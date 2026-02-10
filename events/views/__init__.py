@@ -1,0 +1,56 @@
+from .event import (
+    EventListView,
+    EventDetailView,
+    EventCreateView,
+    EventUpdateView,
+    EventDeleteView,
+    UpcomingEventsView,
+    PastEventsView,
+    EventSearchView,
+    FeaturedEventsView,
+    RecommendedEventsView,
+    EventStatisticsView,
+    EventTimelineView,
+    UserOrganizedEventsView,
+    GroupEventsView,
+    EventTypeEventsView
+)
+
+from .event_attendance import (
+    EventAttendanceListView,
+    EventAttendanceDetailView,
+    EventRSVPView,
+    UpdateAttendanceStatusView,
+    UserEventsView,
+    UserAttendanceStatisticsView,
+    MutualAttendeesView,
+    AttendanceTrendView,
+    SendRemindersView
+)
+
+__all__ = [
+    'EventListView',
+    'EventDetailView',
+    'EventCreateView',
+    'EventUpdateView',
+    'EventDeleteView',
+    'UpcomingEventsView',
+    'PastEventsView',
+    'EventSearchView',
+    'FeaturedEventsView',
+    'RecommendedEventsView',
+    'EventStatisticsView',
+    'EventTimelineView',
+    'UserOrganizedEventsView',
+    'GroupEventsView',
+    'EventTypeEventsView',
+    'EventAttendanceListView',
+    'EventAttendanceDetailView',
+    'EventRSVPView',
+    'UpdateAttendanceStatusView',
+    'UserEventsView',
+    'UserAttendanceStatisticsView',
+    'MutualAttendeesView',
+    'AttendanceTrendView',
+    'SendRemindersView',
+]

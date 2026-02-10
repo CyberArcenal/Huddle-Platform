@@ -8,7 +8,7 @@ from django.conf.urls.static import static
 # from users.views.custom import HomeView
 # List all your app names here
 app_urls = [
-   "admin_pannel",
+    "admin_pannel",
     "analytics",
     "events",
     "feed",
@@ -22,24 +22,21 @@ app_urls = [
 
 urlpatterns = [
     # Django admin
-    path('admin/', admin.site.urls),
+    path("admin/", admin.site.urls),
 ]
 
 # Dynamically include each app's urls/base.py under its own prefix
-urlpatterns += [
-    path(f'api/v1/{app}/', include(f'{app}.urls.base'))
-    for app in app_urls
-]
+urlpatterns += [path(f"api/v1/{app}/", include(f"{app}.urls.base")) for app in app_urls]
 
 for app in app_urls:
     try:
-        urlpatterns+=[path(f'api/v2/{app}/', include(f'{app}.urls_v2.base'))]
+        urlpatterns += [path(f"api/v2/{app}/", include(f"{app}.urls_v2.base"))]
     except ModuleNotFoundError:
         pass
 
 for app in app_urls:
     try:
-        urlpatterns += [path(f'api/v3/{app}/', include(f'{app}.urls_v3.base'))]
+        urlpatterns += [path(f"api/v3/{app}/", include(f"{app}.urls_v3.base"))]
     except ModuleNotFoundError:
         pass
 
