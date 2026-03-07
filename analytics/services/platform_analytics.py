@@ -503,3 +503,53 @@ class PlatformAnalyticsService:
         old_analytics.delete()
         
         return count
+    
+    @staticmethod
+    def increment_pending_reports(date: Optional[datetime.date] = None) -> PlatformAnalytics:
+        """Increment the count of pending reports for the given date."""
+        analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
+        analytics.pending_reports = F('pending_reports') + 1
+        analytics.save()
+        analytics.refresh_from_db()
+        return analytics
+
+    @staticmethod
+    def update_report_status_counts(old_status: str, new_status: str, date: Optional[datetime.date] = None) -> PlatformAnalytics:
+        """
+        Update report status counts when a report changes status.
+        old_status and new_status are strings like 'pending', 'reviewed', 'resolved', 'dismissed'.
+        """
+        analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
+
+        # Decrement old status count
+        if old_status:
+            old_field = f"{old_status}_reports"
+            if hasattr(analytics, old_field):
+                setattr(analytics, old_field, F(old_field) - 1)
+
+        # Increment new status count
+        if new_status:
+            new_field = f"{new_status}_reports"
+            if hasattr(analytics, new_field):
+                setattr(analytics, new_field, F(new_field) + 1)
+
+        analytics.save()
+        analytics.refresh_from_db()
+        return analytics
+    
+    @staticmethod
+    def increment_active_stories(date: Optional[datetime.date] = None) -> PlatformAnalytics:
+        analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
+        analytics.active_stories = F('active_stories') + 1
+        analytics.save()
+        analytics.refresh_from_db()
+        return analytics
+
+    @staticmethod
+    def decrement_active_stories(date: Optional[datetime.date] = None) -> PlatformAnalytics:
+        analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
+        # Use Max to ensure it never goes negative
+        analytics.active_stories = F('active_stories') - 1
+        analytics.save()
+        analytics.refresh_from_db()
+        return analytics

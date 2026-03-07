@@ -1,0 +1,45 @@
+from django.db.models.signals import pre_save, post_save
+from django.dispatch import receiver
+from stories.models import Story
+from stories.state_transition_service.story import StoryStateTransitionService
+
+
+@receiver(pre_save, sender=Story)
+def story_pre_save(sender, instance, **kwargs):
+    """Detect is_active change before saving."""
+    if not instance.pk:
+        # New story – no previous state
+        return
+
+    try:
+        old_instance = sender.objects.get(pk=instance.pk)
+    except sender.DoesNotExist:
+        return
+
+    # Monitor is_active field
+    if old_instance.is_active != instance.is_active:
+        instance._state_transition_changes = {
+            'is_active': {
+                'old': old_instance.is_active,
+                'new': instance.is_active
+            }
+        }
+
+
+@receiver(post_save, sender=Story)
+def story_post_save(sender, instance, created, **kwargs):
+    """After save, handle is_active transition if any."""
+    if created:
+        # New story – maybe log creation, but no transition needed here.
+        return
+
+    if hasattr(instance, '_state_transition_changes'):
+        changes = instance._state_transition_changes
+        if 'is_active' in changes:
+            change = changes['is_active']
+            StoryStateTransitionService.handle_is_active_change(
+                instance,
+                change['old'],
+                change['new']
+            )
+        del instance._state_transition_changes

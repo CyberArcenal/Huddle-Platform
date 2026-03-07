@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 
+from global_utils.pagination import UsersPagination
+
 from ..services.user_activity import UserActivityService
 from ..serializers.activity import UserActivitySerializer, ActivitySummarySerializer
 from ..models import User, UserActivity
@@ -18,32 +20,17 @@ class UserActivityListView(APIView):
         """Get activities for current user"""
         try:
             action = request.query_params.get('action')
-            limit = int(request.query_params.get('limit', 50))
-            offset = int(request.query_params.get('offset', 0))
-            
+            # Get full queryset from service (no limit/offset)
             activities = UserActivityService.get_user_activities(
                 user=request.user,
-                action=action,
-                limit=limit,
-                offset=offset
+                action=action
             )
-            
-            serializer = UserActivitySerializer(
-                activities,
-                many=True,
-                context={'request': request}
-            )
-            
-            return Response({
-                'count': len(activities),
-                'activities': serializer.data
-            })
-            
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(activities, request)
+            serializer = UserActivitySerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FollowingActivityView(APIView):
@@ -54,29 +41,14 @@ class FollowingActivityView(APIView):
     def get(self, request):
         """Get activities from users being followed"""
         try:
-            limit = int(request.query_params.get('limit', 50))
-            
-            activities = UserActivityService.get_following_activities(
-                user=request.user,
-                limit=limit
-            )
-            
-            serializer = UserActivitySerializer(
-                activities,
-                many=True,
-                context={'request': request}
-            )
-            
-            return Response({
-                'count': len(activities),
-                'activities': serializer.data
-            })
-            
+            # Service returns full queryset (no limit)
+            activities = UserActivityService.get_following_activities(user=request.user)
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(activities, request)
+            serializer = UserActivitySerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ActivitySummaryView(APIView):
@@ -155,36 +127,23 @@ class RecentActivitiesView(APIView):
     def get(self, request):
         """Get recent activities (public or from followed users)"""
         try:
-            limit = int(request.query_params.get('limit', 100))
             action = request.query_params.get('action')
             user_id = request.query_params.get('user_id')
-            
             user = None
             if user_id:
                 user = get_object_or_404(User, id=user_id)
-            
+
+            # Get full queryset
             activities = UserActivityService.get_recent_activities(
-                limit=limit,
                 action=action,
                 user=user
             )
-            
-            serializer = UserActivitySerializer(
-                activities,
-                many=True,
-                context={'request': request}
-            )
-            
-            return Response({
-                'count': len(activities),
-                'activities': serializer.data
-            })
-            
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(activities, request)
+            serializer = UserActivitySerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class LogActivityView(APIView):

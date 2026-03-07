@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 
+from global_utils.pagination import UsersPagination
+
 from ..services.user_follow import UserFollowService
 from ..services.user_activity import UserActivityService
 from ..serializers.follow import (
@@ -201,36 +203,21 @@ class FollowersListView(APIView):
                 user = get_object_or_404(User, id=user_id)
             else:
                 user = request.user
-            
-            # Check privacy settings (if implemented)
-            # For now, allow viewing anyone's followers
-            
+
+            # Get full queryset
             followers = UserFollowService.get_followers(user)
-            
-            # Serialize with context for is_following_back
+
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(followers, request)
             serializer = FollowerListSerializer(
-                followers,
-                many=True,
-                context={'request': request, 'following': user}
+                page, many=True, context={'request': request, 'following': user}
             )
-            
-            return Response({
-                'user_id': user.id,
-                'username': user.username,
-                'count': len(followers),
-                'followers': serializer.data
-            })
-            
+            return paginator.get_paginated_response(serializer.data)
+
         except User.DoesNotExist:
-            return Response(
-                {'error': 'User not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FollowingListView(APIView):
@@ -245,33 +232,20 @@ class FollowingListView(APIView):
                 user = get_object_or_404(User, id=user_id)
             else:
                 user = request.user
-            
+
             following = UserFollowService.get_following(user)
-            
-            # Serialize with context for is_following_back
+
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(following, request)
             serializer = FollowingListSerializer(
-                following,
-                many=True,
-                context={'request': request, 'follower': user}
+                page, many=True, context={'request': request, 'follower': user}
             )
-            
-            return Response({
-                'user_id': user.id,
-                'username': user.username,
-                'count': len(following),
-                'following': serializer.data
-            })
-            
+            return paginator.get_paginated_response(serializer.data)
+
         except User.DoesNotExist:
-            return Response(
-                {'error': 'User not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MutualFollowsView(APIView):

@@ -177,3 +177,8 @@ class StoryViewService:
             }
             for story in stories
         ]
+    @staticmethod
+    def clear_story_views(story: Story) -> int:
+        """Delete all view records for a story. Returns number of deleted views."""
+        deleted_count, _ = StoryView.objects.filter(story=story).delete()
+        return deleted_count

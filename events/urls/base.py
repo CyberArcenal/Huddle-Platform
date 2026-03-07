@@ -1,6 +1,6 @@
 from django.urls import path, include
 from events import views
-
+from events.views import event_analytics
 # Event URL patterns
 event_urlpatterns = [
     # Main event endpoints
@@ -62,6 +62,10 @@ urlpatterns = [
     
     # User events endpoints
     path('user/events/', include(user_events_urlpatterns)),
+    
+        path('events/<int:event_id>/analytics/', event_analytics.EventAnalyticsListView.as_view(), name='event-analytics-list'),
+    path('events/<int:event_id>/analytics/<str:date>/', event_analytics.EventAnalyticsDetailView.as_view(), name='event-analytics-detail'),
+    path('events/<int:event_id>/analytics/summary/', event_analytics.EventAnalyticsSummaryView.as_view(), name='event-analytics-summary'),
 ]
 
 # For backward compatibility (optional)

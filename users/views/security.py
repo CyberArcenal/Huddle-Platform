@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 
+from global_utils.pagination import UsersPagination
+
 from ..services.security_log import SecurityLogService
 from ..services.user_security_settings import UserSecuritySettingsService
 from ..services.login_session import LoginSessionService
@@ -198,28 +200,17 @@ class SecurityLogsView(APIView):
         """Get security logs for current user"""
         try:
             event_type = request.query_params.get('event_type')
-            limit = int(request.query_params.get('limit', 50))
-            offset = int(request.query_params.get('offset', 0))
-            
+            # Get full queryset from service
             logs = SecurityLogService.get_user_logs(
                 user=request.user,
-                event_type=event_type,
-                limit=limit,
-                offset=offset
+                event_type=event_type
             )
-            
-            serializer = SecurityLogSerializer(logs, many=True)
-            
-            return Response({
-                'count': len(logs),
-                'logs': serializer.data
-            })
-            
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(logs, request)
+            serializer = SecurityLogSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FailedLoginAttemptsView(APIView):
@@ -295,23 +286,12 @@ class ActiveSessionsView(APIView):
         """Get all active sessions for current user"""
         try:
             sessions = LoginSessionService.get_active_user_sessions(request.user)
-            
-            serializer = LoginSessionSerializer(
-                sessions,
-                many=True,
-                context={'request': request}
-            )
-            
-            return Response({
-                'count': len(sessions),
-                'sessions': serializer.data
-            })
-            
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(sessions, request)
+            serializer = LoginSessionSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TerminateSessionView(APIView):

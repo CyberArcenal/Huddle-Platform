@@ -1,4 +1,4 @@
-from .user_views import (
+from .user import (
     UserRegisterView,
     UserProfileView,
     UserDetailView,
@@ -10,7 +10,7 @@ from .user_views import (
     CheckEmailView
 )
 
-from .follow_views import (
+from .follow import (
     FollowUserView,
     UnfollowUserView,
     FollowStatusView,
@@ -21,7 +21,7 @@ from .follow_views import (
     SuggestedUsersView
 )
 
-from .security_views import (
+from .security import (
     ChangePasswordView,
     Enable2FAView,
     Disable2FAView,
@@ -36,7 +36,7 @@ from .security_views import (
     Check2FAStatusView
 )
 
-from .activity_views import (
+from .activity import (
     UserActivityListView,
     FollowingActivityView,
     ActivitySummaryView,
@@ -44,7 +44,7 @@ from .activity_views import (
     LogActivityView
 )
 
-from .media_views import (
+from .media import (
     ProfilePictureUploadView,
     CoverPhotoUploadView,
     RemoveProfilePictureView,
@@ -54,7 +54,7 @@ from .media_views import (
     ValidateImageUploadView
 )
 
-from .search_views import (
+from .search import (
     UserSearchView as SearchUserView,
     AdvancedUserSearchView,
     SearchAutocompleteView,
@@ -63,7 +63,7 @@ from .search_views import (
     GlobalSearchView
 )
 
-from .admin_views import (
+from .admin import (
     AdminUserListView,
     AdminUserDetailView,
     AdminCreateUserView,

@@ -6,6 +6,8 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
 
+from global_utils.pagination import UsersPagination
+
 from ..serializers.admin import (
     AdminUserUpdateSerializer,
     AdminUserCreateSerializer,
@@ -27,28 +29,22 @@ class AdminUserListView(APIView):
     def get(self, request):
         """Get list of users with admin filters"""
         try:
-            # Get query parameters
+            # Get query parameters (no limit/offset, they are handled by paginator)
             status_filter = request.query_params.get('status')
             is_verified = request.query_params.get('is_verified')
             is_active = request.query_params.get('is_active')
             search = request.query_params.get('search', '').strip()
-            page = int(request.query_params.get('page', 1))
-            page_size = int(request.query_params.get('page_size', 20))
-            
+
             # Build queryset
             queryset = User.objects.all()
-            
+
             # Apply filters
             if status_filter:
                 queryset = queryset.filter(status=status_filter)
-            
             if is_verified is not None:
                 queryset = queryset.filter(is_verified=is_verified.lower() == 'true')
-            
             if is_active is not None:
                 queryset = queryset.filter(is_active=is_active.lower() == 'true')
-            
-            # Apply search
             if search:
                 queryset = queryset.filter(
                     Q(username__icontains=search) |
@@ -56,35 +52,18 @@ class AdminUserListView(APIView):
                     Q(first_name__icontains=search) |
                     Q(last_name__icontains=search)
                 )
-            
-            # Calculate pagination
-            total_count = queryset.count()
-            total_pages = (total_count + page_size - 1) // page_size
-            
+
+            # Order by date_joined descending
+            queryset = queryset.order_by('-date_joined')
+
             # Apply pagination
-            offset = (page - 1) * page_size
-            users = queryset.order_by('-date_joined')[offset:offset + page_size]
-            
-            # Serialize results
-            serializer = AdminUserListSerializer(
-                users,
-                many=True,
-                context={'request': request}
-            )
-            
-            return Response({
-                'total_count': total_count,
-                'total_pages': total_pages,
-                'current_page': page,
-                'page_size': page_size,
-                'users': serializer.data
-            })
-            
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(queryset, request)
+            serializer = AdminUserListSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
+
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AdminUserDetailView(APIView):

@@ -6,13 +6,7 @@ from stories.models.base import Story, StoryView
 from stories.services.story import StoryService
 from stories.services.story_view import StoryViewService
 from users.models.base import User
-
-
-class UserMinimalSerializer(serializers.ModelSerializer):
-    """Minimal user serializer for story feeds"""
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'profile_picture', 'display_name']
+from users.serializers.user import UserMinimalSerializer
 
 
 class StorySerializer(serializers.ModelSerializer):

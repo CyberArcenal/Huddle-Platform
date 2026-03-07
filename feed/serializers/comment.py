@@ -38,7 +38,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "like_count",
             "has_liked",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "is_deleted"]
         extra_kwargs = {
             "post": {"read_only": True},
             "parent_comment": {"read_only": True},

@@ -32,4 +32,5 @@ INSTALLED_APPS += [
     "rest_framework_simplejwt.token_blacklist",
     "cloudinary",
     "cloudinary_storage",
+    "drf_spectacular",
 ]

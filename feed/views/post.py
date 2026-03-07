@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from feed.models import Post
 from feed.serializers.post import PostDetailSerializer, PostFeedSerializer, PostSerializer, PostStatisticsSerializer, SearchSerializer, UserPostStatisticsSerializer
 from feed.services import PostService
+from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
 
 
@@ -22,50 +23,24 @@ class PostListView(APIView):
         return [IsAuthenticated()]
     
     def get(self, request):
-        """Get list of posts"""
         user = request.user if request.user.is_authenticated else None
-        
-        # Check for query parameters
         user_posts = request.query_params.get('user_id')
         feed = request.query_params.get('feed', 'false').lower() == 'true'
-        limit = int(request.query_params.get('limit', 50))
-        offset = int(request.query_params.get('offset', 0))
-        
+
         try:
             if user_posts:
-                # Get posts by specific user
                 target_user = get_object_or_404(User, id=user_posts)
-                posts = PostService.get_user_posts(
-                    user=target_user,
-                    limit=limit,
-                    offset=offset
-                )
-                serializer = PostFeedSerializer(posts, many=True)
-                
+                posts = PostService.get_user_posts(user=target_user)   # no limit/offset
             elif feed and user:
-                # Get personalized feed for authenticated user
-                posts = PostService.get_feed_posts(
-                    user=user,
-                    limit=limit,
-                    offset=offset
-                )
-                serializer = PostFeedSerializer(posts, many=True)
-                
+                posts = PostService.get_feed_posts(user=user)           # no limit/offset
             else:
-                # Get public posts
-                posts = PostService.get_public_posts(
-                    exclude_user=user,
-                    limit=limit,
-                    offset=offset
-                )
-                serializer = PostFeedSerializer(posts, many=True)
-            
-            return Response({
-                'count': len(posts),
-                'next_offset': offset + len(posts),
-                'results': serializer.data
-            })
-            
+                posts = PostService.get_public_posts(exclude_user=user) # no limit/offset
+
+            paginator = StandardResultsSetPagination()
+            page = paginator.paginate_queryset(posts, request)
+            serializer = PostFeedSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
         except Exception as e:
             return Response(
                 {'error': str(e)},
@@ -256,28 +231,22 @@ class PostSearchView(APIView):
         return [IsAuthenticated()]
     
     def get(self, request):
-        """Search posts"""
         serializer = SearchSerializer(data=request.query_params)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         data = serializer.validated_data
         user = request.user if request.user.is_authenticated else None
-        
         posts = PostService.search_posts(
             query=data['query'],
             user=user,
-            post_type=data.get('post_type'),
-            limit=data['limit'],
-            offset=data['offset']
-        )
-        
-        results = PostFeedSerializer(posts, many=True).data
-        return Response({
-            'query': data['query'],
-            'count': len(posts),
-            'results': results
-        })
+            post_type=data.get('post_type')
+        )   # no limit/offset
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(posts, request)
+        results = PostFeedSerializer(page, many=True).data
+        return paginator.get_paginated_response(results)
 
 
 class TrendingPostsView(APIView):

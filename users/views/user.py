@@ -6,6 +6,8 @@ from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
 
+from global_utils.pagination import UsersPagination
+
 from ..services.user import UserService
 from ..services.security_log import SecurityLogService
 from ..services.login_session import LoginSessionService
@@ -159,32 +161,19 @@ class UserSearchView(APIView):
     def get(self, request):
         """Search users by query"""
         query = request.query_params.get('q', '').strip()
-        
         if not query or len(query) < 2:
             return Response(
                 {'error': 'Search query must be at least 2 characters'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
         try:
-            users = UserService.search_users(query)
-            serializer = UserListSerializer(
-                users,
-                many=True,
-                context={'request': request}
-            )
-            
-            return Response({
-                'query': query,
-                'count': len(users),
-                'results': serializer.data
-            })
-            
+            users = UserService.search_users(query)   # returns full queryset
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(users, request)
+            serializer = UserListSerializer(page, many=True, context={'request': request})
+            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserStatusUpdateView(APIView):

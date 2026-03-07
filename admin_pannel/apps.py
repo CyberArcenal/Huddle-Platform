@@ -4,3 +4,5 @@ from django.apps import AppConfig
 class AdminPanelConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "admin_pannel"
+    def ready(self):
+        import admin_pannel.signals.reported_content   # noqa

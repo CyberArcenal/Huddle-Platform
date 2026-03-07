@@ -4,7 +4,8 @@ from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any, Tuple
 
 from events.services.event import EventService
-from ..models import Event, EventAttendance, User
+from users.models.base import User
+from ..models import Event, EventAttendance
 
 
 class EventAttendanceService:

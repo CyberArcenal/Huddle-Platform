@@ -152,3 +152,15 @@ class StoryFeedService:
                 })
         
         return recommendations
+    
+    @staticmethod
+    def remove_story_from_feeds(story: Story):
+        """Remove story from all users' feeds (e.g., from cache)."""
+        # Example: if using Redis sorted sets per user, remove this story
+        # from the feed of every follower.
+        print(f"Removing story {story.id} from feeds.")
+
+    @staticmethod
+    def add_story_to_feeds(story: Story):
+        """Add story back to followers' feeds (after reactivation)."""
+        print(f"Adding story {story.id} to feeds.")

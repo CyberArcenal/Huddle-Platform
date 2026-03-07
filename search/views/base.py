@@ -1,13 +1,15 @@
-# views.py
+# search/views/base.py
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import SessionAuthentication
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from django.core.cache import cache
+
+from global_utils.pagination import SearchPagination
 from search.serializers.base import (
     ClearHistoryRequestSerializer,
     PopularSearchSerializer,
@@ -27,60 +29,27 @@ class SearchHistoryAPIView(APIView):
         """
         Get user's search history
         Query Parameters:
-        - limit: Number of results (default: 50)
-        - offset: Pagination offset (default: 0)
         - search_type: Filter by type (all, users, groups, posts)
         - days: Filter by last X days
         """
         try:
-            limit = int(request.query_params.get("limit", 50))
-            offset = int(request.query_params.get("offset", 0))
             search_type = request.query_params.get("search_type")
             days = request.query_params.get("days")
             days = int(days) if days else None
 
-            # Get search history
+            # Get search history (full queryset, no slicing)
             history = SearchHistoryService.get_user_search_history(
                 user=request.user,
-                limit=min(limit, 100),  # Cap at 100 for safety
-                offset=offset,
                 search_type=search_type,
                 days=days,
+                # limit/offset removed – service should return full queryset
             )
 
-            serializer = SearchHistorySerializer(history, many=True)
-
-            # Get total count for pagination
-            total_count = (
-                SearchHistoryService.get_user_search_history(
-                    user=request.user,
-                    limit=None,
-                    offset=0,
-                    search_type=search_type,
-                    days=days,
-                ).count()
-                if history
-                else 0
-            )
-
-            return Response(
-                {
-                    "success": True,
-                    "count": len(history),
-                    "total": total_count,
-                    "next": (
-                        f"?limit={limit}&offset={offset+limit}"
-                        if offset + limit < total_count
-                        else None
-                    ),
-                    "previous": (
-                        f"?limit={limit}&offset={max(0, offset-limit)}"
-                        if offset > 0
-                        else None
-                    ),
-                    "results": serializer.data,
-                }
-            )
+            # Apply pagination
+            paginator = SearchPagination()
+            page = paginator.paginate_queryset(history, request)
+            serializer = SearchHistorySerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
 
         except Exception as e:
             return Response(
@@ -94,12 +63,10 @@ class SearchHistoryAPIView(APIView):
         Optional Fields: search_type, results_count
         """
         try:
-            # Extract data from request
             query = request.data.get("query", "")
             search_type = request.data.get("search_type", "all")
             results_count = request.data.get("results_count", 0)
 
-            # Record search using service
             search_record = SearchHistoryService.record_search(
                 user=request.user,
                 query=query,
@@ -258,12 +225,10 @@ class PopularSearchesAPIView(APIView):
             user_only = request.query_params.get("user_only", "false").lower() == "true"
 
             if user_only and request.user.is_authenticated:
-                # Get user's popular searches
                 popular_searches = SearchHistoryService.get_user_popular_searches(
                     user=request.user, days=min(days, 365), limit=min(limit, 50)
                 )
             else:
-                # Get global popular searches
                 popular_searches = SearchHistoryService.get_popular_searches(
                     days=min(days, 365), limit=min(limit, 50), search_type=search_type
                 )
@@ -308,7 +273,6 @@ class SearchSuggestionsAPIView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Use cache for authenticated users
             if request.user.is_authenticated:
                 cache_key = f"search_suggestions_{request.user.id}_{prefix}_{limit}"
                 suggestions = cache.get(cache_key)
@@ -320,7 +284,7 @@ class SearchSuggestionsAPIView(APIView):
                         limit=min(limit, 20),
                         include_anonymous=include_anonymous,
                     )
-                    cache.set(cache_key, suggestions, 60 * 10)  # Cache for 10 minutes
+                    cache.set(cache_key, suggestions, 60 * 10)
             else:
                 suggestions = SearchHistoryService.get_suggestions(
                     user=None,
@@ -399,7 +363,7 @@ class SearchTrendsAPIView(APIView):
                 )
 
             trends = SearchHistoryService.get_search_trends(
-                days=min(days, 90), interval=interval  # Max 90 days for trends
+                days=min(days, 90), interval=interval
             )
 
             return Response(
@@ -450,7 +414,6 @@ class ExportSearchHistoryAPIView(APIView):
                 include_metadata=include_metadata,
             )
 
-            # Set response headers for file download
             response = Response(export_data)
             response["Content-Disposition"] = (
                 f'attachment; filename="search_history_{request.user.username}.json"'

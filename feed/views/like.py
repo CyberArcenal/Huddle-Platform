@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from feed.models import Like, Post, Comment
 from feed.serializers.like import LikeSerializer, LikeToggleSerializer
 from feed.services import LikeService
+from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
 
 
@@ -17,24 +18,14 @@ class LikeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        """Get likes by the authenticated user"""
         content_type = request.query_params.get("content_type")
-        limit = int(request.query_params.get("limit", 50))
-        offset = int(request.query_params.get("offset", 0))
-
         likes = LikeService.get_user_likes(
-            user=request.user, content_type=content_type, limit=limit, offset=offset
-        )
-
-        serializer = LikeSerializer(likes, many=True, context={"request": request})
-
-        return Response(
-            {
-                "count": len(likes),
-                "next_offset": offset + len(likes),
-                "results": serializer.data,
-            }
-        )
+            user=request.user, content_type=content_type
+        )   # no limit/offset
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(likes, request)
+        serializer = LikeSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         """Create a new like"""
@@ -130,17 +121,12 @@ class ObjectLikesView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, content_type, object_id):
-        """Get likes for a specific object"""
-        # Validate content type
+        # Validate and check permissions (unchanged)
         if content_type not in LikeService.CONTENT_TYPES:
             return Response(
-                {
-                    "error": f"Invalid content type. Must be one of {LikeService.CONTENT_TYPES}"
-                },
+                {"error": f"Invalid content type. Must be one of {LikeService.CONTENT_TYPES}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Check if object exists and is accessible
         if content_type == "post":
             post = get_object_or_404(Post, id=object_id)
             if not post.is_public and request.user != post.user:
@@ -152,33 +138,17 @@ class ObjectLikesView(APIView):
             comment = get_object_or_404(Comment, id=object_id)
             if not comment.post.is_public and request.user != comment.post.user:
                 return Response(
-                    {
-                        "error": "You do not have permission to view likes for this comment"
-                    },
+                    {"error": "You do not have permission to view likes for this comment"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        limit = int(request.query_params.get("limit", 50))
-        offset = int(request.query_params.get("offset", 0))
-
         likes = LikeService.get_likes_for_object(
-            content_type=content_type, object_id=object_id, limit=limit, offset=offset
-        )
-
-        serializer = LikeSerializer(likes, many=True, context={"request": request})
-
-        like_count = LikeService.get_like_count(content_type, object_id)
-
-        return Response(
-            {
-                "content_type": content_type,
-                "object_id": object_id,
-                "total_likes": like_count,
-                "count": len(likes),
-                "next_offset": offset + len(likes),
-                "results": serializer.data,
-            }
-        )
+            content_type=content_type, object_id=object_id
+        )   # no limit/offset
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(likes, request)
+        serializer = LikeSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class LikeCheckView(APIView):
@@ -219,39 +189,26 @@ class RecentLikersView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, content_type, object_id):
-        """Get recent users who liked an object"""
-        # Validate content type
+        # Validate and check permissions (unchanged)
         if content_type not in LikeService.CONTENT_TYPES:
             return Response(
-                {
-                    "error": f"Invalid content type. Must be one of {LikeService.CONTENT_TYPES}"
-                },
+                {"error": f"Invalid content type. Must be one of {LikeService.CONTENT_TYPES}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Check object accessibility
         if content_type == "post":
             post = get_object_or_404(Post, id=object_id)
             if not post.is_public and request.user != post.user:
                 return Response(
-                    {
-                        "error": "You do not have permission to view likers for this post"
-                    },
+                    {"error": "You do not have permission to view likers for this post"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
         limit = int(request.query_params.get("limit", 10))
-
         recent_likers = LikeService.get_recent_likers(
             content_type=content_type, object_id=object_id, limit=limit
-        )
-
+        )   # this service call already uses limit – we keep it
         from users.serializers import UserSerializer
-
-        serializer = UserSerializer(
-            recent_likers, many=True, context={"request": request}
-        )
-
+        serializer = UserSerializer(recent_likers, many=True, context={"request": request})
         return Response(
             {
                 "content_type": content_type,

@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from feed.models import Comment, Post
 from feed.serializers.comment import CommentSerializer
 from feed.services import CommentService
+from global_utils.pagination import StandardResultsSetPagination
 
 
 class CommentListView(APIView):
@@ -20,12 +21,9 @@ class CommentListView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request, post_id=None):
-        """Get comments"""
         if post_id:
             # Get comments for a specific post
             post = get_object_or_404(Post, id=post_id, is_deleted=False)
-
-            # Check if post is public
             if not post.is_public and request.user != post.user:
                 return Response(
                     {
@@ -37,25 +35,14 @@ class CommentListView(APIView):
             include_replies = (
                 request.query_params.get("include_replies", "true").lower() == "true"
             )
-            limit = int(request.query_params.get("limit", 100))
-            offset = int(request.query_params.get("offset", 0))
-
+            include_deleted = (
+                request.query_params.get("include_deleted", "false").lower() == "true"
+            )
             comments = CommentService.get_post_comments(
-                post=post, include_replies=include_replies, limit=limit, offset=offset
-            )
-
-            serializer = CommentSerializer(
-                comments, many=True, context={"request": request}
-            )
-
-            return Response(
-                {
-                    "post_id": post_id,
-                    "count": len(comments),
-                    "next_offset": offset + len(comments),
-                    "results": serializer.data,
-                }
-            )
+                post=post,
+                include_replies=include_replies,
+                include_deleted=include_deleted,
+            )  # no limit/offset – service now returns full queryset
         else:
             # Get all comments by the authenticated user
             if not request.user.is_authenticated:
@@ -63,25 +50,13 @@ class CommentListView(APIView):
                     {"error": "Authentication required"},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
+            comments = CommentService.get_user_comments(user=request.user)
 
-            limit = int(request.query_params.get("limit", 50))
-            offset = int(request.query_params.get("offset", 0))
-
-            comments = CommentService.get_user_comments(
-                user=request.user, limit=limit, offset=offset
-            )
-
-            serializer = CommentSerializer(
-                comments, many=True, context={"request": request}
-            )
-
-            return Response(
-                {
-                    "count": len(comments),
-                    "next_offset": offset + len(comments),
-                    "results": serializer.data,
-                }
-            )
+        # Apply pagination
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(comments, request)
+        serializer = CommentSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request, post_id):
         """Create a new comment on a post"""
@@ -214,10 +189,7 @@ class CommentRepliesView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request, comment_id):
-        """Get replies for a comment"""
         comment = get_object_or_404(Comment, id=comment_id)
-
-        # Check if associated post is accessible
         if not comment.post.is_public and request.user != comment.post.user:
             return Response(
                 {
@@ -225,24 +197,11 @@ class CommentRepliesView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        limit = int(request.query_params.get("limit", 50))
-        offset = int(request.query_params.get("offset", 0))
-
-        replies = CommentService.get_comment_replies(
-            comment=comment, limit=limit, offset=offset
-        )
-
-        serializer = CommentSerializer(replies, many=True, context={"request": request})
-
-        return Response(
-            {
-                "comment_id": comment_id,
-                "count": len(replies),
-                "next_offset": offset + len(replies),
-                "results": serializer.data,
-            }
-        )
+        replies = CommentService.get_comment_replies(comment=comment)  # no limit/offset
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(replies, request)
+        serializer = CommentSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request, comment_id):
         """Create a reply to a comment"""
@@ -317,30 +276,22 @@ class CommentSearchView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        """Search comments by content"""
         query = request.query_params.get("query", "")
         user_id = request.query_params.get("user_id")
         post_id = request.query_params.get("post_id")
-        limit = int(request.query_params.get("limit", 20))
-        offset = int(request.query_params.get("offset", 0))
-
         if not query:
             return Response(
                 {"error": "Query parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         user = None
         if user_id:
             from users.models import User
 
             user = get_object_or_404(User, id=user_id)
-
         post = None
         if post_id:
             post = get_object_or_404(Post, id=post_id, is_deleted=False)
-
-            # Check post accessibility
             if not post.is_public and request.user != post.user:
                 return Response(
                     {
@@ -350,13 +301,9 @@ class CommentSearchView(APIView):
                 )
 
         comments = CommentService.search_comments(
-            query=query, user=user, post=post, limit=limit, offset=offset
-        )
-
-        serializer = CommentSerializer(
-            comments, many=True, context={"request": request}
-        )
-
-        return Response(
-            {"query": query, "count": len(comments), "results": serializer.data}
-        )
+            query=query, user=user, post=post
+        )  # no limit/offset
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(comments, request)
+        serializer = CommentSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)

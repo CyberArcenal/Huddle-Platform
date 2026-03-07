@@ -3,9 +3,11 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import Event, Group, User
 import uuid
 
+from groups.models.base import Group
+from users.models.base import User
+from events.models import Event
 
 class EventService:
     """Service for Event model operations"""

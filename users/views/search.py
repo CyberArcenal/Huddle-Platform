@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.db.models import Q
 
+from global_utils.pagination import UsersPagination
+
 from ..serializers.search import (
     UserSearchSerializer,
     SearchResultSerializer,
@@ -18,35 +20,20 @@ class UserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        """Search users with basic query"""
         serializer = UserSearchSerializer(data=request.query_params)
-        
         if serializer.is_valid():
             try:
+                # Service returns full queryset (no slicing)
                 users = serializer.search()
-                
+                paginator = UsersPagination()
+                page = paginator.paginate_queryset(users, request)
                 result_serializer = SearchResultSerializer(
-                    users,
-                    many=True,
-                    context={'request': request}
+                    page, many=True, context={'request': request}
                 )
-                
-                return Response({
-                    'query': serializer.validated_data['query'],
-                    'count': len(users),
-                    'results': result_serializer.data
-                })
-                
+                return paginator.get_paginated_response(result_serializer.data)
             except Exception as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        return Response(
-            {'errors': serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AdvancedUserSearchView(APIView):
@@ -55,44 +42,25 @@ class AdvancedUserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        """Advanced user search with multiple filters"""
         serializer = AdvancedSearchSerializer(data=request.query_params)
-        
         if serializer.is_valid():
             try:
+                # Service returns a dict with 'results' and pagination metadata
                 search_result = serializer.search()
-                
-                # Serialize results
+                results = search_result['results']   # already a queryset/list
+                paginator = UsersPagination()
+                page = paginator.paginate_queryset(results, request)
                 result_serializer = SearchResultSerializer(
-                    search_result['results'],
-                    many=True,
-                    context={'request': request}
+                    page, many=True, context={'request': request}
                 )
-                
-                return Response({
-                    'query': request.query_params,
-                    'pagination': {
-                        'total_count': search_result['total_count'],
-                        'total_pages': search_result['total_pages'],
-                        'current_page': search_result['current_page'],
-                        'page_size': search_result['page_size'],
-                        'has_next': search_result['has_next'],
-                        'has_previous': search_result['has_previous']
-                    },
-                    'count': len(search_result['results']),
-                    'results': result_serializer.data
-                })
-                
+                # Override paginator response to include additional metadata if needed
+                response = paginator.get_paginated_response(result_serializer.data)
+                response.data['total_count'] = search_result['total_count']
+                response.data['total_pages'] = search_result['total_pages']
+                return response
             except Exception as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        return Response(
-            {'errors': serializer.errors},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class SearchAutocompleteView(APIView):

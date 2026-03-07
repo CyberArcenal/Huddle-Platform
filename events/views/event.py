@@ -8,7 +8,10 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
-from ..models import Event, Group
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from global_utils.pagination import EventsPagination
+
+from ..models import Event
 from ..serializers import (
     EventSerializer,
     EventDetailSerializer,
@@ -28,6 +31,51 @@ class EventListView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="type",
+                type=str,
+                description="Filter by event type (public, private, group)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="group_id",
+                type=int,
+                description="Filter by group ID",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="organizer_id",
+                type=int,
+                description="Filter by organizer ID",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="upcoming",
+                type=bool,
+                description="Show only upcoming events",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="days_ahead",
+                type=int,
+                description="Days ahead for upcoming events",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="List events with optional filters and pagination.",
+    )
     def get(self, request):
         """Get list of events with filters"""
         # Get query parameters
@@ -36,10 +84,8 @@ class EventListView(APIView):
         organizer_id = request.query_params.get("organizer_id")
         upcoming = request.query_params.get("upcoming", "true").lower() == "true"
         days_ahead = int(request.query_params.get("days_ahead", 30))
-        limit = min(int(request.query_params.get("limit", 50)), 100)
-        offset = int(request.query_params.get("offset", 0))
 
-        # Get queryset
+        # Get queryset (no limit/offset)
         if upcoming:
             queryset = Event.objects.filter(start_time__gte=timezone.now()).order_by(
                 "start_time"
@@ -69,21 +115,53 @@ class EventListView(APIView):
                     {"error": "Organizer not found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
-        # Apply pagination
-        events = queryset[offset : offset + limit]
-
-        # Check access for each event
+        # Filter accessible events
         accessible_events = []
-        for event in events:
+        for event in queryset:
             has_access, _ = EventService.check_user_access(event, request.user)
             if has_access or event.event_type == "public":
                 accessible_events.append(event)
 
-        serializer = EventListSerializer(
-            accessible_events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        # Apply pagination
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(accessible_events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        request=EventCreateSerializer,
+        responses={201: EventDetailSerializer},
+        examples=[
+            OpenApiExample(
+                "Create public event",
+                value={
+                    "title": "Community Meetup",
+                    "description": "Monthly gathering",
+                    "location": "Central Park",
+                    "start_time": "2025-04-01T10:00:00Z",
+                    "end_time": "2025-04-01T12:00:00Z",
+                    "event_type": "public",
+                    "max_attendees": 50,
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Create group event",
+                value={
+                    "title": "Group Hike",
+                    "description": "Weekend hike",
+                    "location": "Mountain Trail",
+                    "start_time": "2025-04-02T09:00:00Z",
+                    "end_time": "2025-04-02T15:00:00Z",
+                    "event_type": "group",
+                    "group_id": 5,
+                    "max_attendees": 20,
+                },
+                request_only=True,
+            ),
+        ],
+        description="Create a new event.",
+    )
     def post(self, request):
         """Create a new event"""
         serializer = EventCreateSerializer(
@@ -115,6 +193,10 @@ class EventDetailView(APIView):
         except Event.DoesNotExist:
             raise NotFound(detail="Event not found")
 
+    @extend_schema(
+        responses={200: EventDetailSerializer},
+        description="Retrieve detailed information about an event.",
+    )
     def get(self, request, pk):
         """Retrieve event details"""
         event = self.get_object(pk)
@@ -127,6 +209,26 @@ class EventDetailView(APIView):
         serializer = EventDetailSerializer(event, context={"request": request})
         return Response(serializer.data)
 
+    @extend_schema(
+        request=EventSerializer,
+        responses={200: EventSerializer},
+        examples=[
+            OpenApiExample(
+                "Full update",
+                value={
+                    "title": "Updated Title",
+                    "description": "New description",
+                    "location": "New location",
+                    "start_time": "2025-04-01T11:00:00Z",
+                    "end_time": "2025-04-01T13:00:00Z",
+                    "event_type": "public",
+                    "max_attendees": 60,
+                },
+                request_only=True,
+            )
+        ],
+        description="Update all fields of an event.",
+    )
     def put(self, request, pk):
         """Update event"""
         event = self.get_object(pk)
@@ -150,6 +252,16 @@ class EventDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        request=EventSerializer,
+        responses={200: EventSerializer},
+        examples=[
+            OpenApiExample(
+                "Partial update", value={"title": "New Title Only"}, request_only=True
+            )
+        ],
+        description="Partially update an event.",
+    )
     def patch(self, request, pk):
         """Partial update event"""
         event = self.get_object(pk)
@@ -173,6 +285,7 @@ class EventDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(responses={204: None}, description="Delete an event.")
     def delete(self, request, pk):
         """Delete event"""
         event = self.get_object(pk)
@@ -195,6 +308,26 @@ class EventCreateView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=EventCreateSerializer,
+        responses={201: EventDetailSerializer},
+        examples=[
+            OpenApiExample(
+                "Create event",
+                value={
+                    "title": "New Event",
+                    "description": "Description",
+                    "location": "Somewhere",
+                    "start_time": "2025-04-01T10:00:00Z",
+                    "end_time": "2025-04-01T12:00:00Z",
+                    "event_type": "public",
+                    "max_attendees": 30,
+                },
+                request_only=True,
+            )
+        ],
+        description="Create a new event.",
+    )
     def post(self, request):
         """Create new event"""
         serializer = EventCreateSerializer(
@@ -219,6 +352,16 @@ class EventUpdateView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=EventSerializer,
+        responses={200: EventSerializer},
+        examples=[
+            OpenApiExample(
+                "Update event", value={"title": "Updated Title"}, request_only=True
+            )
+        ],
+        description="Update an event (full or partial).",
+    )
     def put(self, request, pk):
         """Update event"""
         try:
@@ -251,6 +394,7 @@ class EventDeleteView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={204: None}, description="Delete an event.")
     def delete(self, request, pk):
         """Delete event"""
         try:
@@ -276,43 +420,60 @@ class UpcomingEventsView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="Filter by user attending/organizing",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="group_id", type=int, description="Filter by group", required=False
+            ),
+            OpenApiParameter(
+                name="type", type=str, description="Event type", required=False
+            ),
+            OpenApiParameter(
+                name="days_ahead",
+                type=int,
+                description="Number of days ahead",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get upcoming events with filters.",
+    )
     def get(self, request):
         """Get upcoming events with filters"""
         user_id = request.query_params.get("user_id")
         group_id = request.query_params.get("group_id")
         event_type = request.query_params.get("type")
         days_ahead = int(request.query_params.get("days_ahead", 30))
-        limit = min(int(request.query_params.get("limit", 50)), 100)
-        offset = int(request.query_params.get("offset", 0))
 
-        # Prepare filters
         user = None
         group = None
 
         if user_id:
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                return Response(
-                    {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-                )
-
+            user = get_object_or_404(User, id=user_id)
         if group_id:
-            try:
-                group = Group.objects.get(id=group_id)
-            except Group.DoesNotExist:
-                return Response(
-                    {"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND
-                )
+            group = get_object_or_404(Group, id=group_id)
 
-        # Get upcoming events
+        # Service returns full queryset (no limit/offset)
         events = EventService.get_upcoming_events(
             user=user,
             group=group,
             event_type=event_type,
             days_ahead=days_ahead,
-            limit=limit,
-            offset=offset,
         )
 
         # Filter accessible events
@@ -322,10 +483,10 @@ class UpcomingEventsView(APIView):
             if has_access or event.event_type == "public":
                 accessible_events.append(event)
 
-        serializer = EventListSerializer(
-            accessible_events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(accessible_events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class PastEventsView(APIView):
@@ -333,50 +494,64 @@ class PastEventsView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="Filter by user attending/organizing",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="group_id", type=int, description="Filter by group", required=False
+            ),
+            OpenApiParameter(
+                name="days_back",
+                type=int,
+                description="Number of days back",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get past events with filters.",
+    )
     def get(self, request):
         """Get past events with filters"""
         user_id = request.query_params.get("user_id")
         group_id = request.query_params.get("group_id")
         days_back = int(request.query_params.get("days_back", 365))
-        limit = min(int(request.query_params.get("limit", 50)), 100)
-        offset = int(request.query_params.get("offset", 0))
 
-        # Prepare filters
         user = None
         group = None
 
         if user_id:
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                return Response(
-                    {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-                )
-
+            user = get_object_or_404(User, id=user_id)
         if group_id:
-            try:
-                group = Group.objects.get(id=group_id)
-            except Group.DoesNotExist:
-                return Response(
-                    {"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND
-                )
+            group = get_object_or_404(Group, id=group_id)
 
-        # Get past events
         events = EventService.get_past_events(
-            user=user, group=group, days_back=days_back, limit=limit, offset=offset
+            user=user, group=group, days_back=days_back
         )
 
-        # Filter accessible events
         accessible_events = []
         for event in events:
             has_access, _ = EventService.check_user_access(event, request.user)
             if has_access or event.event_type == "public":
                 accessible_events.append(event)
 
-        serializer = EventListSerializer(
-            accessible_events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(accessible_events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class EventSearchView(APIView):
@@ -384,13 +559,48 @@ class EventSearchView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="q", type=str, description="Search query", required=False
+            ),
+            OpenApiParameter(
+                name="location", type=str, description="Location filter", required=False
+            ),
+            OpenApiParameter(
+                name="type", type=str, description="Event type", required=False
+            ),
+            OpenApiParameter(
+                name="start_date",
+                type=str,
+                description="Start date (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="end_date",
+                type=str,
+                description="End date (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Search events by query, location, date range.",
+    )
     def get(self, request):
         """Search events"""
         query = request.query_params.get("q", "")
         location = request.query_params.get("location")
         event_type = request.query_params.get("type")
 
-        # Parse date range
         start_date_str = request.query_params.get("start_date")
         end_date_str = request.query_params.get("end_date")
         date_range = None
@@ -410,39 +620,49 @@ class EventSearchView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        limit = min(int(request.query_params.get("limit", 20)), 50)
-        offset = int(request.query_params.get("offset", 0))
-
-        # Search events
         events = EventService.search_events(
             query=query,
             location=location,
             date_range=date_range,
             event_type=event_type,
-            limit=limit,
-            offset=offset,
         )
 
-        # Filter accessible events
         accessible_events = []
         for event in events:
             has_access, _ = EventService.check_user_access(event, request.user)
             if has_access or event.event_type == "public":
                 accessible_events.append(event)
 
-        serializer = EventListSerializer(
-            accessible_events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(accessible_events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class FeaturedEventsView(APIView):
-    """Get featured events"""
+    """Get featured events (most popular)"""
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="min_attendees",
+                type=int,
+                description="Minimum attendees",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="days_ahead", type=int, description="Days ahead", required=False
+            ),
+            OpenApiParameter(
+                name="limit", type=int, description="Number of results", required=False
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get featured (most popular) events.",
+    )
     def get(self, request):
-        """Get featured events"""
         min_attendees = int(request.query_params.get("min_attendees", 5))
         days_ahead = int(request.query_params.get("days_ahead", 7))
         limit = min(int(request.query_params.get("limit", 10)), 20)
@@ -450,7 +670,6 @@ class FeaturedEventsView(APIView):
         events = EventService.get_featured_events(
             min_attendees=min_attendees, days_ahead=days_ahead, limit=limit
         )
-
         serializer = EventListSerializer(
             events, many=True, context={"request": request}
         )
@@ -462,12 +681,18 @@ class RecommendedEventsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="limit", type=int, description="Number of results", required=False
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get personalized event recommendations.",
+    )
     def get(self, request):
-        """Get recommended events"""
         limit = min(int(request.query_params.get("limit", 10)), 20)
-
         events = EventService.get_recommended_events(user=request.user, limit=limit)
-
         serializer = EventListSerializer(
             events, many=True, context={"request": request}
         )
@@ -479,6 +704,10 @@ class EventStatisticsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: EventStatisticsSerializer},
+        description="Get detailed statistics for an event (attendee counts, remaining spots, etc.).",
+    )
     def get(self, request, pk):
         """Get statistics for a specific event"""
         try:
@@ -501,6 +730,36 @@ class EventTimelineView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="start_date",
+                type=str,
+                description="Start date (ISO format)",
+                required=True,
+            ),
+            OpenApiParameter(
+                name="end_date",
+                type=str,
+                description="End date (ISO format)",
+                required=True,
+            ),
+            OpenApiParameter(
+                name="include_attending",
+                type=bool,
+                description="Include events user is attending",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="include_organized",
+                type=bool,
+                description="Include events user organized",
+                required=False,
+            ),
+        ],
+        responses={200: EventTimelineSerializer(many=True)},
+        description="Get a timeline of events within a date range for the current user.",
+    )
     def get(self, request):
         """Get event timeline within date range"""
         # Parse date range
@@ -550,44 +809,60 @@ class UserOrganizedEventsView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="User ID (optional, defaults to current user)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="upcoming_only",
+                type=bool,
+                description="Show only upcoming events",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get events organized by a specific user.",
+    )
     def get(self, request, user_id=None):
-        """Get events organized by user"""
         if user_id is None:
             user_id = request.query_params.get("user_id")
-
         if not user_id:
             return Response(
                 {"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-
+        user = get_object_or_404(User, id=user_id)
         upcoming_only = (
             request.query_params.get("upcoming_only", "true").lower() == "true"
         )
-        limit = min(int(request.query_params.get("limit", 50)), 100)
-        offset = int(request.query_params.get("offset", 0))
 
         events = EventService.get_user_organized_events(
-            user=user, upcoming_only=upcoming_only, limit=limit, offset=offset
+            user=user, upcoming_only=upcoming_only
         )
 
-        # Check access for each event
         accessible_events = []
         for event in events:
             has_access, _ = EventService.check_user_access(event, request.user)
             if has_access or event.event_type == "public":
                 accessible_events.append(event)
 
-        serializer = EventListSerializer(
-            accessible_events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(accessible_events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class GroupEventsView(APIView):
@@ -595,14 +870,29 @@ class GroupEventsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="upcoming_only",
+                type=bool,
+                description="Show only upcoming events",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get events for a group (user must be a group member for private groups).",
+    )
     def get(self, request, group_id):
-        """Get events for group"""
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
-            return Response(
-                {"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND
-            )
+        group = get_object_or_404(Group, id=group_id)
 
         # Check if user is group member (for private groups)
         if not GroupMemberService.is_member(group, request.user):
@@ -613,17 +903,13 @@ class GroupEventsView(APIView):
         upcoming_only = (
             request.query_params.get("upcoming_only", "true").lower() == "true"
         )
-        limit = min(int(request.query_params.get("limit", 50)), 100)
-        offset = int(request.query_params.get("offset", 0))
 
-        events = EventService.get_group_events(
-            group=group, upcoming_only=upcoming_only, limit=limit, offset=offset
-        )
+        events = EventService.get_group_events(group=group, upcoming_only=upcoming_only)
 
-        serializer = EventListSerializer(
-            events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
 
 
 class EventTypeEventsView(APIView):
@@ -631,9 +917,28 @@ class EventTypeEventsView(APIView):
 
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="upcoming_only",
+                type=bool,
+                description="Show only upcoming events",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: EventListSerializer(many=True)},
+        description="Get events filtered by event type (public, private, group).",
+    )
     def get(self, request, event_type):
-        """Get events by type"""
-        # Validate event type
         valid_types = [choice[0] for choice in Event.EVENT_TYPES]
         if event_type not in valid_types:
             return Response(
@@ -644,24 +949,18 @@ class EventTypeEventsView(APIView):
         upcoming_only = (
             request.query_params.get("upcoming_only", "true").lower() == "true"
         )
-        limit = min(int(request.query_params.get("limit", 50)), 100)
-        offset = int(request.query_params.get("offset", 0))
 
         events = EventService.get_events_by_type(
-            event_type=event_type,
-            upcoming_only=upcoming_only,
-            limit=limit,
-            offset=offset,
+            event_type=event_type, upcoming_only=upcoming_only
         )
 
-        # Filter accessible events
         accessible_events = []
         for event in events:
             has_access, _ = EventService.check_user_access(event, request.user)
             if has_access or event.event_type == "public":
                 accessible_events.append(event)
 
-        serializer = EventListSerializer(
-            accessible_events, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
+        paginator = EventsPagination()
+        page = paginator.paginate_queryset(accessible_events, request)
+        serializer = EventListSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
