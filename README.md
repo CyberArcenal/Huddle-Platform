@@ -1,3 +1,6 @@
+## 📄 Updated README.md (with API Documentation)
+
+```markdown
 # Huddle Platform
 
 Huddle Platform is a Django-powered backend for the **Huddle** social media app.  
@@ -65,6 +68,22 @@ python manage.py runserver
 
 ---
 
+## API Documentation
+
+The Huddle Platform API is fully documented using **OpenAPI 3.0.3**.  
+When the server is running, you can access:
+
+- **Interactive Swagger UI** → [`/api/docs/`](http://localhost:8000/api/docs/)  
+  Test and explore all endpoints directly from your browser.
+
+- **Raw OpenAPI schema** → [`/api/schema/`](http://localhost:8000/api/schema/)  
+  Returns the schema in JSON format. To download as YAML, use `/api/schema/?format=yaml`.
+
+- **Static YAML file** (optional)  
+  Save the schema locally by downloading from `/api/schema/?format=yaml` and place it in your project root as `schema.yml` for use with other tools (e.g., Postman, code generators).
+
+---
+
 ## Contributing
 Contributions are welcome!  
 Please fork the repository and submit a pull request.  
@@ -73,4 +92,5 @@ Follow the coding style and modular structure outlined in `core/settings/compone
 ---
 
 ## License
-This project is licensed under the **Apache License 2.0** – see the `[Looks like the result wasn't safe to show. Let's switch things up and try something else!]` file for details.
+This project is licensed under the **Apache License 2.0** – see the [LICENCE](./LICENCE) file for details.
+```
