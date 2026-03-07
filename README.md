@@ -1,6 +1,5 @@
 ## 📄 Updated README.md (with API Documentation)
 
-```markdown
 # Huddle Platform
 
 Huddle Platform is a Django-powered backend for the **Huddle** social media app.  
@@ -22,6 +21,7 @@ Built to support community-driven connections, it serves as the foundation for m
 ---
 
 ## Project Structure
+```bash
 core/
  ├── settings/
  │    ├── base.py          # Base Django settings
