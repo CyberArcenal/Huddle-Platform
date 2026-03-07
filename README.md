@@ -92,4 +92,3 @@ Follow the coding style and modular structure outlined in `core/settings/compone
 
 ## License
 This project is licensed under the **Apache License 2.0** – see the [LICENCE](./LICENCE) file for details.
-```
