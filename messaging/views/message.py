@@ -6,16 +6,26 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from global_utils.pagination import MessagingPagination
 from messaging.models import Conversation, Message
 from messaging.serializers.base import MessageSerializer, MessageCreateSerializer
-from drf_spectacular.utils import extend_schema, OpenApiExample
 
 
 class MessageListView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: MessageSerializer(many=True)},
+        description="Retrieve paginated list of messages in a conversation (oldest first)."
+    )
     def get(self, request, conversation_pk):
         conversation = get_object_or_404(Conversation, pk=conversation_pk)
         if request.user not in conversation.participants.all():
@@ -75,7 +85,6 @@ class MessageListView(APIView):
             ),
         ],
     )
-    
     def post(self, request, conversation_pk):
         conversation = get_object_or_404(Conversation, pk=conversation_pk)
         if request.user not in conversation.participants.all():

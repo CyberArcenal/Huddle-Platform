@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from feed.models import Like, Post, Comment
 from feed.serializers.like import LikeSerializer, LikeToggleSerializer
 from feed.services import LikeService
@@ -17,16 +20,40 @@ class LikeListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='content_type', type=str, description='Filter by content type (post, comment, story)', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: LikeSerializer(many=True)},
+        description="List likes created by the authenticated user, optionally filtered by content type."
+    )
     def get(self, request):
         content_type = request.query_params.get("content_type")
         likes = LikeService.get_user_likes(
             user=request.user, content_type=content_type
-        )   # no limit/offset
+        )
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(likes, request)
         serializer = LikeSerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        request=LikeSerializer,
+        responses={201: LikeSerializer},
+        examples=[
+            OpenApiExample(
+                'Like a post',
+                value={
+                    'content_type': 'post',
+                    'object_id': 42
+                },
+                request_only=True
+            )
+        ],
+        description="Create a new like. The user is automatically set to the current user."
+    )
     def post(self, request):
         """Create a new like"""
         data = request.data.copy()
@@ -49,6 +76,34 @@ class LikeToggleView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=LikeToggleSerializer,
+        responses={200: {'type': 'object', 'properties': {
+            'liked': {'type': 'boolean'},
+            'like_count': {'type': 'integer'},
+            'message': {'type': 'string'}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Toggle like request',
+                value={
+                    'content_type': 'post',
+                    'object_id': 42
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Toggle like response (like created)',
+                value={
+                    'liked': True,
+                    'like_count': 10,
+                    'message': 'Liked'
+                },
+                response_only=True
+            )
+        ],
+        description="Toggle like on an object: creates a like if not present, removes it if present."
+    )
     def post(self, request):
         """Toggle like on an object"""
         serializer = LikeToggleSerializer(
@@ -77,6 +132,10 @@ class LikeDetailView(APIView):
         """Get like object or return 404"""
         return get_object_or_404(Like, id=like_id)
 
+    @extend_schema(
+        responses={200: LikeSerializer},
+        description="Retrieve a specific like (only if owned by current user)."
+    )
     def get(self, request, like_id):
         """Retrieve a specific like"""
         like = self.get_object(like_id)
@@ -91,6 +150,10 @@ class LikeDetailView(APIView):
         serializer = LikeSerializer(like, context={"request": request})
         return Response(serializer.data)
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {'message': {'type': 'string'}}}},
+        description="Delete a like (unlike)."
+    )
     def delete(self, request, like_id):
         """Delete a like"""
         like = self.get_object(like_id)
@@ -120,8 +183,15 @@ class ObjectLikesView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: LikeSerializer(many=True)},
+        description="Get all likes for a specific object (post or comment)."
+    )
     def get(self, request, content_type, object_id):
-        # Validate and check permissions (unchanged)
         if content_type not in LikeService.CONTENT_TYPES:
             return Response(
                 {"error": f"Invalid content type. Must be one of {LikeService.CONTENT_TYPES}"},
@@ -144,7 +214,7 @@ class ObjectLikesView(APIView):
 
         likes = LikeService.get_likes_for_object(
             content_type=content_type, object_id=object_id
-        )   # no limit/offset
+        )
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(likes, request)
         serializer = LikeSerializer(page, many=True, context={"request": request})
@@ -156,9 +226,16 @@ class LikeCheckView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {
+            'has_liked': {'type': 'boolean'},
+            'like_count': {'type': 'integer'},
+            'content_type': {'type': 'string'},
+            'object_id': {'type': 'integer'}
+        }}},
+        description="Check if the authenticated user has liked a specific object, and get total like count."
+    )
     def get(self, request, content_type, object_id):
-        """Check if authenticated user has liked an object"""
-        # Validate content type
         if content_type not in LikeService.CONTENT_TYPES:
             return Response(
                 {
@@ -188,8 +265,18 @@ class RecentLikersView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Number of recent likers to return', required=False),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'content_type': {'type': 'string'},
+            'object_id': {'type': 'integer'},
+            'recent_likers': {'type': 'array', 'items': {'type': 'object'}}
+        }}},
+        description="Get a list of users who recently liked an object (limited)."
+    )
     def get(self, request, content_type, object_id):
-        # Validate and check permissions (unchanged)
         if content_type not in LikeService.CONTENT_TYPES:
             return Response(
                 {"error": f"Invalid content type. Must be one of {LikeService.CONTENT_TYPES}"},
@@ -206,7 +293,7 @@ class RecentLikersView(APIView):
         limit = int(request.query_params.get("limit", 10))
         recent_likers = LikeService.get_recent_likers(
             content_type=content_type, object_id=object_id, limit=limit
-        )   # this service call already uses limit – we keep it
+        )
         from users.serializers import UserSerializer
         serializer = UserSerializer(recent_likers, many=True, context={"request": request})
         return Response(
@@ -223,9 +310,19 @@ class MostLikedContentView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='days', type=int, description='Number of days to look back', required=False),
+            OpenApiParameter(name='limit', type=int, description='Number of results', required=False),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'content_type': {'type': 'string'},
+            'timeframe_days': {'type': 'integer'},
+            'results': {'type': 'array'}
+        }}},
+        description="Get the most liked content (posts or comments) within a time period."
+    )
     def get(self, request, content_type):
-        """Get most liked content of a specific type"""
-        # Validate content type
         if content_type not in ["post", "comment"]:
             return Response(
                 {"error": 'Content type must be either "post" or "comment"'},
@@ -269,8 +366,14 @@ class UserLikeStatisticsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='user_id', type=int, description='User ID (defaults to current user)', required=False),
+        ],
+        responses={200: {'type': 'object'}},
+        description="Get like statistics for a user (total likes given, breakdown by type, etc.)."
+    )
     def get(self, request, user_id=None):
-        """Get like statistics for a user"""
         if user_id:
             target_user = get_object_or_404(User, id=user_id)
             # Users can only view their own statistics
@@ -291,8 +394,15 @@ class MutualLikesView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {
+            'user1_id': {'type': 'integer'},
+            'user2_id': {'type': 'integer'},
+            'mutual_likes': {'type': 'object'}
+        }}},
+        description="Get mutual likes (posts/comments both users have liked) between the current user and another user."
+    )
     def get(self, request, user_id):
-        """Get mutual likes between authenticated user and another user"""
         other_user = get_object_or_404(User, id=user_id)
 
         mutual_likes = LikeService.get_mutual_likes(

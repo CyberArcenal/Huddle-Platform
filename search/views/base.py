@@ -9,6 +9,8 @@ from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from django.core.cache import cache
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from global_utils.pagination import SearchPagination
 from search.serializers.base import (
     ClearHistoryRequestSerializer,
@@ -25,27 +27,28 @@ class SearchHistoryAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='search_type', type=str, description='Filter by type (all, users, groups, posts)', required=False),
+            OpenApiParameter(name='days', type=int, description='Filter by last X days', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: SearchHistorySerializer(many=True)},
+        description="Retrieve the authenticated user's search history, with optional filters and pagination."
+    )
     def get(self, request):
-        """
-        Get user's search history
-        Query Parameters:
-        - search_type: Filter by type (all, users, groups, posts)
-        - days: Filter by last X days
-        """
         try:
             search_type = request.query_params.get("search_type")
             days = request.query_params.get("days")
             days = int(days) if days else None
 
-            # Get search history (full queryset, no slicing)
             history = SearchHistoryService.get_user_search_history(
                 user=request.user,
                 search_type=search_type,
                 days=days,
-                # limit/offset removed – service should return full queryset
             )
 
-            # Apply pagination
             paginator = SearchPagination()
             page = paginator.paginate_queryset(history, request)
             serializer = SearchHistorySerializer(page, many=True)
@@ -56,12 +59,48 @@ class SearchHistoryAPIView(APIView):
                 {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
 
+    @extend_schema(
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'query': {'type': 'string'},
+                    'search_type': {'type': 'string'},
+                    'results_count': {'type': 'integer'}
+                }
+            }
+        },
+        responses={201: SearchHistorySerializer},
+        examples=[
+            OpenApiExample(
+                'Record search',
+                value={
+                    'query': 'python',
+                    'search_type': 'all',
+                    'results_count': 42
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Response',
+                value={
+                    'success': True,
+                    'message': 'Search recorded successfully',
+                    'data': {
+                        'id': 1,
+                        'user': 1,
+                        'query': 'python',
+                        'search_type': 'all',
+                        'results_count': 42,
+                        'searched_at': '2025-03-07T12:34:56Z'
+                    }
+                },
+                response_only=True
+            )
+        ],
+        description="Record a new search entry."
+    )
     def post(self, request):
-        """
-        Record a new search
-        Required Fields: query
-        Optional Fields: search_type, results_count
-        """
         try:
             query = request.data.get("query", "")
             search_type = request.data.get("search_type", "all")
@@ -76,7 +115,6 @@ class SearchHistoryAPIView(APIView):
 
             serializer = SearchHistorySerializer(search_record)
 
-            # Clear cache for suggestions if exists
             cache_key = f"search_suggestions_{request.user.id}"
             cache.delete(cache_key)
 
@@ -94,13 +132,32 @@ class SearchHistoryAPIView(APIView):
                 {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
 
+    @extend_schema(
+        request=ClearHistoryRequestSerializer,
+        responses={200: {'type': 'object', 'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'details': {'type': 'object'}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Clear history request',
+                value={'older_than_days': 30, 'search_type': 'all'},
+                request_only=True
+            ),
+            OpenApiExample(
+                'Clear history response',
+                value={
+                    'success': True,
+                    'message': 'Successfully deleted 15 search records',
+                    'details': {'deleted': 15}
+                },
+                response_only=True
+            )
+        ],
+        description="Clear the user's search history, optionally filtering by age or type."
+    )
     def delete(self, request):
-        """
-        Clear user's search history
-        Optional Query Parameters:
-        - older_than_days: Clear history older than X days
-        - search_type: Clear history of specific type
-        """
         try:
             serializer = ClearHistoryRequestSerializer(data=request.data)
             if not serializer.is_valid():
@@ -144,6 +201,27 @@ class DeleteSearchEntryAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={
+            200: {'type': 'object', 'properties': {'success': {'type': 'boolean'}, 'message': {'type': 'string'}}},
+            404: {'type': 'object', 'properties': {'success': {'type': 'boolean'}, 'error': {'type': 'string'}}}
+        },
+        examples=[
+            OpenApiExample(
+                'Success',
+                value={'success': True, 'message': 'Search entry deleted successfully'},
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Not found',
+                value={'success': False, 'error': 'Search entry not found or you do not have permission'},
+                response_only=True,
+                status_codes=['404']
+            )
+        ],
+        description="Delete a specific search history entry by its ID."
+    )
     def delete(self, request, entry_id):
         try:
             success = SearchHistoryService.delete_search_entry(
@@ -174,15 +252,32 @@ class RecentSearchesAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(cache_page(60 * 5))  # Cache for 5 minutes
+    @method_decorator(cache_page(60 * 5))
     @method_decorator(vary_on_cookie)
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Number of results (default 10)', required=False),
+            OpenApiParameter(name='unique', type=bool, description='Return unique queries only', required=False),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'success': {'type': 'boolean'},
+            'count': {'type': 'integer'},
+            'results': {'type': 'array', 'items': {'type': 'string'}}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Response',
+                value={
+                    'success': True,
+                    'count': 3,
+                    'results': ['python', 'django', 'react']
+                },
+                response_only=True
+            )
+        ],
+        description="Get a list of the user's recent search queries."
+    )
     def get(self, request):
-        """
-        Get recent searches
-        Query Parameters:
-        - limit: Number of results (default: 10)
-        - unique: Return unique queries only (default: true)
-        """
         try:
             limit = int(request.query_params.get("limit", 10))
             unique = request.query_params.get("unique", "true").lower() == "true"
@@ -208,16 +303,33 @@ class RecentSearchesAPIView(APIView):
 class PopularSearchesAPIView(APIView):
     """Get popular search queries"""
 
-    @method_decorator(cache_page(60 * 30))  # Cache for 30 minutes
+    @method_decorator(cache_page(60 * 30))
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='days', type=int, description='Time period in days (default 7)', required=False),
+            OpenApiParameter(name='limit', type=int, description='Number of results (default 10)', required=False),
+            OpenApiParameter(name='search_type', type=str, description='Filter by search type', required=False),
+            OpenApiParameter(name='user_only', type=bool, description='Show only user\'s popular searches (auth required)', required=False),
+        ],
+        responses={200: PopularSearchSerializer(many=True)},
+        examples=[
+            OpenApiExample(
+                'Response',
+                value={
+                    'success': True,
+                    'count': 3,
+                    'results': [
+                        {'query': 'django', 'count': 150},
+                        {'query': 'python', 'count': 120},
+                        {'query': 'react', 'count': 90}
+                    ]
+                },
+                response_only=True
+            )
+        ],
+        description="Get globally popular searches or, if user_only=true, popular searches for the authenticated user."
+    )
     def get(self, request):
-        """
-        Get popular searches
-        Query Parameters:
-        - days: Time period in days (default: 7)
-        - limit: Number of results (default: 10)
-        - search_type: Filter by type
-        - user_only: Show only user's popular searches (authenticated only)
-        """
         try:
             days = int(request.query_params.get("days", 7))
             limit = int(request.query_params.get("limit", 10))
@@ -252,14 +364,33 @@ class PopularSearchesAPIView(APIView):
 class SearchSuggestionsAPIView(APIView):
     """Get search suggestions based on prefix"""
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='prefix', type=str, description='Search prefix (required)', required=True),
+            OpenApiParameter(name='limit', type=int, description='Number of suggestions (default 10)', required=False),
+            OpenApiParameter(name='include_anonymous', type=bool, description='Include anonymous searches', required=False),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'success': {'type': 'boolean'},
+            'count': {'type': 'integer'},
+            'prefix': {'type': 'string'},
+            'suggestions': {'type': 'array', 'items': {'type': 'string'}}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Response',
+                value={
+                    'success': True,
+                    'count': 3,
+                    'prefix': 'py',
+                    'suggestions': ['python', 'pytest', 'pygame']
+                },
+                response_only=True
+            )
+        ],
+        description="Get autocomplete suggestions based on a prefix."
+    )
     def get(self, request):
-        """
-        Get search suggestions
-        Query Parameters:
-        - prefix: Search prefix (required)
-        - limit: Number of suggestions (default: 10)
-        - include_anonymous: Include anonymous searches (default: false)
-        """
         try:
             prefix = request.query_params.get("prefix", "").strip()
             limit = int(request.query_params.get("limit", 10))
@@ -313,14 +444,31 @@ class SearchStatisticsAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @method_decorator(cache_page(60 * 10))  # Cache for 10 minutes
+    @method_decorator(cache_page(60 * 10))
     @method_decorator(vary_on_cookie)
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='days', type=int, description='Time period in days (default 30)', required=False),
+        ],
+        responses={200: SearchStatisticsSerializer},
+        examples=[
+            OpenApiExample(
+                'Response',
+                value={
+                    'success': True,
+                    'statistics': {
+                        'total_searches': 250,
+                        'unique_queries': 45,
+                        'avg_results_per_search': 12.3,
+                        'top_search_types': {'all': 150, 'users': 50, 'groups': 30, 'posts': 20}
+                    }
+                },
+                response_only=True
+            )
+        ],
+        description="Get search statistics for the authenticated user."
+    )
     def get(self, request):
-        """
-        Get search statistics
-        Query Parameters:
-        - days: Time period in days (default: 30)
-        """
         try:
             days = int(request.query_params.get("days", 30))
 
@@ -341,14 +489,36 @@ class SearchStatisticsAPIView(APIView):
 class SearchTrendsAPIView(APIView):
     """Get search trends over time"""
 
-    @method_decorator(cache_page(60 * 60))  # Cache for 1 hour
+    @method_decorator(cache_page(60 * 60))
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='days', type=int, description='Time period in days (default 7)', required=False),
+            OpenApiParameter(name='interval', type=str, description='Grouping interval (day/hour)', required=False),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'success': {'type': 'boolean'},
+            'count': {'type': 'integer'},
+            'interval': {'type': 'string'},
+            'trends': {'type': 'array', 'items': {'type': 'object'}}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Response',
+                value={
+                    'success': True,
+                    'count': 7,
+                    'interval': 'day',
+                    'trends': [
+                        {'date': '2025-03-01', 'count': 42},
+                        {'date': '2025-03-02', 'count': 38}
+                    ]
+                },
+                response_only=True
+            )
+        ],
+        description="Get search volume trends over time."
+    )
     def get(self, request):
-        """
-        Get search trends
-        Query Parameters:
-        - days: Time period in days (default: 7)
-        - interval: Grouping interval (day/hour) (default: day)
-        """
         try:
             days = int(request.query_params.get("days", 7))
             interval = request.query_params.get("interval", "day")
@@ -386,13 +556,22 @@ class ExportSearchHistoryAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='format', type=str, description='Export format (json)', required=False),
+            OpenApiParameter(name='include_metadata', type=bool, description='Include metadata', required=False),
+        ],
+        responses={200: {'type': 'object'}},
+        examples=[
+            OpenApiExample(
+                'Response (file download)',
+                value={'exported_data': '...'},
+                response_only=True
+            )
+        ],
+        description="Export the user's search history as a JSON file."
+    )
     def get(self, request):
-        """
-        Export search history
-        Query Parameters:
-        - format: Export format (json) (default: json)
-        - include_metadata: Include metadata (default: true)
-        """
         try:
             export_format = request.query_params.get("format", "json")
             include_metadata = (

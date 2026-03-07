@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.core.files.storage import default_storage
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from ..serializers.media import (
     ProfilePictureUploadSerializer,
     CoverPhotoUploadSerializer,
@@ -17,8 +19,33 @@ class ProfilePictureUploadView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request=ProfilePictureUploadSerializer,
+        responses={200: {'type': 'object'}},
+        examples=[
+            OpenApiExample(
+                'Upload request',
+                value={
+                    'profile_picture': 'binary file data'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Success response',
+                value={
+                    'message': 'Profile picture uploaded successfully',
+                    'user': {
+                        'id': 1,
+                        'username': 'johndoe',
+                        'profile_picture': 'https://...'
+                    }
+                },
+                response_only=True
+            )
+        ],
+        description="Upload or update the current user's profile picture."
+    )
     def post(self, request):
-        """Upload or update profile picture"""
         serializer = ProfilePictureUploadSerializer(
             data=request.data,
             context={'request': request}
@@ -28,7 +55,6 @@ class ProfilePictureUploadView(APIView):
             try:
                 user = serializer.save()
                 
-                # Return updated user data
                 from ..serializers.user import UserProfileSerializer
                 user_serializer = UserProfileSerializer(
                     user,
@@ -60,8 +86,33 @@ class CoverPhotoUploadView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request=CoverPhotoUploadSerializer,
+        responses={200: {'type': 'object'}},
+        examples=[
+            OpenApiExample(
+                'Upload request',
+                value={
+                    'cover_photo': 'binary file data'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Success response',
+                value={
+                    'message': 'Cover photo uploaded successfully',
+                    'user': {
+                        'id': 1,
+                        'username': 'johndoe',
+                        'cover_photo': 'https://...'
+                    }
+                },
+                response_only=True
+            )
+        ],
+        description="Upload or update the current user's cover photo."
+    )
     def post(self, request):
-        """Upload or update cover photo"""
         serializer = CoverPhotoUploadSerializer(
             data=request.data,
             context={'request': request}
@@ -71,7 +122,6 @@ class CoverPhotoUploadView(APIView):
             try:
                 user = serializer.save()
                 
-                # Return updated user data
                 from ..serializers.user import UserProfileSerializer
                 user_serializer = UserProfileSerializer(
                     user,
@@ -103,8 +153,12 @@ class RemoveProfilePictureView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request=RemoveProfilePictureSerializer,
+        responses={200: {'type': 'object'}},
+        description="Remove the current user's profile picture."
+    )
     def post(self, request):
-        """Remove profile picture"""
         serializer = RemoveProfilePictureSerializer(
             data=request.data,
             context={'request': request}
@@ -114,7 +168,6 @@ class RemoveProfilePictureView(APIView):
             try:
                 user = serializer.save()
                 
-                # Return updated user data
                 from ..serializers.user import UserProfileSerializer
                 user_serializer = UserProfileSerializer(
                     user,
@@ -145,8 +198,12 @@ class RemoveCoverPhotoView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request=RemoveCoverPhotoSerializer,
+        responses={200: {'type': 'object'}},
+        description="Remove the current user's cover photo."
+    )
     def post(self, request):
-        """Remove cover photo"""
         serializer = RemoveCoverPhotoSerializer(
             data=request.data,
             context={'request': request}
@@ -156,7 +213,6 @@ class RemoveCoverPhotoView(APIView):
             try:
                 user = serializer.save()
                 
-                # Return updated user data
                 from ..serializers.user import UserProfileSerializer
                 user_serializer = UserProfileSerializer(
                     user,
@@ -187,8 +243,14 @@ class GetProfilePictureView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='user_id', type=int, description='User ID (optional, defaults to current)', required=False),
+        ],
+        responses={200: {'type': 'object'}},
+        description="Get the profile picture URL for a user."
+    )
     def get(self, request, user_id=None):
-        """Get profile picture URL for a user"""
         try:
             from ..services.user import UserService
             
@@ -227,8 +289,14 @@ class GetCoverPhotoView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='user_id', type=int, description='User ID (optional, defaults to current)', required=False),
+        ],
+        responses={200: {'type': 'object'}},
+        description="Get the cover photo URL for a user."
+    )
     def get(self, request, user_id=None):
-        """Get cover photo URL for a user"""
         try:
             from ..services.user import UserService
             
@@ -267,8 +335,26 @@ class ValidateImageUploadView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request={'multipart/form-data': {'image': 'file'}},
+        responses={200: {'type': 'object'}},
+        examples=[
+            OpenApiExample(
+                'Valid response',
+                value={
+                    'valid': True,
+                    'filename': 'photo.jpg',
+                    'size': 102400,
+                    'dimensions': {'width': 800, 'height': 600},
+                    'format': 'JPEG',
+                    'mime_type': 'image/jpeg'
+                },
+                response_only=True
+            )
+        ],
+        description="Validate an image file before upload (checks size, dimensions, format)."
+    )
     def post(self, request):
-        """Validate image file before uploading"""
         try:
             from PIL import Image
             import os
@@ -281,7 +367,6 @@ class ValidateImageUploadView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Check file size (max 5MB)
             max_size = 5 * 1024 * 1024  # 5MB
             if image_file.size > max_size:
                 return Response({
@@ -289,15 +374,11 @@ class ValidateImageUploadView(APIView):
                     'error': f'Image size must be less than 5MB. Current size: {image_file.size / 1024 / 1024:.2f}MB'
                 })
             
-            # Check image dimensions and format
             try:
                 image = Image.open(image_file)
                 width, height = image.size
-                
-                # Get format
                 format_name = image.format
                 
-                # Check if format is supported
                 supported_formats = ['JPEG', 'PNG', 'GIF', 'WEBP']
                 if format_name not in supported_formats:
                     return Response({
@@ -305,7 +386,6 @@ class ValidateImageUploadView(APIView):
                         'error': f'Image format {format_name} not supported. Must be one of: {", ".join(supported_formats)}'
                     })
                 
-                # Check dimensions
                 min_dimension = 100
                 if width < min_dimension or height < min_dimension:
                     return Response({

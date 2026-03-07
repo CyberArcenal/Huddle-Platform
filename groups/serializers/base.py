@@ -11,7 +11,7 @@ class GroupMinimalSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'description', 'icon', 'creator', 'creator_id']
+        fields = ['id', 'name', 'description', 'profile_picture', 'creator', 'creator_id']
         read_only_fields = fields
         
         
@@ -30,9 +30,6 @@ class GroupSerializer(serializers.ModelSerializer):
             'created_at', 'is_member', 'member_role'
         ]
         read_only_fields = ['creator', 'member_count', 'created_at']
-        extra_kwargs = {
-            'creator': {'write_only': True}
-        }
     
     def get_is_member(self, obj):
         """Check if current user is a member of the group"""

@@ -6,6 +6,8 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from global_utils.pagination import StoriesPagination
 from stories.serializers.base import (
     StoryCleanupResponseSerializer, StoryCreateSerializer, StoryFeedSerializer,
@@ -22,15 +24,46 @@ class StoryListView(APIView):
     """Get active stories or create new story"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: StorySerializer(many=True)},
+        description="Retrieve a paginated list of active stories (including those of followed users and public stories)."
+    )
     def get(self, request):
         """Get active stories"""
-        # Get full queryset from service (no limit/offset)
         stories = StoryService.get_active_stories(user=request.user)
         paginator = StoriesPagination()
         page = paginator.paginate_queryset(stories, request)
         serializer = StorySerializer(page, many=True, context={'request': request})
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        request=StoryCreateSerializer,
+        responses={201: StorySerializer},
+        examples=[
+            OpenApiExample(
+                'Create image story',
+                value={
+                    'story_type': 'image',
+                    'media_url': 'https://example.com/story.jpg',
+                    'content': 'Optional caption'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Create text story',
+                value={
+                    'story_type': 'text',
+                    'content': 'Just a thought...'
+                },
+                request_only=True
+            )
+        ],
+        description="Create a new story. The story will be active for 24 hours."
+    )
     def post(self, request):
         """Create new story"""
         serializer = StoryCreateSerializer(data=request.data, context={'request': request})
@@ -53,6 +86,10 @@ class StoryDetailView(APIView):
             return None
         return story
 
+    @extend_schema(
+        responses={200: StorySerializer},
+        description="Retrieve a single story by ID."
+    )
     def get(self, request, story_id):
         story = self.get_object(story_id)
         if not story:
@@ -63,6 +100,18 @@ class StoryDetailView(APIView):
         serializer = StorySerializer(story, context={'request': request})
         return Response(serializer.data)
 
+    @extend_schema(
+        request=StoryUpdateSerializer,
+        responses={200: StorySerializer},
+        examples=[
+            OpenApiExample(
+                'Update story',
+                value={'content': 'Updated caption'},
+                request_only=True
+            )
+        ],
+        description="Update a story (e.g., change caption). Only the owner can update."
+    )
     def put(self, request, story_id):
         story = self.get_object(story_id)
         if not story:
@@ -83,6 +132,10 @@ class StoryDetailView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {'status': {'type': 'string'}}}},
+        description="Permanently delete a story. Only the owner can delete."
+    )
     def delete(self, request, story_id):
         story = self.get_object(story_id)
         if not story:
@@ -107,6 +160,15 @@ class StoryFeedView(APIView):
     """Get personalized story feed (structured, not paginated)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='include_own', type=bool, description='Include user\'s own stories', required=False),
+            OpenApiParameter(name='limit_per_user', type=int, description='Max stories per user', required=False),
+            OpenApiParameter(name='max_users', type=int, description='Max number of users to include', required=False),
+        ],
+        responses={200: StoryFeedSerializer(many=True)},
+        description="Generate a personalized story feed grouped by user."
+    )
     def get(self, request):
         include_own = request.query_params.get('include_own', 'true').lower() == 'true'
         limit_per_user = int(request.query_params.get('limit_per_user', 3))
@@ -127,6 +189,10 @@ class StoryStatsView(APIView):
     """Get story statistics"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: StoryStatsSerializer},
+        description="Get statistics about the current user's stories (total, views, etc.)."
+    )
     def get(self, request):
         stats = StoryService.get_story_stats(request.user)
         serializer = StoryStatsSerializer(stats)
@@ -137,6 +203,18 @@ class StoryViewCreateView(APIView):
     """Record a story view"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=StoryViewCreateSerializer,
+        responses={201: StoryViewSerializer},
+        examples=[
+            OpenApiExample(
+                'Record view',
+                value={'story_id': 123},
+                request_only=True
+            )
+        ],
+        description="Record that the current user has viewed a story."
+    )
     def post(self, request, story_id):
         serializer = StoryViewCreateSerializer(
             data={'story_id': story_id},
@@ -155,6 +233,14 @@ class StoryViewsListView(APIView):
     """Get views for a specific story"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: StoryViewSerializer(many=True)},
+        description="Retrieve a paginated list of users who viewed a story. Only the story owner can access."
+    )
     def get(self, request, story_id):
         story = StoryService.get_story_by_id(story_id)
         if not story:
@@ -162,7 +248,12 @@ class StoryViewsListView(APIView):
                 {'error': 'Story not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        # Get full queryset (no limit/offset)
+        # Permission check: only owner or admin can see viewers
+        if story.user != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'You do not have permission to view viewers of this story'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         views = StoryViewService.get_story_views(story)
         paginator = StoriesPagination()
         page = paginator.paginate_queryset(views, request)
@@ -174,6 +265,10 @@ class StoryViewCountView(APIView):
     """Get view count for a story"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: StoryViewCountSerializer},
+        description="Get total view count and unique viewers for a story. Accessible if the story is visible to the user."
+    )
     def get(self, request, story_id):
         story = StoryService.get_story_by_id(story_id)
         if not story:
@@ -194,12 +289,25 @@ class StoryRecentViewersView(APIView):
     """Get recent viewers for a story (limited list, not paginated)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='hours', type=int, description='Lookback period in hours', required=False),
+            OpenApiParameter(name='limit', type=int, description='Maximum number of viewers', required=False),
+        ],
+        responses={200: StoryRecentViewerSerializer(many=True)},
+        description="Get a list of recent viewers of a story. Only the story owner can access."
+    )
     def get(self, request, story_id):
         story = StoryService.get_story_by_id(story_id)
         if not story:
             return Response(
                 {'error': 'Story not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        if story.user != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'You do not have permission to view viewers of this story'},
+                status=status.HTTP_403_FORBIDDEN
             )
         hours = int(request.query_params.get('hours', 24))
         limit = int(request.query_params.get('limit', 50))
@@ -213,6 +321,10 @@ class StoryDeactivateView(APIView):
     """Deactivate a story (soft delete)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {'status': {'type': 'string'}}}},
+        description="Deactivate a story (soft delete). The story will no longer appear in feeds. Only the owner can deactivate."
+    )
     def post(self, request, story_id):
         story = StoryService.get_story_by_id(story_id)
         if not story:
@@ -233,6 +345,18 @@ class StoryExtendView(APIView):
     """Extend story expiration"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'additional_hours': 24}},
+        responses={200: {'type': 'object', 'properties': {'status': {'type': 'string'}}}},
+        examples=[
+            OpenApiExample(
+                'Extend request',
+                value={'additional_hours': 12},
+                request_only=True
+            )
+        ],
+        description="Extend the life of an active story by a given number of hours. Only the owner can extend."
+    )
     def post(self, request, story_id):
         story = StoryService.get_story_by_id(story_id)
         if not story:
@@ -254,6 +378,15 @@ class UserStoriesView(APIView):
     """Get stories for a specific user"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='include_expired', type=bool, description='Include expired stories', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: StorySerializer(many=True)},
+        description="Retrieve stories posted by a specific user (paginated)."
+    )
     def get(self, request, user_id=None):
         target_user_id = user_id or request.user.id
         from users.models import User
@@ -263,7 +396,6 @@ class UserStoriesView(APIView):
 
         include_expired = request.query_params.get('include_expired', 'false').lower() == 'true'
 
-        # Get full queryset (no limit/offset)
         stories = StoryService.get_user_stories(
             user=user,
             include_expired=include_expired
@@ -278,6 +410,13 @@ class FollowingStoriesView(APIView):
     """Get stories from followed users (structured feed, not paginated)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Maximum number of stories to return', required=False),
+        ],
+        responses={200: StoryFeedSerializer(many=True)},
+        description="Get a list of stories from users followed by the current user, grouped by user."
+    )
     def get(self, request):
         limit = int(request.query_params.get('limit', 50))
 
@@ -290,6 +429,14 @@ class StoryHighlightsView(APIView):
     """Get story highlights (limited list, not paginated)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='days', type=int, description='Number of days to look back', required=False),
+            OpenApiParameter(name='limit', type=int, description='Number of highlights', required=False),
+        ],
+        responses={200: StoryHighlightSerializer(many=True)},
+        description="Get highlighted stories (most viewed) for the current user."
+    )
     def get(self, request):
         days = int(request.query_params.get('days', 7))
         limit = int(request.query_params.get('limit', 10))
@@ -307,6 +454,13 @@ class StoryRecommendationsView(APIView):
     """Get story recommendations (limited list, not paginated)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Number of recommendations', required=False),
+        ],
+        responses={200: StoryRecommendationSerializer(many=True)},
+        description="Get personalized story recommendations for the current user."
+    )
     def get(self, request):
         limit = int(request.query_params.get('limit', 5))
 
@@ -322,6 +476,18 @@ class StoryCleanupView(APIView):
     """Cleanup expired stories (admin only)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'deactivate_only': True}},
+        responses={200: StoryCleanupResponseSerializer},
+        examples=[
+            OpenApiExample(
+                'Cleanup response',
+                value={'deactivated': 5, 'deleted': 2},
+                response_only=True
+            )
+        ],
+        description="Admin endpoint to clean up expired stories (deactivate or delete)."
+    )
     def post(self, request):
         if not request.user.is_staff:
             return Response(
@@ -338,10 +504,18 @@ class StoriesByTypeView(APIView):
     """Get stories by type"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='active_only', type=bool, description='Only active stories', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: StorySerializer(many=True)},
+        description="Retrieve stories filtered by type (image, video, text), with optional active filter and pagination."
+    )
     def get(self, request, story_type):
         active_only = request.query_params.get('active_only', 'true').lower() == 'true'
 
-        # Get full queryset (no limit/offset)
         stories = StoryService.get_stories_by_type(
             story_type=story_type,
             active_only=active_only
@@ -356,6 +530,10 @@ class StoryViewStatsView(APIView):
     """Get viewing statistics for the current user"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: {'type': 'object'}},
+        description="Get statistics about the current user's story viewing habits (stories viewed, unique creators, etc.)."
+    )
     def get(self, request):
         stats = StoryViewService.get_user_story_view_stats(request.user)
         return Response(stats)
@@ -365,6 +543,10 @@ class MutualStoryViewsView(APIView):
     """Get mutual story viewing statistics between two users"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: {'type': 'object'}},
+        description="Get mutual story viewing data between the current user and another user."
+    )
     def get(self, request, other_user_id):
         from users.models import User
         from django.shortcuts import get_object_or_404
@@ -379,6 +561,14 @@ class PopularStoriesView(APIView):
     """Get popular stories (limited list, not paginated)"""
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='hours', type=int, description='Lookback period in hours', required=False),
+            OpenApiParameter(name='limit', type=int, description='Number of stories', required=False),
+        ],
+        responses={200: {'type': 'array', 'items': {'type': 'object'}}},
+        description="Get the most viewed stories in the last N hours."
+    )
     def get(self, request):
         hours = int(request.query_params.get('hours', 24))
         limit = int(request.query_params.get('limit', 20))

@@ -6,6 +6,8 @@ from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from global_utils.pagination import UsersPagination
 
 from ..services.user import UserService
@@ -26,8 +28,45 @@ class UserRegisterView(APIView):
     
     permission_classes = [permissions.AllowAny]
     
+    @extend_schema(
+        request=UserCreateSerializer,
+        responses={201: UserProfileSerializer},
+        examples=[
+            OpenApiExample(
+                'Registration request',
+                value={
+                    'username': 'newuser',
+                    'email': 'user@example.com',
+                    'password': 'securepass123',
+                    'first_name': 'John',
+                    'last_name': 'Doe'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Registration response',
+                value={
+                    'id': 1,
+                    'username': 'newuser',
+                    'email': 'user@example.com',
+                    'first_name': 'John',
+                    'last_name': 'Doe',
+                    'bio': '',
+                    'profile_picture': None,
+                    'cover_photo': None,
+                    'date_of_birth': None,
+                    'phone_number': '',
+                    'is_verified': False,
+                    'status': 'active',
+                    'created_at': '2025-03-07T12:34:56Z',
+                    'updated_at': '2025-03-07T12:34:56Z'
+                },
+                response_only=True
+            )
+        ],
+        description="Register a new user account."
+    )
     def post(self, request):
-        """Register a new user"""
         serializer = UserCreateSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
@@ -35,7 +74,6 @@ class UserRegisterView(APIView):
                 with transaction.atomic():
                     user = serializer.save()
                     
-                    # Log security event
                     SecurityLogService.create_log(
                         user=user,
                         event_type='signup',
@@ -44,7 +82,6 @@ class UserRegisterView(APIView):
                         details='User registered successfully'
                     )
                     
-                    # Return user data (excluding password)
                     response_serializer = UserProfileSerializer(
                         user, 
                         context={'request': request}
@@ -74,16 +111,36 @@ class UserProfileView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        responses={200: UserProfileSerializer},
+        description="Get the profile of the currently authenticated user."
+    )
     def get(self, request):
-        """Get current user profile"""
         serializer = UserProfileSerializer(
             request.user,
             context={'request': request}
         )
         return Response(serializer.data)
     
+    @extend_schema(
+        request=UserUpdateSerializer,
+        responses={200: {'type': 'object', 'properties': {
+            'message': {'type': 'string'},
+            'user': UserProfileSerializer().data
+        }}},
+        examples=[
+            OpenApiExample(
+                'Update profile',
+                value={
+                    'bio': 'New bio',
+                    'phone_number': '+1234567890'
+                },
+                request_only=True
+            )
+        ],
+        description="Update the profile of the currently authenticated user."
+    )
     def put(self, request):
-        """Update user profile"""
         serializer = UserUpdateSerializer(
             request.user,
             data=request.data,
@@ -95,7 +152,6 @@ class UserProfileView(APIView):
             try:
                 user = serializer.save()
                 
-                # Log activity
                 from ..services.user_activity import UserActivityService
                 UserActivityService.log_activity(
                     user=request.user,
@@ -129,8 +185,11 @@ class UserDetailView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        responses={200: UserProfileSerializer},
+        description="Retrieve a user's public profile by ID."
+    )
     def get(self, request, user_id):
-        """Get user profile by ID"""
         try:
             user = UserService.get_user_by_id(user_id)
             
@@ -158,8 +217,16 @@ class UserSearchView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='q', type=str, description='Search query (minimum 2 characters)', required=True),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: UserListSerializer(many=True)},
+        description="Search users by username, first name, or last name."
+    )
     def get(self, request):
-        """Search users by query"""
         query = request.query_params.get('q', '').strip()
         if not query or len(query) < 2:
             return Response(
@@ -167,7 +234,7 @@ class UserSearchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         try:
-            users = UserService.search_users(query)   # returns full queryset
+            users = UserService.search_users(query)
             paginator = UsersPagination()
             page = paginator.paginate_queryset(users, request)
             serializer = UserListSerializer(page, many=True, context={'request': request})
@@ -181,13 +248,30 @@ class UserStatusUpdateView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request=UserStatusSerializer,
+        responses={200: {'type': 'object', 'properties': {
+            'message': {'type': 'string'},
+            'user_id': {'type': 'integer'},
+            'status': {'type': 'string'}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Update status',
+                value={
+                    'user_id': 1,
+                    'status': 'suspended'
+                },
+                request_only=True
+            )
+        ],
+        description="Update a user's status. Users can update their own status to 'deleted'; admins can set any status."
+    )
     def post(self, request):
-        """Update user status"""
         serializer = UserStatusSerializer(data=request.data)
         
         if serializer.is_valid():
             try:
-                # Check if user can update their own status
                 user_id = request.data.get('user_id', request.user.id)
                 
                 if user_id != request.user.id and not request.user.is_staff:
@@ -196,16 +280,13 @@ class UserStatusUpdateView(APIView):
                         status=status.HTTP_403_FORBIDDEN
                     )
                 
-                # Get user to update
                 if user_id == request.user.id:
                     user = request.user
                 else:
                     user = get_object_or_404(User, id=user_id)
                 
-                # Update status
                 updated_user = serializer.update(user, serializer.validated_data)
                 
-                # Log security event
                 SecurityLogService.create_log(
                     user=updated_user,
                     event_type='status_change',
@@ -239,10 +320,27 @@ class UserDeactivateView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request={'application/json': {'password': 'string', 'confirm': 'boolean'}},
+        responses={200: {'type': 'object', 'properties': {
+            'message': {'type': 'string'},
+            'user_id': {'type': 'integer'},
+            'status': {'type': 'string'}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Deactivate request',
+                value={
+                    'password': 'currentpass',
+                    'confirm': True
+                },
+                request_only=True
+            )
+        ],
+        description="Deactivate the current user's account (soft delete). Requires password confirmation."
+    )
     def post(self, request):
-        """Deactivate user account"""
         try:
-            # Verify password
             password = request.data.get('password')
             if not password or not request.user.check_password(password):
                 return Response(
@@ -250,7 +348,6 @@ class UserDeactivateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Confirm deactivation
             confirm = request.data.get('confirm')
             if not confirm:
                 return Response(
@@ -258,10 +355,8 @@ class UserDeactivateView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Deactivate user
             user = UserService.deactivate_user(request.user)
             
-            # Log security event
             SecurityLogService.create_log(
                 user=user,
                 event_type='account_deactivated',
@@ -290,12 +385,18 @@ class VerifyUserView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {
+            'message': {'type': 'string'},
+            'user_id': {'type': 'integer'},
+            'is_verified': {'type': 'boolean'}
+        }}},
+        description="Mark the current user's account as verified. (Typically called after email confirmation.)"
+    )
     def post(self, request):
-        """Verify user account"""
         try:
             user = UserService.verify_user(request.user)
             
-            # Log security event
             SecurityLogService.create_log(
                 user=user,
                 event_type='account_verified',
@@ -324,8 +425,38 @@ class CheckUsernameView(APIView):
     
     permission_classes = [permissions.AllowAny]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='username', type=str, description='Username to check', required=True),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'available': {'type': 'boolean'},
+            'username': {'type': 'string'},
+            'message': {'type': 'string'}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Username available',
+                value={
+                    'available': True,
+                    'username': 'newuser',
+                    'message': 'Username is available'
+                },
+                response_only=True
+            ),
+            OpenApiExample(
+                'Username taken',
+                value={
+                    'available': False,
+                    'username': 'existing',
+                    'message': 'Username is taken'
+                },
+                response_only=True
+            )
+        ],
+        description="Check if a username is available for registration."
+    )
     def get(self, request):
-        """Check if username is available"""
         username = request.query_params.get('username', '').strip().lower()
         
         if not username:
@@ -334,7 +465,6 @@ class CheckUsernameView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate username format
         if len(username) < 3:
             return Response({
                 'available': False,
@@ -353,7 +483,6 @@ class CheckUsernameView(APIView):
                 'message': 'Username can only contain letters, numbers, underscores and dots'
             })
         
-        # Check availability
         user = UserService.get_user_by_username(username)
         available = user is None
         
@@ -369,8 +498,38 @@ class CheckEmailView(APIView):
     
     permission_classes = [permissions.AllowAny]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='email', type=str, description='Email to check', required=True),
+        ],
+        responses={200: {'type': 'object', 'properties': {
+            'available': {'type': 'boolean'},
+            'email': {'type': 'string'},
+            'message': {'type': 'string'}
+        }}},
+        examples=[
+            OpenApiExample(
+                'Email available',
+                value={
+                    'available': True,
+                    'email': 'new@example.com',
+                    'message': 'Email is available'
+                },
+                response_only=True
+            ),
+            OpenApiExample(
+                'Email taken',
+                value={
+                    'available': False,
+                    'email': 'existing@example.com',
+                    'message': 'Email is already registered'
+                },
+                response_only=True
+            )
+        ],
+        description="Check if an email address is already registered."
+    )
     def get(self, request):
-        """Check if email is available"""
         email = request.query_params.get('email', '').strip().lower()
         
         if not email:
@@ -379,14 +538,12 @@ class CheckEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validate email format
         if '@' not in email or '.' not in email:
             return Response({
                 'available': False,
                 'message': 'Invalid email format'
             })
         
-        # Check availability
         user = UserService.get_user_by_email(email)
         available = user is None
         

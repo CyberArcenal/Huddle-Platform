@@ -1,8 +1,9 @@
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from global_utils.pagination import UsersPagination
 
@@ -16,11 +17,18 @@ class UserActivityListView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='action', type=str, description='Filter by action type', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: UserActivitySerializer(many=True)},
+        description="Get a paginated list of the current user's activities, optionally filtered by action."
+    )
     def get(self, request):
-        """Get activities for current user"""
         try:
             action = request.query_params.get('action')
-            # Get full queryset from service (no limit/offset)
             activities = UserActivityService.get_user_activities(
                 user=request.user,
                 action=action
@@ -38,10 +46,16 @@ class FollowingActivityView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: UserActivitySerializer(many=True)},
+        description="Get a paginated list of activities from users that the current user follows."
+    )
     def get(self, request):
-        """Get activities from users being followed"""
         try:
-            # Service returns full queryset (no limit)
             activities = UserActivityService.get_following_activities(user=request.user)
             paginator = UsersPagination()
             page = paginator.paginate_queryset(activities, request)
@@ -56,47 +70,41 @@ class ActivitySummaryView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        responses={200: ActivitySummarySerializer},
+        description="Get a summary of the current user's activity (total counts, last activity, breakdown by type)."
+    )
     def get(self, request):
-        """Get activity summary for current user"""
         try:
             from django.db.models import Count, Q
             from django.utils import timezone
             from datetime import timedelta
             
-            # Calculate time thresholds
             now = timezone.now()
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             week_start = now - timedelta(days=now.weekday())
             
-            # Get total activities
             total_activities = UserActivity.objects.filter(user=request.user).count()
-            
-            # Get last activity
             last_activity = UserActivity.objects.filter(
                 user=request.user
             ).order_by('-timestamp').first()
             
-            # Get activities by type
             activities_by_type = UserActivity.objects.filter(
                 user=request.user
             ).values('action').annotate(count=Count('id')).order_by('-count')
             
-            # Convert to dictionary
             activity_types = {item['action']: item['count'] for item in activities_by_type}
             
-            # Get activities today
             activities_today = UserActivity.objects.filter(
                 user=request.user,
                 timestamp__gte=today_start
             ).count()
             
-            # Get activities this week
             activities_this_week = UserActivity.objects.filter(
                 user=request.user,
                 timestamp__gte=week_start
             ).count()
             
-            # Prepare summary data
             summary_data = {
                 'total_activities': total_activities,
                 'last_activity': last_activity.timestamp if last_activity else None,
@@ -124,8 +132,17 @@ class RecentActivitiesView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='action', type=str, description='Filter by action type', required=False),
+            OpenApiParameter(name='user_id', type=int, description='Filter by specific user ID', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: UserActivitySerializer(many=True)},
+        description="Get recent activities (public or from followed users) with optional filters and pagination."
+    )
     def get(self, request):
-        """Get recent activities (public or from followed users)"""
         try:
             action = request.query_params.get('action')
             user_id = request.query_params.get('user_id')
@@ -133,7 +150,6 @@ class RecentActivitiesView(APIView):
             if user_id:
                 user = get_object_or_404(User, id=user_id)
 
-            # Get full queryset
             activities = UserActivityService.get_recent_activities(
                 action=action,
                 user=user
@@ -151,10 +167,47 @@ class LogActivityView(APIView):
     
     permission_classes = [permissions.IsAuthenticated]
     
+    @extend_schema(
+        request={'application/json': {'type': 'object', 'properties': {
+            'action': {'type': 'string', 'description': 'Action type'},
+            'description': {'type': 'string', 'description': 'Description'},
+            'location': {'type': 'string', 'description': 'Location'},
+            'metadata': {'type': 'object', 'description': 'Additional metadata'}
+        }}},
+        responses={201: UserActivitySerializer},
+        examples=[
+            OpenApiExample(
+                'Log activity request',
+                value={
+                    'action': 'login',
+                    'description': 'User logged in',
+                    'metadata': {'device': 'mobile'}
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Log activity response',
+                value={
+                    'message': 'Activity logged successfully',
+                    'activity': {
+                        'id': 1,
+                        'user': 1,
+                        'action': 'login',
+                        'description': 'User logged in',
+                        'ip_address': '192.168.1.1',
+                        'user_agent': 'Mozilla/5.0',
+                        'timestamp': '2025-03-07T12:34:56Z',
+                        'location': None,
+                        'metadata': {'device': 'mobile'}
+                    }
+                },
+                response_only=True
+            )
+        ],
+        description="Log a new activity for the current user. (Internal use, typically called by other services.)"
+    )
     def post(self, request):
-        """Log a user activity"""
         try:
-            # Validate required fields
             action = request.data.get('action')
             description = request.data.get('description', '')
             
@@ -164,7 +217,6 @@ class LogActivityView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
             )
             
-            # Validate action type
             valid_actions = [choice[0] for choice in UserActivityService.ACTION_TYPES]
             if action not in valid_actions:
                 return Response(
@@ -172,7 +224,6 @@ class LogActivityView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Log activity
             activity = UserActivityService.log_activity(
                 user=request.user,
                 action=action,

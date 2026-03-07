@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from feed.models import Comment, Post
 from feed.serializers.comment import CommentSerializer
 from feed.services import CommentService
@@ -20,6 +23,17 @@ class CommentListView(APIView):
             return [AllowAny()]
         return [IsAuthenticated()]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='post_id', type=int, description='ID of the post to get comments for', required=False, location=OpenApiParameter.PATH),
+            OpenApiParameter(name='include_replies', type=bool, description='Include nested replies', required=False),
+            OpenApiParameter(name='include_deleted', type=bool, description='Include soft-deleted comments (admin only)', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: CommentSerializer(many=True)},
+        description="List comments for a post (if post_id provided) or comments by the authenticated user."
+    )
     def get(self, request, post_id=None):
         if post_id:
             # Get comments for a specific post
@@ -42,7 +56,7 @@ class CommentListView(APIView):
                 post=post,
                 include_replies=include_replies,
                 include_deleted=include_deleted,
-            )  # no limit/offset – service now returns full queryset
+            )
         else:
             # Get all comments by the authenticated user
             if not request.user.is_authenticated:
@@ -58,6 +72,42 @@ class CommentListView(APIView):
         serializer = CommentSerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        request=CommentSerializer,
+        responses={201: CommentSerializer},
+        examples=[
+            OpenApiExample(
+                'Create comment',
+                value={
+                    'content': 'Great post!',
+                    'parent_comment_id': None
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Create reply',
+                value={
+                    'content': 'I agree!',
+                    'parent_comment_id': 5
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Comment response',
+                value={
+                    'id': 123,
+                    'post': 1,
+                    'user': 1,
+                    'content': 'Great post!',
+                    'parent_comment': None,
+                    'created_at': '2025-03-07T12:34:56Z',
+                    'is_deleted': False
+                },
+                response_only=True
+            )
+        ],
+        description="Create a new comment on a post."
+    )
     def post(self, request, post_id):
         """Create a new comment on a post"""
         post = get_object_or_404(Post, id=post_id, is_deleted=False)
@@ -99,6 +149,10 @@ class CommentDetailView(APIView):
         """Get comment object or return 404"""
         return get_object_or_404(Comment, id=comment_id)
 
+    @extend_schema(
+        responses={200: CommentSerializer},
+        description="Retrieve a single comment by ID."
+    )
     def get(self, request, comment_id):
         """Retrieve a specific comment"""
         comment = self.get_object(comment_id)
@@ -113,6 +167,18 @@ class CommentDetailView(APIView):
         serializer = CommentSerializer(comment, context={"request": request})
         return Response(serializer.data)
 
+    @extend_schema(
+        request=CommentSerializer,
+        responses={200: CommentSerializer},
+        examples=[
+            OpenApiExample(
+                'Update comment',
+                value={'content': 'Updated comment text'},
+                request_only=True
+            )
+        ],
+        description="Update a comment (full or partial)."
+    )
     def put(self, request, comment_id):
         """Update a comment"""
         comment = self.get_object(comment_id)
@@ -156,6 +222,10 @@ class CommentDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {'message': {'type': 'string'}}}},
+        description="Delete a comment (soft delete)."
+    )
     def delete(self, request, comment_id):
         """Delete a comment"""
         comment = self.get_object(comment_id)
@@ -188,6 +258,14 @@ class CommentRepliesView(APIView):
             return [AllowAny()]
         return [IsAuthenticated()]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: CommentSerializer(many=True)},
+        description="Get all replies to a specific comment."
+    )
     def get(self, request, comment_id):
         comment = get_object_or_404(Comment, id=comment_id)
         if not comment.post.is_public and request.user != comment.post.user:
@@ -197,12 +275,24 @@ class CommentRepliesView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        replies = CommentService.get_comment_replies(comment=comment)  # no limit/offset
+        replies = CommentService.get_comment_replies(comment=comment)
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(replies, request)
         serializer = CommentSerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        request=CommentSerializer,
+        responses={201: CommentSerializer},
+        examples=[
+            OpenApiExample(
+                'Create reply',
+                value={'content': 'This is a reply'},
+                request_only=True
+            )
+        ],
+        description="Create a reply to an existing comment."
+    )
     def post(self, request, comment_id):
         """Create a reply to a comment"""
         parent_comment = get_object_or_404(Comment, id=comment_id)
@@ -247,6 +337,14 @@ class CommentThreadView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        responses={200: {'type': 'object', 'properties': {
+            'comment_id': {'type': 'integer'},
+            'post_id': {'type': 'integer'},
+            'thread': CommentSerializer(many=True).data
+        }}},
+        description="Get the full thread (ancestors and all descendants) of a comment."
+    )
     def get(self, request, comment_id):
         """Get full thread for a comment (parent and all children)"""
         comment = get_object_or_404(Comment, id=comment_id)
@@ -275,6 +373,17 @@ class CommentSearchView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='query', type=str, description='Search term', required=True),
+            OpenApiParameter(name='user_id', type=int, description='Filter by user ID', required=False),
+            OpenApiParameter(name='post_id', type=int, description='Filter by post ID', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: CommentSerializer(many=True)},
+        description="Search comments by content."
+    )
     def get(self, request):
         query = request.query_params.get("query", "")
         user_id = request.query_params.get("user_id")
@@ -302,7 +411,7 @@ class CommentSearchView(APIView):
 
         comments = CommentService.search_comments(
             query=query, user=user, post=post
-        )  # no limit/offset
+        )
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(comments, request)
         serializer = CommentSerializer(page, many=True, context={"request": request})

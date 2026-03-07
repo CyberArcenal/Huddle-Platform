@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 from global_utils.pagination import GroupsPagination
 from groups.models.base import Group
 from groups.serializers.base import (
@@ -28,9 +30,18 @@ class GroupListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='query', type=str, description='Search query for group name or description', required=False),
+            OpenApiParameter(name='privacy', type=str, description='Filter by privacy (public, private, secret)', required=False),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: GroupSerializer(many=True)},
+        description="List groups: either user's groups, search results, or filtered by privacy."
+    )
     def get(self, request):
         """List groups with filtering and search"""
-        # Use serializer to validate query params (without limit/offset)
         serializer = GroupSearchSerializer(data=request.query_params)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -55,6 +66,44 @@ class GroupListView(APIView):
         )
         return paginator.get_paginated_response(group_serializer.data)
 
+    @extend_schema(
+        request=GroupCreateSerializer,
+        responses={201: GroupSerializer},
+        examples=[
+            OpenApiExample(
+                'Create public group',
+                value={
+                    'name': 'Python Developers',
+                    'description': 'A group for Python enthusiasts',
+                    'privacy': 'public'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Create private group',
+                value={
+                    'name': 'Secret Project',
+                    'description': 'Invite only',
+                    'privacy': 'private'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Group response',
+                value={
+                    'id': 1,
+                    'name': 'Python Developers',
+                    'description': 'A group for Python enthusiasts',
+                    'creator': 5,
+                    'privacy': 'public',
+                    'member_count': 0,
+                    'created_at': '2025-03-07T12:34:56Z'
+                },
+                response_only=True
+            )
+        ],
+        description="Create a new group. The current user becomes the creator and admin."
+    )
     def post(self, request):
         """Create a new group"""
         serializer = GroupCreateSerializer(
@@ -72,6 +121,10 @@ class GroupListView(APIView):
 class GroupDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: GroupSerializer},
+        description="Retrieve details of a specific group."
+    )
     def get(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if not GroupService.is_user_allowed_to_view(request.user, group):
@@ -82,9 +135,36 @@ class GroupDetailView(APIView):
         serializer = GroupSerializer(group, context={"request": request})
         return Response(serializer.data)
 
+    @extend_schema(
+        request=GroupUpdateSerializer,
+        responses={200: GroupSerializer},
+        examples=[
+            OpenApiExample(
+                'Update group',
+                value={
+                    'name': 'New Group Name',
+                    'description': 'Updated description'
+                },
+                request_only=True
+            )
+        ],
+        description="Update all fields of a group."
+    )
     def put(self, request, group_id):
         return self._update_group(request, group_id, partial=False)
 
+    @extend_schema(
+        request=GroupUpdateSerializer,
+        responses={200: GroupSerializer},
+        examples=[
+            OpenApiExample(
+                'Partial update',
+                value={'description': 'Only update description'},
+                request_only=True
+            )
+        ],
+        description="Partially update a group."
+    )
     def patch(self, request, group_id):
         return self._update_group(request, group_id, partial=True)
 
@@ -110,6 +190,10 @@ class GroupDetailView(APIView):
             GroupSerializer(updated_group, context={"request": request}).data
         )
 
+    @extend_schema(
+        responses={204: None},
+        description="Delete a group. Only the creator can delete."
+    )
     def delete(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if group.creator != request.user:
@@ -131,6 +215,14 @@ class GroupMembersView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: GroupMemberSerializer(many=True)},
+        description="List all members of a group (paginated)."
+    )
     def get(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if not GroupService.is_user_allowed_to_view(request.user, group):
@@ -138,13 +230,38 @@ class GroupMembersView(APIView):
                 {"detail": "You do not have permission to view members"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        # Get full queryset (no limit/offset)
         members = GroupMemberService.get_group_members(group)
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(members, request)
         serializer = GroupMemberSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @extend_schema(
+        request=GroupMemberCreateSerializer,
+        responses={201: GroupMemberSerializer},
+        examples=[
+            OpenApiExample(
+                'Add member',
+                value={
+                    'user_id': 42,
+                    'role': 'member'
+                },
+                request_only=True
+            ),
+            OpenApiExample(
+                'Member response',
+                value={
+                    'id': 1,
+                    'group': 1,
+                    'user': 42,
+                    'role': 'member',
+                    'joined_at': '2025-03-07T12:34:56Z'
+                },
+                response_only=True
+            )
+        ],
+        description="Add a user to the group. Requires admin permissions."
+    )
     def post(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         serializer = GroupMemberCreateSerializer(
@@ -164,6 +281,18 @@ class GroupMembersView(APIView):
             {"detail": "User is already a member"}, status=status.HTTP_400_BAD_REQUEST
         )
 
+    @extend_schema(
+        request={'application/json': {'user_id': 'integer'}},
+        responses={204: None},
+        examples=[
+            OpenApiExample(
+                'Remove member',
+                value={'user_id': 42},
+                request_only=True
+            )
+        ],
+        description="Remove a user from the group. Requires appropriate permissions."
+    )
     def delete(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         user_id = request.data.get("user_id")
@@ -209,6 +338,18 @@ class GroupMemberRoleView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=GroupMemberUpdateSerializer,
+        responses={200: GroupMemberSerializer},
+        examples=[
+            OpenApiExample(
+                'Update role',
+                value={'role': 'admin'},
+                request_only=True
+            )
+        ],
+        description="Update a member's role (admin, moderator, member). Requires appropriate permissions."
+    )
     def patch(self, request, group_id, user_id):
         group = get_object_or_404(Group, id=group_id)
         target_user = get_object_or_404(User, id=user_id)
@@ -233,6 +374,10 @@ class GroupMemberRoleView(APIView):
 class GroupJoinView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={201: GroupMemberSerializer},
+        description="Join a public group. For private groups, the user must be invited."
+    )
     def post(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         allowed, message = GroupService.is_user_allowed_to_join(request.user, group)
@@ -254,6 +399,10 @@ class GroupJoinView(APIView):
 class GroupLeaveView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={204: None},
+        description="Leave a group. Creator cannot leave without transferring ownership first."
+    )
     def post(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if not GroupMemberService.is_member(group, request.user):
@@ -278,6 +427,10 @@ class GroupLeaveView(APIView):
 class GroupStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses={200: GroupStatisticsSerializer},
+        description="Get statistics for a group (member count, posts count, etc.)."
+    )
     def get(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if not GroupService.is_user_allowed_to_view(request.user, group):
@@ -293,6 +446,23 @@ class GroupStatisticsView(APIView):
 class GroupTransferOwnershipView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=TransferOwnershipSerializer,
+        responses={200: {'type': 'object', 'properties': {'detail': {'type': 'string'}}}},
+        examples=[
+            OpenApiExample(
+                'Transfer request',
+                value={'new_owner_id': 42},
+                request_only=True
+            ),
+            OpenApiExample(
+                'Transfer response',
+                value={'detail': 'Ownership transferred successfully.'},
+                response_only=True
+            )
+        ],
+        description="Transfer group ownership to another member. Only current creator can do this."
+    )
     def post(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if group.creator != request.user:
@@ -317,6 +487,18 @@ class GroupTransferOwnershipView(APIView):
 class GroupPrivacyView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request={'application/json': {'privacy': 'string'}},
+        responses={200: GroupSerializer},
+        examples=[
+            OpenApiExample(
+                'Change privacy',
+                value={'privacy': 'private'},
+                request_only=True
+            )
+        ],
+        description="Change group privacy (public, private, secret). Only creator can do this."
+    )
     def patch(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if group.creator != request.user:
@@ -344,6 +526,13 @@ class GroupRecommendationsView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Number of recommendations', required=False),
+        ],
+        responses={200: GroupSerializer(many=True)},
+        description="Get group recommendations for the current user based on their interests/follows."
+    )
     def get(self, request):
         limit = int(request.query_params.get("limit", 10))
         recommendations = GroupService.get_recommended_groups(
@@ -358,6 +547,15 @@ class GroupRecommendationsView(APIView):
 class GroupPopularView(APIView):
     """View for popular groups (already limited, not paginated)"""
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='limit', type=int, description='Number of results', required=False),
+            OpenApiParameter(name='min_members', type=int, description='Minimum member count', required=False),
+            OpenApiParameter(name='days', type=int, description='Lookback period for activity', required=False),
+        ],
+        responses={200: GroupSerializer(many=True)},
+        description="Get popular groups based on recent activity and member count."
+    )
     def get(self, request):
         limit = int(request.query_params.get("limit", 10))
         min_members = int(request.query_params.get("min_members", 10))
@@ -376,6 +574,15 @@ class GroupSearchMembersView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='query', type=str, description='Search query for username or name', required=True),
+            OpenApiParameter(name='page', type=int, description='Page number', required=False),
+            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+        ],
+        responses={200: GroupMemberSerializer(many=True)},
+        description="Search members within a group by username or name."
+    )
     def get(self, request, group_id):
         group = get_object_or_404(Group, id=group_id)
         if not GroupService.is_user_allowed_to_view(request.user, group):
@@ -389,7 +596,6 @@ class GroupSearchMembersView(APIView):
                 {"detail": "query parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # Get full queryset (service should not slice)
         members = GroupMemberService.search_members(group=group, query=query)
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(members, request)

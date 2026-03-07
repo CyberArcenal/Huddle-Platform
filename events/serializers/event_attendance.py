@@ -16,7 +16,7 @@ class EventAttendanceCreateSerializer(serializers.ModelSerializer):
         fields = ["event", "status"]
         extra_kwargs = {
             "event": {"required": True},
-            "status": {"required": True, "default": "going"},
+            "status": {"default": "going"},
         }
 
     def validate(self, data):
