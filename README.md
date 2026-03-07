@@ -22,7 +22,6 @@ Built to support community-driven connections, it serves as the foundation for m
 ---
 
 ## Project Structure
-```bash
 core/
  ├── settings/
  │    ├── base.py          # Base Django settings
