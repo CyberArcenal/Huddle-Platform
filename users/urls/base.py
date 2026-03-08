@@ -8,7 +8,11 @@ from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfil
 from users.views.search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
 from users.views.security import ActiveSessionsView, BulkTerminateSessionsView, ChangePasswordView, Check2FAStatusView, Disable2FAView, Enable2FAView, FailedLoginAttemptsView, SecurityLogsView, SecuritySettingsView, SuspiciousActivitiesView, TerminateAllSessionsView, TerminateSessionView
 from users.views.user import CheckEmailView, CheckUsernameView, UserDeactivateView, UserDetailView, UserProfileView, UserRegisterView, UserStatusUpdateView, VerifyUserView
-
+from .jwt import urlpatterns as jwt_urlpatterns
+from .login import urlpatterns as login_urlpatterns
+from .login_checkpoint import urlpatterns as checkpoint
+from .reset import urlpatterns as password_urlpatterns
+from .OtpRequest import urlpatterns as otp
 # Create a router for API views
 router = DefaultRouter()
 
@@ -83,4 +87,13 @@ urlpatterns = [
     path('admin/dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
     path('admin/export/<int:user_id>/', UserExportView.as_view(), name='user-export'),
     path('admin/cleanup/', AdminCleanupView.as_view(), name='admin-cleanup'),
+]
+
+
+urlpatterns += [
+    path("token/", include(jwt_urlpatterns)),
+    path("login/", include(login_urlpatterns)),
+    path("password/", include(password_urlpatterns)),
+    path("login-checkpoints/", include(checkpoint)),
+    path("otp-requests/", include(otp)),
 ]

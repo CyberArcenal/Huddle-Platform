@@ -7541,6 +7541,639 @@ paths:
                 items:
                   $ref: '#/components/schemas/FollowingList'
           description: ''
+  /api/v1/users/login/:
+    post:
+      operationId: v1_users_login_create
+      description: Authenticate user and return tokens. If 2FA is enabled, returns
+        checkpoint_token.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              LoginRequest:
+                value:
+                  email: john@example.com
+                  password: SecurePass123!
+                summary: Login request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                LoginSuccessful(no2FA):
+                  value:
+                    status: true
+                    user:
+                      id: 1
+                      username: johndoe
+                      email: john@example.com
+                      first_name: John
+                      last_name: Doe
+                      profile_picture_url: https://example.com/media/profile_pics/john.jpg
+                      cover_photo_url: https://example.com/media/covers/john_cover.jpg
+                      bio: Software developer
+                      is_verified: true
+                      followers_count: 42
+                      following_count: 18
+                      is_following: false
+                    refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...
+                    accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQxNTk2MDAwLCJqdGkiOiI0NTZkZWYiLCJ1c2VyX2lkIjoxfQ...
+                    expiresIn: 900
+                    message: Login successful
+                  summary: Login successful (no 2FA)
+                2FARequired:
+                  value:
+                    status: true
+                    requires_2fa: true
+                    checkpoint_token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                    message: Two-factor authentication required. Please check your
+                      email for the verification code.
+                    expires_in: 300
+                  summary: 2FA required
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/login-checkpoints/:
+    get:
+      operationId: v1_users_login_checkpoints_list
+      description: Retrieve a list of login checkpoints or a single checkpoint by
+        ID.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Checkpoint ID (optional)
+        required: true
+      - in: query
+        name: is_used
+        schema:
+          type: boolean
+        description: Filter by used status
+      - in: query
+        name: is_valid
+        schema:
+          type: boolean
+        description: Filter by validity
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search in username, email, token
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLoginCheckpointList'
+              examples:
+                CheckpointDetailResponse:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 1
+                      user_data:
+                        id: 1
+                        username: johndoe
+                        full_name: John Doe
+                      token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                      created_at: '2025-03-08T10:00:00Z'
+                      expires_at: '2025-03-08T10:15:00Z'
+                      is_used: false
+                      status_display: Active
+                  summary: Checkpoint detail response
+          description: ''
+    post:
+      operationId: v1_users_login_checkpoints_create
+      description: Create a new login checkpoint.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginCheckpoint'
+            examples:
+              CreateCheckpointRequest:
+                value:
+                  user: 1
+                summary: Create checkpoint request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginCheckpoint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginCheckpoint'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginCheckpoint'
+              examples:
+                CreateCheckpointResponse:
+                  value:
+                    id: 2
+                    user_data:
+                      id: 1
+                      username: johndoe
+                      full_name: John Doe
+                    token: b2c3d4e5-f6g7-8901-2345-67890abcdef1
+                    created_at: '2025-03-08T11:00:00Z'
+                    expires_at: '2025-03-08T11:15:00Z'
+                    is_used: false
+                    status_display: Active
+                  summary: Create checkpoint response
+          description: ''
+    put:
+      operationId: v1_users_login_checkpoints_update
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_users_login_checkpoints_partial_update
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_users_login_checkpoints_destroy
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/login-checkpoints/{id}/:
+    get:
+      operationId: v1_users_login_checkpoints_list_2
+      description: Retrieve a list of login checkpoints or a single checkpoint by
+        ID.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: Checkpoint ID (optional)
+        required: true
+      - in: query
+        name: is_used
+        schema:
+          type: boolean
+        description: Filter by used status
+      - in: query
+        name: is_valid
+        schema:
+          type: boolean
+        description: Filter by validity
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search in username, email, token
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLoginCheckpointList'
+              examples:
+                CheckpointDetailResponse:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 1
+                      user_data:
+                        id: 1
+                        username: johndoe
+                        full_name: John Doe
+                      token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                      created_at: '2025-03-08T10:00:00Z'
+                      expires_at: '2025-03-08T10:15:00Z'
+                      is_used: false
+                      status_display: Active
+                  summary: Checkpoint detail response
+          description: ''
+    post:
+      operationId: v1_users_login_checkpoints_create_2
+      description: Create a new login checkpoint.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginCheckpoint'
+            examples:
+              CreateCheckpointRequest:
+                value:
+                  user: 1
+                summary: Create checkpoint request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginCheckpoint'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginCheckpoint'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginCheckpoint'
+              examples:
+                CreateCheckpointResponse:
+                  value:
+                    id: 2
+                    user_data:
+                      id: 1
+                      username: johndoe
+                      full_name: John Doe
+                    token: b2c3d4e5-f6g7-8901-2345-67890abcdef1
+                    created_at: '2025-03-08T11:00:00Z'
+                    expires_at: '2025-03-08T11:15:00Z'
+                    is_used: false
+                    status_display: Active
+                  summary: Create checkpoint response
+          description: ''
+    put:
+      operationId: v1_users_login_checkpoints_update_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_users_login_checkpoints_partial_update_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_users_login_checkpoints_destroy_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/login/logout/:
+    post:
+      operationId: v1_users_login_logout_create
+      description: Logout the current session by blacklisting tokens.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+            examples:
+              LogoutRequest:
+                value:
+                  refresh: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...
+                summary: Logout request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+              examples:
+                LogoutSuccessful:
+                  value:
+                    status: true
+                    message: Logged out successfully
+                  summary: Logout successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/login/logout/all/:
+    post:
+      operationId: v1_users_login_logout_all_create
+      description: Logout from all active sessions by blacklisting all tokens.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+              examples:
+                LogoutAllSuccessful:
+                  value:
+                    status: true
+                    message: Logged out from 2 devices successfully
+                  summary: Logout all successful
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/login/resend-2fa/:
+    post:
+      operationId: v1_users_login_resend_2fa_create
+      description: Resend 2FA OTP for an ongoing 2FA login.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Resend2FARequest'
+            examples:
+              Resend2FAOTPRequest:
+                value:
+                  checkpoint_token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                summary: Resend 2FA OTP request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Resend2FARequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Resend2FARequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resend2FAResponse'
+              examples:
+                Resend2FAOTPSuccessful:
+                  value:
+                    status: true
+                    message: Verification code has been resent
+                    expires_in: 300
+                  summary: Resend 2FA OTP successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/login/verify-2fa/:
+    post:
+      operationId: v1_users_login_verify_2fa_create
+      description: Verify 2FA OTP and complete login.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Verify2FARequest'
+            examples:
+              Verify2FARequest:
+                value:
+                  checkpoint_token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                  otp_code: '123456'
+                summary: Verify 2FA request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Verify2FARequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Verify2FARequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Verify2FAResponse'
+              examples:
+                Verify2FASuccessful:
+                  value:
+                    status: true
+                    user:
+                      id: 1
+                      username: johndoe
+                      email: john@example.com
+                      first_name: John
+                      last_name: Doe
+                      profile_picture_url: https://example.com/media/profile_pics/john.jpg
+                      cover_photo_url: https://example.com/media/covers/john_cover.jpg
+                      bio: Software developer
+                      is_verified: true
+                      followers_count: 42
+                      following_count: 18
+                      is_following: false
+                    refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...
+                    accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQxNTk2MDAwLCJqdGkiOiI0NTZkZWYiLCJ1c2VyX2lkIjoxfQ...
+                    expiresIn: 900
+                    message: Login successful with two-factor authentication
+                  summary: Verify 2FA successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
   /api/v1/users/media/cover-photo/:
     post:
       operationId: v1_users_media_cover_photo_create
@@ -7766,6 +8399,613 @@ paths:
             application/json:
               schema:
                 type: object
+          description: ''
+  /api/v1/users/otp-requests/:
+    get:
+      operationId: v1_users_otp_requests_list
+      description: Retrieve a list of OTP requests or a single request by ID.
+      parameters:
+      - in: query
+        name: email
+        schema:
+          type: string
+        description: Filter by email
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: OTP request ID (optional)
+        required: true
+      - in: query
+        name: is_used
+        schema:
+          type: boolean
+        description: Filter by used status
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search in email, OTP code
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOtpRequestList'
+              examples:
+                OTPRequestDetailResponse:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 1
+                      user_data:
+                        id: 1
+                        username: johndoe
+                        full_name: John Doe
+                      otp_code: '123456'
+                      email: john@example.com
+                      created_at: '2025-03-08T10:00:00Z'
+                      expires_at: '2025-03-08T10:10:00Z'
+                      is_used: false
+                      attempt_count: 0
+                      status_display: Active
+                  summary: OTP request detail response
+          description: ''
+    post:
+      operationId: v1_users_otp_requests_create
+      description: Create a new OTP request.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpRequest'
+            examples:
+              CreateOTPRequest:
+                value:
+                  user: 1
+                  otp_code: '123456'
+                summary: Create OTP request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OtpRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OtpRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpRequest'
+              examples:
+                CreateOTPResponse:
+                  value:
+                    id: 2
+                    user_data:
+                      id: 1
+                      username: johndoe
+                      full_name: John Doe
+                    otp_code: '654321'
+                    email: john@example.com
+                    created_at: '2025-03-08T11:00:00Z'
+                    expires_at: '2025-03-08T11:10:00Z'
+                    is_used: false
+                    attempt_count: 0
+                    status_display: Active
+                  summary: Create OTP response
+          description: ''
+    put:
+      operationId: v1_users_otp_requests_update
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_users_otp_requests_partial_update
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_users_otp_requests_destroy
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/otp-requests/{id}/:
+    get:
+      operationId: v1_users_otp_requests_list_2
+      description: Retrieve a list of OTP requests or a single request by ID.
+      parameters:
+      - in: query
+        name: email
+        schema:
+          type: string
+        description: Filter by email
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: OTP request ID (optional)
+        required: true
+      - in: query
+        name: is_used
+        schema:
+          type: boolean
+        description: Filter by used status
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - in: query
+        name: search
+        schema:
+          type: string
+        description: Search in email, OTP code
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOtpRequestList'
+              examples:
+                OTPRequestDetailResponse:
+                  value:
+                    count: 123
+                    next: http://api.example.org/accounts/?page=4
+                    previous: http://api.example.org/accounts/?page=2
+                    results:
+                    - id: 1
+                      user_data:
+                        id: 1
+                        username: johndoe
+                        full_name: John Doe
+                      otp_code: '123456'
+                      email: john@example.com
+                      created_at: '2025-03-08T10:00:00Z'
+                      expires_at: '2025-03-08T10:10:00Z'
+                      is_used: false
+                      attempt_count: 0
+                      status_display: Active
+                  summary: OTP request detail response
+          description: ''
+    post:
+      operationId: v1_users_otp_requests_create_2
+      description: Create a new OTP request.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpRequest'
+            examples:
+              CreateOTPRequest:
+                value:
+                  user: 1
+                  otp_code: '123456'
+                summary: Create OTP request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OtpRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OtpRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpRequest'
+              examples:
+                CreateOTPResponse:
+                  value:
+                    id: 2
+                    user_data:
+                      id: 1
+                      username: johndoe
+                      full_name: John Doe
+                    otp_code: '654321'
+                    email: john@example.com
+                    created_at: '2025-03-08T11:00:00Z'
+                    expires_at: '2025-03-08T11:10:00Z'
+                    is_used: false
+                    attempt_count: 0
+                    status_display: Active
+                  summary: Create OTP response
+          description: ''
+    put:
+      operationId: v1_users_otp_requests_update_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: v1_users_otp_requests_partial_update_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: v1_users_otp_requests_destroy_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/users/password/change/:
+    post:
+      operationId: v1_users_password_change_create
+      description: Change the authenticated user's password.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+            examples:
+              PasswordChangeRequest:
+                value:
+                  current_password: OldPass123!
+                  new_password: NewPass123!
+                  confirm_password: NewPass123!
+                summary: Password change request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordChangeResponse'
+              examples:
+                PasswordChangeSuccessful:
+                  value:
+                    message: Password changed successfully
+                    changed_at: '2025-03-08T12:34:56Z'
+                  summary: Password change successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/password/check-strength/:
+    post:
+      operationId: v1_users_password_check_strength_create
+      description: Check the strength of a password without changing it.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordStrengthCheckRequest'
+            examples:
+              PasswordStrengthCheckRequest:
+                value:
+                  password: mypassword
+                summary: Password strength check request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordStrengthCheckRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordStrengthCheckRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordStrengthCheckResponse'
+              examples:
+                PasswordStrengthCheckResponse:
+                  value:
+                    strength_score: 45
+                    strength_level: fair
+                    is_acceptable: false
+                    errors:
+                    - Password must contain at least one number
+                    suggestions:
+                    - Add special characters
+                    - Mix letters, numbers and special characters
+                  summary: Password strength check response
+          description: ''
+  /api/v1/users/password/history/:
+    get:
+      operationId: v1_users_password_history_retrieve
+      description: Get the user's password change history.
+      tags:
+      - v1
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordHistoryResponse'
+              examples:
+                PasswordHistoryResponse:
+                  value:
+                    total_events: 2
+                    events:
+                    - event_type: password_changed
+                      created_at: '2025-03-07T10:00:00Z'
+                      ip_address: 192.168.1.100
+                      user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+                      success: true
+                    - event_type: password_change_failed
+                      created_at: '2025-03-06T15:30:00Z'
+                      ip_address: 192.168.1.101
+                      user_agent: Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac
+                        OS X)
+                      success: false
+                  summary: Password history response
+          description: ''
+  /api/v1/users/password/reset/:
+    post:
+      operationId: v1_users_password_reset_create
+      description: Request a password reset OTP to be sent to the user's email.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+            examples:
+              PasswordResetRequest:
+                value:
+                  email: john@example.com
+                summary: Password reset request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetRequestResponse'
+              examples:
+                PasswordResetRequestSuccessful:
+                  value:
+                    message: If the email exists, a password reset OTP has been sent
+                  summary: Password reset request successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/password/reset/complete/:
+    post:
+      operationId: v1_users_password_reset_complete_create
+      description: Complete password reset using the checkpoint token and new password.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompleteRequest'
+            examples:
+              PasswordResetCompleteRequest:
+                value:
+                  checkpoint_token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                  new_password: NewSecurePass123!
+                  confirm_password: NewSecurePass123!
+                summary: Password reset complete request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompleteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompleteRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetCompleteResponse'
+              examples:
+                PasswordResetCompleteSuccessful:
+                  value:
+                    message: Password reset successfully
+                  summary: Password reset complete successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/users/password/reset/verify/:
+    post:
+      operationId: v1_users_password_reset_verify_create
+      description: Verify the OTP for password reset and obtain a checkpoint token
+        to complete the reset.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerifyRequest'
+            examples:
+              PasswordResetVerifyRequest:
+                value:
+                  email: john@example.com
+                  otp_code: '123456'
+                summary: Password reset verify request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerifyRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetVerifyResponse'
+              examples:
+                PasswordResetVerifySuccessful:
+                  value:
+                    message: OTP verified successfully
+                    email: john@example.com
+                    verified: true
+                    checkpoint_token: a1b2c3d4-e5f6-7890-1234-567890abcdef
+                  summary: Password reset verify successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/users/profile/:
     get:
@@ -8626,6 +9866,76 @@ paths:
             application/json:
               schema:
                 type: object
+          description: ''
+  /api/v1/users/token/refresh/:
+    post:
+      operationId: v1_users_token_refresh_create
+      description: Obtain a new access token using a refresh token. Also updates the
+        refresh token (rotation).
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+            examples:
+              RefreshTokenRequest:
+                value:
+                  refresh: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...
+                summary: Refresh token request
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+              examples:
+                RefreshTokenSuccessful:
+                  value:
+                    refresh: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiNDU2ZGVmIiwidXNlcl9pZCI6MX0...
+                    access: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQxNTk2MDAwLCJqdGkiOiI3ODlnaGkiLCJ1c2VyX2lkIjoxfQ...
+                    message: Tokens refreshed successfully
+                  summary: Refresh token successful
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/users/unfollow/:
     post:
@@ -10096,6 +11406,74 @@ components:
       required:
       - content_type
       - object_id
+    LoginCheckpoint:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          writeOnly: true
+        user_data:
+          allOf:
+          - $ref: '#/components/schemas/UserMinimal'
+          readOnly: true
+        token:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_used:
+          type: boolean
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+      required:
+      - created_at
+      - expires_at
+      - id
+      - is_used
+      - status_display
+      - token
+      - user
+      - user_data
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+    LogoutRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+      required:
+      - refresh
+    LogoutResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+        message:
+          type: string
+      required:
+      - message
+      - status
     Message:
       type: object
       properties:
@@ -10230,6 +11608,235 @@ components:
         * `message` - Message
         * `group_invite` - Group Invite
         * `event_reminder` - Event Reminder
+    OtpRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user:
+          type: integer
+          writeOnly: true
+          nullable: true
+        user_data:
+          allOf:
+          - $ref: '#/components/schemas/UserMinimal'
+          readOnly: true
+        otp_code:
+          type: string
+          maxLength: 6
+        email:
+          type: string
+          format: email
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+        is_used:
+          type: boolean
+          readOnly: true
+        attempt_count:
+          type: integer
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+      required:
+      - attempt_count
+      - created_at
+      - expires_at
+      - id
+      - is_used
+      - otp_code
+      - status_display
+      - user_data
+    PaginatedLoginCheckpointList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LoginCheckpoint'
+    PaginatedOtpRequestList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OtpRequest'
+    PasswordChangeRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+        new_password:
+          type: string
+          writeOnly: true
+        confirm_password:
+          type: string
+          writeOnly: true
+      required:
+      - confirm_password
+      - current_password
+      - new_password
+    PasswordChangeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        changed_at:
+          type: string
+          format: date-time
+      required:
+      - changed_at
+      - message
+    PasswordHistoryResponse:
+      type: object
+      properties:
+        total_events:
+          type: integer
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - events
+      - total_events
+    PasswordResetCompleteRequest:
+      type: object
+      properties:
+        checkpoint_token:
+          type: string
+        new_password:
+          type: string
+          writeOnly: true
+        confirm_password:
+          type: string
+          writeOnly: true
+      required:
+      - checkpoint_token
+      - confirm_password
+      - new_password
+    PasswordResetCompleteResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    PasswordResetRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    PasswordResetRequestResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    PasswordResetVerifyRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        otp_code:
+          type: string
+          maxLength: 6
+      required:
+      - email
+      - otp_code
+    PasswordResetVerifyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        email:
+          type: string
+          format: email
+        verified:
+          type: boolean
+        checkpoint_token:
+          type: string
+      required:
+      - checkpoint_token
+      - email
+      - message
+      - verified
+    PasswordStrengthCheckRequest:
+      type: object
+      properties:
+        password:
+          type: string
+      required:
+      - password
+    PasswordStrengthCheckResponse:
+      type: object
+      properties:
+        strength_score:
+          type: integer
+        strength_level:
+          type: string
+        is_acceptable:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+      required:
+      - errors
+      - is_acceptable
+      - strength_level
+      - strength_score
+      - suggestions
     PatchedEventAttendanceUpdate:
       type: object
       description: Serializer for updating event attendance status
@@ -11001,6 +12608,26 @@ components:
       - object_id
       - reason
       - reporter
+    Resend2FARequest:
+      type: object
+      properties:
+        checkpoint_token:
+          type: string
+      required:
+      - checkpoint_token
+    Resend2FAResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+        message:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - expires_in
+      - message
+      - status
     ResolveReportInput:
       type: object
       properties:
@@ -11393,6 +13020,26 @@ components:
           format: uuid
       required:
       - session_id
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+      required:
+      - refresh
+    TokenRefreshResponse:
+      type: object
+      properties:
+        refresh:
+          type: string
+        access:
+          type: string
+        message:
+          type: string
+      required:
+      - access
+      - message
+      - refresh
     TransferOwnership:
       type: object
       description: Serializer for transferring group ownership
@@ -12048,6 +13695,39 @@ components:
       - is_verified
       - updated_at
       - username
+    Verify2FARequest:
+      type: object
+      properties:
+        checkpoint_token:
+          type: string
+        otp_code:
+          type: string
+          maxLength: 6
+      required:
+      - checkpoint_token
+      - otp_code
+    Verify2FAResponse:
+      type: object
+      properties:
+        status:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        refreshToken:
+          type: string
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
+        message:
+          type: string
+      required:
+      - accessToken
+      - expiresIn
+      - message
+      - refreshToken
+      - status
+      - user
     WarnUserInput:
       type: object
       properties:

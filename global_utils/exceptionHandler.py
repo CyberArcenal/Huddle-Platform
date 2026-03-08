@@ -5,7 +5,7 @@ from rest_framework import status
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
 
-from users.authentications import is_blacklisted
+from users.utils.authentications import is_blacklisted
 
 
 def custom_exception_handler(exc, context):
