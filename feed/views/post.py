@@ -4,18 +4,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
-from rest_framework import serializers
 from drf_spectacular.utils import (
     extend_schema,
     OpenApiParameter,
     OpenApiExample,
     inline_serializer,
 )
-
+from django.db import transaction
 from feed.models import Post
 from feed.serializers.post import (
+    PostCreateSerializer,
     PostDetailSerializer,
     PostFeedSerializer,
     PostSerializer,
@@ -26,6 +27,22 @@ from feed.serializers.post import (
 from feed.services import PostService
 from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
+
+
+# ----- Paginated response serializers for drf-spectacular -----
+class PaginatedPostFeedSerializer(serializers.Serializer):
+    """Matches the structure of paginator.get_paginated_response()"""
+
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = PostFeedSerializer(many=True)
+
+
+# --------------------------------------------------------------
 
 
 class PostListView(APIView):
@@ -60,7 +77,7 @@ class PostListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PostFeedSerializer(many=True)},
+        responses={200: PaginatedPostFeedSerializer},  # ✅ Fixed pagination doc
         description="List posts: public posts, posts by a specific user, or personalized feed for authenticated user.",
     )
     def get(self, request):
@@ -89,7 +106,7 @@ class PostListView(APIView):
             )
 
     @extend_schema(
-        request=PostSerializer,
+        request=PostCreateSerializer,
         responses={201: PostSerializer},
         examples=[
             OpenApiExample(
@@ -129,6 +146,7 @@ class PostListView(APIView):
         ],
         description="Create a new post.",
     )
+    @transaction.atomic
     def post(self, request):
         """Create a new post"""
         serializer = PostSerializer(data=request.data, context={"request": request})
@@ -195,6 +213,7 @@ class PostDetailView(APIView):
         ],
         description="Update a post (full or partial).",
     )
+    @transaction.atomic
     def put(self, request, post_id):
         post = self.get_object(post_id)
         if not post:
@@ -242,6 +261,7 @@ class PostDetailView(APIView):
         },
         description="Delete a post (soft delete by default).",
     )
+    @transaction.atomic
     def delete(self, request, post_id):
         post = self.get_object(post_id)
         if not post:
@@ -354,7 +374,7 @@ class PostSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PostFeedSerializer(many=True)},
+        responses={200: PaginatedPostFeedSerializer},  # ✅ Fixed pagination doc
         description="Search posts by content.",
     )
     def get(self, request):
@@ -451,6 +471,7 @@ class PostRestoreView(APIView):
         },
         description="Restore a soft-deleted post (only owner).",
     )
+    @transaction.atomic
     def post(self, request, post_id):
         post = get_object_or_404(Post, id=post_id)
 

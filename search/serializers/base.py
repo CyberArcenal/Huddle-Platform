@@ -94,3 +94,12 @@ class ClearHistoryRequestSerializer(serializers.Serializer):
                 f"Search type must be one of: {', '.join(valid_types)}"
             )
         return value
+
+class RecordSearchInputSerializer(serializers.Serializer):
+    query = serializers.CharField(max_length=255, required=True, help_text="Search query")
+    search_type = serializers.ChoiceField(
+        choices=['all', 'users', 'groups', 'posts'],
+        default='all',
+        help_text="Type of search"
+    )
+    results_count = serializers.IntegerField(default=0, min_value=0, help_text="Number of results returned")

@@ -18,12 +18,36 @@ from ..serializers.security import (
     UpdateSecuritySettingsSerializer,
     SecurityLogSerializer,
 )
+from django.db import transaction
 from ..serializers.activity import (
     LoginSessionSerializer,
     TerminateSessionSerializer,
     BulkTerminateSessionsSerializer,
 )
 from ..models import UserSecuritySettings, SecurityLog, LoginSession
+from rest_framework import serializers
+from ..serializers.security import SecurityLogSerializer
+from ..serializers.activity import LoginSessionSerializer
+
+
+class PaginatedSecurityLogSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = SecurityLogSerializer(many=True)
+
+
+class PaginatedLoginSessionSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = LoginSessionSerializer(many=True)
 
 
 class ChangePasswordView(APIView):
@@ -60,6 +84,7 @@ class ChangePasswordView(APIView):
         ],
         description="Change the authenticated user's password.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = ChangePasswordSerializer(
             data=request.data, context={"request": request}
@@ -113,6 +138,7 @@ class Enable2FAView(APIView):
         ],
         description="Enable two-factor authentication for the current user.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = EnableTwoFactorSerializer(
             data=request.data, context={"request": request}
@@ -170,6 +196,7 @@ class Disable2FAView(APIView):
         ],
         description="Disable two-factor authentication for the current user.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = DisableTwoFactorSerializer(
             data=request.data, context={"request": request}
@@ -233,6 +260,7 @@ class SecuritySettingsView(APIView):
         ],
         description="Update the current user's security settings.",
     )
+    @transaction.atomic
     def put(self, request):
         serializer = UpdateSecuritySettingsSerializer(
             data=request.data, context={"request": request}
@@ -284,7 +312,7 @@ class SecurityLogsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: SecurityLogSerializer(many=True).data},
+        responses={200: PaginatedSecurityLogSerializer},
         description="Get paginated security logs for the current user.",
     )
     def get(self, request):
@@ -422,7 +450,7 @@ class ActiveSessionsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: LoginSessionSerializer(many=True).data},
+        responses={200: PaginatedLoginSessionSerializer},
         description="Get all active login sessions for the current user.",
     )
     def get(self, request):
@@ -457,6 +485,7 @@ class TerminateSessionView(APIView):
         ],
         description="Terminate a specific login session by its ID.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = TerminateSessionSerializer(
             data=request.data, context={"request": request}
@@ -504,6 +533,7 @@ class BulkTerminateSessionsView(APIView):
         ],
         description="Terminate multiple sessions at once.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = BulkTerminateSessionsSerializer(
             data=request.data, context={"request": request}
@@ -536,6 +566,7 @@ class TerminateAllSessionsView(APIView):
         },
         description="Terminate all sessions except the current one.",
     )
+    @transaction.atomic
     def post(self, request):
         try:
             LoginSessionService.deactivate_all_user_sessions(request.user)

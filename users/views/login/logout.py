@@ -7,16 +7,23 @@ from django.utils import timezone
 import logging
 from global_utils.security import get_client_ip
 
-from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
-
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
+from django.db import transaction
 from users.models.base import BlacklistedAccessToken, LoginSession, SecurityLog, User
 from users.serializers.auth import LogoutRequestSerializer, LogoutResponseSerializer
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
+
 logger = logging.getLogger(__name__)
+
+
 class LogoutView(APIView):
     """
     Improved logout view with proper token blacklisting (similar to base.py)
     """
+
     @extend_schema(
         request=LogoutRequestSerializer,
         responses={
@@ -28,30 +35,32 @@ class LogoutView(APIView):
         },
         examples=[
             OpenApiExample(
-                'Logout request',
-                value={'refresh': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...'},
+                "Logout request",
+                value={
+                    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0..."
+                },
                 request_only=True,
             ),
             OpenApiExample(
-                'Logout successful',
-                value={'status': True, 'message': 'Logged out successfully'},
+                "Logout successful",
+                value={"status": True, "message": "Logged out successfully"},
                 response_only=True,
             ),
         ],
-        description="Logout the current session by blacklisting tokens."
+        description="Logout the current session by blacklisting tokens.",
     )
+    @transaction.atomic
     def post(self, request):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
         user = request.user
 
-        refresh_token_str = request.data.get("refresh")
+        # Validate request data using serializer
+        serializer = LogoutRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not refresh_token_str:
-            return Response(
-                {"status": False, "detail": "Refresh token is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        refresh_token_str = serializer.validated_data["refresh"]
 
         try:
             refresh_token = RefreshToken(refresh_token_str)
@@ -64,9 +73,7 @@ class LogoutView(APIView):
 
                 # Find the login session
                 session = LoginSession.objects.filter(
-                    user=user, 
-                    refresh_token=refresh_jti,
-                    is_active=True
+                    user=user, refresh_token=refresh_jti, is_active=True
                 ).first()
 
                 # BLACKLIST ACCESS TOKEN - IMPORTANT!
@@ -74,7 +81,7 @@ class LogoutView(APIView):
                     BlacklistedAccessToken.blacklist_token(
                         jti=access_jti,
                         user=user,
-                        expires_at=timezone.now() + timezone.timedelta(days=1)
+                        expires_at=timezone.now() + timezone.timedelta(days=1),
                     )
                     logger.info(f"Blacklisted access token JTI: {access_jti}")
 
@@ -104,7 +111,7 @@ class LogoutView(APIView):
                     event_type="logout",
                     ip_address=client_ip,
                     user_agent=user_agent,
-                    details="User logged out (tokens blacklisted)"
+                    details="User logged out (tokens blacklisted)",
                 )
 
                 return Response(
@@ -138,6 +145,7 @@ class LogoutAllView(APIView):
     """
     Improved logout all view with proper token blacklisting (similar to base.py)
     """
+
     @extend_schema(
         responses={
             200: LogoutResponseSerializer,
@@ -146,13 +154,17 @@ class LogoutAllView(APIView):
         },
         examples=[
             OpenApiExample(
-                'Logout all successful',
-                value={'status': True, 'message': 'Logged out from 2 devices successfully'},
+                "Logout all successful",
+                value={
+                    "status": True,
+                    "message": "Logged out from 2 devices successfully",
+                },
                 response_only=True,
             ),
         ],
-        description="Logout from all active sessions by blacklisting all tokens."
+        description="Logout from all active sessions by blacklisting all tokens.",
     )
+    @transaction.atomic
     def post(self, request):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
@@ -177,7 +189,7 @@ class LogoutAllView(APIView):
                         BlacklistedAccessToken.blacklist_token(
                             jti=session.access_token,
                             user=user,
-                            expires_at=timezone.now() + timezone.timedelta(days=1)
+                            expires_at=timezone.now() + timezone.timedelta(days=1),
                         )
 
                     # Blacklist refresh token
@@ -187,7 +199,9 @@ class LogoutAllView(APIView):
                         token.blacklist()
                     except Exception:
                         try:
-                            outstanding = OutstandingToken.objects.get(jti=session.refresh_token)
+                            outstanding = OutstandingToken.objects.get(
+                                jti=session.refresh_token
+                            )
                             BlacklistedToken.objects.get_or_create(token=outstanding)
                         except OutstandingToken.DoesNotExist:
                             pass
@@ -211,11 +225,14 @@ class LogoutAllView(APIView):
                 event_type="logout",
                 ip_address=client_ip,
                 user_agent=user_agent,
-                details=f"All sessions terminated ({terminated_count} sessions, tokens blacklisted)"
+                details=f"All sessions terminated ({terminated_count} sessions, tokens blacklisted)",
             )
 
             return Response(
-                {"status": True, "message": f"Logged out from {terminated_count} devices successfully"},
+                {
+                    "status": True,
+                    "message": f"Logged out from {terminated_count} devices successfully",
+                },
                 status=status.HTTP_200_OK,
             )
 

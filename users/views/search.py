@@ -14,7 +14,17 @@ from ..serializers.search import (
     AdvancedSearchSerializer,
 )
 from ..models import User, UserStatus
+from rest_framework import serializers
+from ..serializers.search import SearchResultSerializer
 
+class PaginatedSearchResultSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = SearchResultSerializer(many=True)
 
 class UserSearchView(APIView):
     """View for searching users with basic search"""
@@ -39,7 +49,7 @@ class UserSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: SearchResultSerializer(many=True).data},
+        responses={200: PaginatedSearchResultSerializer},
         description="Basic user search by username, first name, or last name.",
     )
     def get(self, request):
@@ -116,7 +126,7 @@ class AdvancedUserSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: SearchResultSerializer(many=True).data},
+        responses={200: PaginatedSearchResultSerializer},
         description="Advanced user search with multiple filters. Returns paginated results with additional metadata.",
     )
     def get(self, request):

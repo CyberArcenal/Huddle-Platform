@@ -8,7 +8,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.views.decorators.vary import vary_on_cookie
 from django.core.cache import cache
-
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from global_utils.pagination import SearchPagination
@@ -17,9 +17,28 @@ from search.serializers.base import (
     PopularSearchSerializer,
     SearchHistorySerializer,
     SearchStatisticsSerializer,
+    RecordSearchInputSerializer,          # <-- new import
 )
 from search.services.search_history import SearchHistoryService
 from users.models import User
+from rest_framework import serializers
+from search.serializers.base import SearchHistorySerializer
+
+
+# ----- Paginated response serializer for drf-spectacular -----
+class PaginatedSearchHistorySerializer(serializers.Serializer):
+    """Matches the custom pagination response from SearchPagination"""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = SearchHistorySerializer(many=True)
+
+
+# --------------------------------------------------------------
 
 
 class SearchHistoryAPIView(APIView):
@@ -29,13 +48,30 @@ class SearchHistoryAPIView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='search_type', type=str, description='Filter by type (all, users, groups, posts)', required=False),
-            OpenApiParameter(name='days', type=int, description='Filter by last X days', required=False),
-            OpenApiParameter(name='page', type=int, description='Page number', required=False),
-            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+            OpenApiParameter(
+                name="search_type",
+                type=str,
+                description="Filter by type (all, users, groups, posts)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="days",
+                type=int,
+                description="Filter by last X days",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
         ],
-        responses={200: SearchHistorySerializer(many=True)},
-        description="Retrieve the authenticated user's search history, with optional filters and pagination."
+        responses={200: PaginatedSearchHistorySerializer},
+        description="Retrieve the authenticated user's search history, with optional filters and pagination.",
     )
     def get(self, request):
         try:
@@ -60,51 +96,48 @@ class SearchHistoryAPIView(APIView):
             )
 
     @extend_schema(
-        request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'query': {'type': 'string'},
-                    'search_type': {'type': 'string'},
-                    'results_count': {'type': 'integer'}
-                }
-            }
-        },
+        request=RecordSearchInputSerializer,      # ✅ Now using dedicated serializer
         responses={201: SearchHistorySerializer},
         examples=[
             OpenApiExample(
-                'Record search',
-                value={
-                    'query': 'python',
-                    'search_type': 'all',
-                    'results_count': 42
-                },
-                request_only=True
+                "Record search",
+                value={"query": "python", "search_type": "all", "results_count": 42},
+                request_only=True,
             ),
             OpenApiExample(
-                'Response',
+                "Response",
                 value={
-                    'success': True,
-                    'message': 'Search recorded successfully',
-                    'data': {
-                        'id': 1,
-                        'user': 1,
-                        'query': 'python',
-                        'search_type': 'all',
-                        'results_count': 42,
-                        'searched_at': '2025-03-07T12:34:56Z'
-                    }
+                    "success": True,
+                    "message": "Search recorded successfully",
+                    "data": {
+                        "id": 1,
+                        "user": 1,
+                        "query": "python",
+                        "search_type": "all",
+                        "results_count": 42,
+                        "searched_at": "2025-03-07T12:34:56Z",
+                    },
                 },
-                response_only=True
-            )
+                response_only=True,
+            ),
         ],
-        description="Record a new search entry."
+        description="Record a new search entry.",
     )
+    @transaction.atomic
     def post(self, request):
         try:
-            query = request.data.get("query", "")
-            search_type = request.data.get("search_type", "all")
-            results_count = request.data.get("results_count", 0)
+            # Validate input using dedicated serializer
+            input_serializer = RecordSearchInputSerializer(data=request.data)
+            if not input_serializer.is_valid():
+                return Response(
+                    {"success": False, "errors": input_serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            data = input_serializer.validated_data
+            query = data.get("query", "")
+            search_type = data.get("search_type", "all")
+            results_count = data.get("results_count", 0)
 
             search_record = SearchHistoryService.record_search(
                 user=request.user,
@@ -113,7 +146,7 @@ class SearchHistoryAPIView(APIView):
                 results_count=results_count,
             )
 
-            serializer = SearchHistorySerializer(search_record)
+            output_serializer = SearchHistorySerializer(search_record)
 
             cache_key = f"search_suggestions_{request.user.id}"
             cache.delete(cache_key)
@@ -122,7 +155,7 @@ class SearchHistoryAPIView(APIView):
                 {
                     "success": True,
                     "message": "Search recorded successfully",
-                    "data": serializer.data,
+                    "data": output_serializer.data,
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -134,29 +167,35 @@ class SearchHistoryAPIView(APIView):
 
     @extend_schema(
         request=ClearHistoryRequestSerializer,
-        responses={200: {'type': 'object', 'properties': {
-            'success': {'type': 'boolean'},
-            'message': {'type': 'string'},
-            'details': {'type': 'object'}
-        }}},
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "message": {"type": "string"},
+                    "details": {"type": "object"},
+                },
+            }
+        },
         examples=[
             OpenApiExample(
-                'Clear history request',
-                value={'older_than_days': 30, 'search_type': 'all'},
-                request_only=True
+                "Clear history request",
+                value={"older_than_days": 30, "search_type": "all"},
+                request_only=True,
             ),
             OpenApiExample(
-                'Clear history response',
+                "Clear history response",
                 value={
-                    'success': True,
-                    'message': 'Successfully deleted 15 search records',
-                    'details': {'deleted': 15}
+                    "success": True,
+                    "message": "Successfully deleted 15 search records",
+                    "details": {"deleted": 15},
                 },
-                response_only=True
-            )
+                response_only=True,
+            ),
         ],
-        description="Clear the user's search history, optionally filtering by age or type."
+        description="Clear the user's search history, optionally filtering by age or type.",
     )
+    @transaction.atomic
     def delete(self, request):
         try:
             serializer = ClearHistoryRequestSerializer(data=request.data)
@@ -203,25 +242,41 @@ class DeleteSearchEntryAPIView(APIView):
 
     @extend_schema(
         responses={
-            200: {'type': 'object', 'properties': {'success': {'type': 'boolean'}, 'message': {'type': 'string'}}},
-            404: {'type': 'object', 'properties': {'success': {'type': 'boolean'}, 'error': {'type': 'string'}}}
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "message": {"type": "string"},
+                },
+            },
+            404: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "error": {"type": "string"},
+                },
+            },
         },
         examples=[
             OpenApiExample(
-                'Success',
-                value={'success': True, 'message': 'Search entry deleted successfully'},
+                "Success",
+                value={"success": True, "message": "Search entry deleted successfully"},
                 response_only=True,
-                status_codes=['200']
+                status_codes=["200"],
             ),
             OpenApiExample(
-                'Not found',
-                value={'success': False, 'error': 'Search entry not found or you do not have permission'},
+                "Not found",
+                value={
+                    "success": False,
+                    "error": "Search entry not found or you do not have permission",
+                },
                 response_only=True,
-                status_codes=['404']
-            )
+                status_codes=["404"],
+            ),
         ],
-        description="Delete a specific search history entry by its ID."
+        description="Delete a specific search history entry by its ID.",
     )
+    @transaction.atomic
     def delete(self, request, entry_id):
         try:
             success = SearchHistoryService.delete_search_entry(
@@ -256,26 +311,41 @@ class RecentSearchesAPIView(APIView):
     @method_decorator(vary_on_cookie)
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='limit', type=int, description='Number of results (default 10)', required=False),
-            OpenApiParameter(name='unique', type=bool, description='Return unique queries only', required=False),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                description="Number of results (default 10)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="unique",
+                type=bool,
+                description="Return unique queries only",
+                required=False,
+            ),
         ],
-        responses={200: {'type': 'object', 'properties': {
-            'success': {'type': 'boolean'},
-            'count': {'type': 'integer'},
-            'results': {'type': 'array', 'items': {'type': 'string'}}
-        }}},
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "count": {"type": "integer"},
+                    "results": {"type": "array", "items": {"type": "string"}},
+                },
+            }
+        },
         examples=[
             OpenApiExample(
-                'Response',
+                "Response",
                 value={
-                    'success': True,
-                    'count': 3,
-                    'results': ['python', 'django', 'react']
+                    "success": True,
+                    "count": 3,
+                    "results": ["python", "django", "react"],
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get a list of the user's recent search queries."
+        description="Get a list of the user's recent search queries.",
     )
     def get(self, request):
         try:
@@ -306,28 +376,48 @@ class PopularSearchesAPIView(APIView):
     @method_decorator(cache_page(60 * 30))
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='days', type=int, description='Time period in days (default 7)', required=False),
-            OpenApiParameter(name='limit', type=int, description='Number of results (default 10)', required=False),
-            OpenApiParameter(name='search_type', type=str, description='Filter by search type', required=False),
-            OpenApiParameter(name='user_only', type=bool, description='Show only user\'s popular searches (auth required)', required=False),
+            OpenApiParameter(
+                name="days",
+                type=int,
+                description="Time period in days (default 7)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                description="Number of results (default 10)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="search_type",
+                type=str,
+                description="Filter by search type",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="user_only",
+                type=bool,
+                description="Show only user's popular searches (auth required)",
+                required=False,
+            ),
         ],
-        responses={200: PopularSearchSerializer(many=True)},
+        responses={200: PaginatedSearchHistorySerializer},
         examples=[
             OpenApiExample(
-                'Response',
+                "Response",
                 value={
-                    'success': True,
-                    'count': 3,
-                    'results': [
-                        {'query': 'django', 'count': 150},
-                        {'query': 'python', 'count': 120},
-                        {'query': 'react', 'count': 90}
-                    ]
+                    "success": True,
+                    "count": 3,
+                    "results": [
+                        {"query": "django", "count": 150},
+                        {"query": "python", "count": 120},
+                        {"query": "react", "count": 90},
+                    ],
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get globally popular searches or, if user_only=true, popular searches for the authenticated user."
+        description="Get globally popular searches or, if user_only=true, popular searches for the authenticated user.",
     )
     def get(self, request):
         try:
@@ -366,29 +456,49 @@ class SearchSuggestionsAPIView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='prefix', type=str, description='Search prefix (required)', required=True),
-            OpenApiParameter(name='limit', type=int, description='Number of suggestions (default 10)', required=False),
-            OpenApiParameter(name='include_anonymous', type=bool, description='Include anonymous searches', required=False),
+            OpenApiParameter(
+                name="prefix",
+                type=str,
+                description="Search prefix (required)",
+                required=True,
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                description="Number of suggestions (default 10)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="include_anonymous",
+                type=bool,
+                description="Include anonymous searches",
+                required=False,
+            ),
         ],
-        responses={200: {'type': 'object', 'properties': {
-            'success': {'type': 'boolean'},
-            'count': {'type': 'integer'},
-            'prefix': {'type': 'string'},
-            'suggestions': {'type': 'array', 'items': {'type': 'string'}}
-        }}},
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "count": {"type": "integer"},
+                    "prefix": {"type": "string"},
+                    "suggestions": {"type": "array", "items": {"type": "string"}},
+                },
+            }
+        },
         examples=[
             OpenApiExample(
-                'Response',
+                "Response",
                 value={
-                    'success': True,
-                    'count': 3,
-                    'prefix': 'py',
-                    'suggestions': ['python', 'pytest', 'pygame']
+                    "success": True,
+                    "count": 3,
+                    "prefix": "py",
+                    "suggestions": ["python", "pytest", "pygame"],
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get autocomplete suggestions based on a prefix."
+        description="Get autocomplete suggestions based on a prefix.",
     )
     def get(self, request):
         try:
@@ -448,25 +558,35 @@ class SearchStatisticsAPIView(APIView):
     @method_decorator(vary_on_cookie)
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='days', type=int, description='Time period in days (default 30)', required=False),
+            OpenApiParameter(
+                name="days",
+                type=int,
+                description="Time period in days (default 30)",
+                required=False,
+            ),
         ],
         responses={200: SearchStatisticsSerializer},
         examples=[
             OpenApiExample(
-                'Response',
+                "Response",
                 value={
-                    'success': True,
-                    'statistics': {
-                        'total_searches': 250,
-                        'unique_queries': 45,
-                        'avg_results_per_search': 12.3,
-                        'top_search_types': {'all': 150, 'users': 50, 'groups': 30, 'posts': 20}
-                    }
+                    "success": True,
+                    "statistics": {
+                        "total_searches": 250,
+                        "unique_queries": 45,
+                        "avg_results_per_search": 12.3,
+                        "top_search_types": {
+                            "all": 150,
+                            "users": 50,
+                            "groups": 30,
+                            "posts": 20,
+                        },
+                    },
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get search statistics for the authenticated user."
+        description="Get search statistics for the authenticated user.",
     )
     def get(self, request):
         try:
@@ -492,31 +612,46 @@ class SearchTrendsAPIView(APIView):
     @method_decorator(cache_page(60 * 60))
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='days', type=int, description='Time period in days (default 7)', required=False),
-            OpenApiParameter(name='interval', type=str, description='Grouping interval (day/hour)', required=False),
+            OpenApiParameter(
+                name="days",
+                type=int,
+                description="Time period in days (default 7)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="interval",
+                type=str,
+                description="Grouping interval (day/hour)",
+                required=False,
+            ),
         ],
-        responses={200: {'type': 'object', 'properties': {
-            'success': {'type': 'boolean'},
-            'count': {'type': 'integer'},
-            'interval': {'type': 'string'},
-            'trends': {'type': 'array', 'items': {'type': 'object'}}
-        }}},
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "count": {"type": "integer"},
+                    "interval": {"type": "string"},
+                    "trends": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
         examples=[
             OpenApiExample(
-                'Response',
+                "Response",
                 value={
-                    'success': True,
-                    'count': 7,
-                    'interval': 'day',
-                    'trends': [
-                        {'date': '2025-03-01', 'count': 42},
-                        {'date': '2025-03-02', 'count': 38}
-                    ]
+                    "success": True,
+                    "count": 7,
+                    "interval": "day",
+                    "trends": [
+                        {"date": "2025-03-01", "count": 42},
+                        {"date": "2025-03-02", "count": 38},
+                    ],
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get search volume trends over time."
+        description="Get search volume trends over time.",
     )
     def get(self, request):
         try:
@@ -558,18 +693,28 @@ class ExportSearchHistoryAPIView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='format', type=str, description='Export format (json)', required=False),
-            OpenApiParameter(name='include_metadata', type=bool, description='Include metadata', required=False),
+            OpenApiParameter(
+                name="format",
+                type=str,
+                description="Export format (json)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="include_metadata",
+                type=bool,
+                description="Include metadata",
+                required=False,
+            ),
         ],
-        responses={200: {'type': 'object'}},
+        responses={200: {"type": "object"}},
         examples=[
             OpenApiExample(
-                'Response (file download)',
-                value={'exported_data': '...'},
-                response_only=True
+                "Response (file download)",
+                value={"exported_data": "..."},
+                response_only=True,
             )
         ],
-        description="Export the user's search history as a JSON file."
+        description="Export the user's search history as a JSON file.",
     )
     def get(self, request):
         try:

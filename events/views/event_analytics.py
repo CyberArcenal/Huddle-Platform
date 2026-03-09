@@ -14,7 +14,20 @@ from events.serializers.event_analytics import (
 )
 from events.services.event_analytics import EventAnalyticsService
 from global_utils.pagination import AnalyticsPagination
+from rest_framework import serializers
+from events.serializers.event_analytics import EventAnalyticsSerializer
 
+# ----- Paginated response serializer for drf-spectacular -----
+class PaginatedEventAnalyticsSerializer(serializers.Serializer):
+    """Matches the custom pagination response from AnalyticsPagination"""
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = EventAnalyticsSerializer(many=True)
+# --------------------------------------------------------------
 
 class EventAnalyticsListView(APIView):
     """
@@ -30,7 +43,7 @@ class EventAnalyticsListView(APIView):
             OpenApiParameter(name='page', type=int, description='Page number', required=False),
             OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
         ],
-        responses={200: EventAnalyticsSerializer(many=True)},
+        responses={200: PaginatedEventAnalyticsSerializer},
         description="Retrieve paginated analytics records for an event, optionally filtered by date range."
     )
     def get(self, request, event_id):

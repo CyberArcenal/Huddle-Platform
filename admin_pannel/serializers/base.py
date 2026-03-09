@@ -125,3 +125,15 @@ class ReportStatisticsSerializer(serializers.Serializer):
     avg_resolution_hours = serializers.FloatField(allow_null=True)
     most_reported_objects = serializers.ListField(child=serializers.DictField())
     resolution_rate = serializers.FloatField()
+    
+
+# For admin_log_views
+class CleanupLogsInputSerializer(serializers.Serializer):
+    days_to_keep = serializers.IntegerField(default=365, help_text="Delete logs older than this many days")
+
+# For reported_content_views
+class DismissReportInputSerializer(serializers.Serializer):
+    reason = serializers.CharField(help_text="Reason for dismissal", default="Report dismissed")
+
+class CleanupReportsInputSerializer(serializers.Serializer):
+    days_to_keep = serializers.IntegerField(default=180, help_text="Delete reports older than this many days")

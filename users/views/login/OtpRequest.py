@@ -16,7 +16,7 @@ from drf_spectacular.utils import (
     OpenApiExample,
     extend_schema_view,
 )
-
+from django.db import transaction
 logger = logging.getLogger(__name__)
 
 
@@ -187,6 +187,7 @@ class OtpRequestCRUD(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @transaction.atomic
     def post(self, request):
         user: User = request.user
         client_ip = get_client_ip(request)
@@ -220,7 +221,7 @@ class OtpRequestCRUD(APIView):
             logger.error(f"OTP request creation failed: {exc}")
 
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
+    @transaction.atomic
     def put(self, request, id):
         user: User = request.user
         client_ip = get_client_ip(request)
@@ -262,7 +263,7 @@ class OtpRequestCRUD(APIView):
             logger.error(f"OTP request update failed: {exc}")
 
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
+    @transaction.atomic
     def delete(self, request, id):
         user: User = request.user
         client_ip = get_client_ip(request)

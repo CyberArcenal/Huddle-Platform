@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from global_utils.pagination import EventsPagination
 
@@ -24,6 +24,21 @@ from ..services import EventService
 from users.models import User
 from groups.models import Group
 from groups.services import GroupMemberService
+
+from rest_framework import serializers
+
+
+# ----- Paginated response serializer for drf-spectacular -----
+class PaginatedEventListSerializer(serializers.Serializer):
+    """Matches the custom pagination response from EventsPagination"""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = EventListSerializer(many=True)
 
 
 class EventListView(APIView):
@@ -73,7 +88,7 @@ class EventListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="List events with optional filters and pagination.",
     )
     def get(self, request):
@@ -162,6 +177,7 @@ class EventListView(APIView):
         ],
         description="Create a new event.",
     )
+    @transaction.atomic
     def post(self, request):
         """Create a new event"""
         serializer = EventCreateSerializer(
@@ -229,6 +245,7 @@ class EventDetailView(APIView):
         ],
         description="Update all fields of an event.",
     )
+    @transaction.atomic
     def put(self, request, pk):
         """Update event"""
         event = self.get_object(pk)
@@ -286,6 +303,7 @@ class EventDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(responses={204: None}, description="Delete an event.")
+    @transaction.atomic
     def delete(self, request, pk):
         """Delete event"""
         event = self.get_object(pk)
@@ -328,6 +346,7 @@ class EventCreateView(APIView):
         ],
         description="Create a new event.",
     )
+    @transaction.atomic
     def post(self, request):
         """Create new event"""
         serializer = EventCreateSerializer(
@@ -362,6 +381,7 @@ class EventUpdateView(APIView):
         ],
         description="Update an event (full or partial).",
     )
+    @transaction.atomic
     def put(self, request, pk):
         """Update event"""
         try:
@@ -395,6 +415,7 @@ class EventDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses={204: None}, description="Delete an event.")
+    @transaction.atomic
     def delete(self, request, pk):
         """Delete event"""
         try:
@@ -450,7 +471,7 @@ class UpcomingEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="Get upcoming events with filters.",
     )
     def get(self, request):
@@ -521,7 +542,7 @@ class PastEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="Get past events with filters.",
     )
     def get(self, request):
@@ -592,7 +613,7 @@ class EventSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="Search events by query, location, date range.",
     )
     def get(self, request):
@@ -833,7 +854,7 @@ class UserOrganizedEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="Get events organized by a specific user.",
     )
     def get(self, request, user_id=None):
@@ -888,7 +909,7 @@ class GroupEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="Get events for a group (user must be a group member for private groups).",
     )
     def get(self, request, group_id):
@@ -935,7 +956,7 @@ class EventTypeEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: PaginatedEventListSerializer},
         description="Get events filtered by event type (public, private, group).",
     )
     def get(self, request, event_type):

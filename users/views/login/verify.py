@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-
+from django.db import transaction
 from users.models.base import BlacklistedAccessToken
 from users.serializers.user import UserMinimalSerializer
 
@@ -15,7 +15,6 @@ from users.serializers.auth import (
     TokenVerifyRequestSerializer,
     TokenVerifyResponseSerializer,
 )
-
 
 User = get_user_model()
 
@@ -54,12 +53,14 @@ class TokenVerifyView(APIView):
         ],
         description="Verify if an access token is valid and not blacklisted, and return user info.",
     )
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
-        token_str = request.data.get("token")
-        if not token_str:
-            return Response(
-                {"detail": "Token is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        # Validate request data using serializer
+        serializer = TokenVerifyRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        token_str = serializer.validated_data["token"]
 
         try:
             # Validate ang token - signature at expiry

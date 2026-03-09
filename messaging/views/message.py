@@ -6,13 +6,26 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from global_utils.pagination import MessagingPagination
 from messaging.models import Conversation, Message
 from messaging.serializers.base import MessageSerializer, MessageCreateSerializer
+from rest_framework import serializers
+from messaging.serializers.base import MessageSerializer
 
+# ----- Paginated response serializer for drf-spectacular -----
+class PaginatedMessageSerializer(serializers.Serializer):
+    """Matches the custom pagination response from MessagingPagination"""
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = MessageSerializer(many=True)
+# --------------------------------------------------------------
 
 class MessageListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -23,7 +36,7 @@ class MessageListView(APIView):
             OpenApiParameter(name='page', type=int, description='Page number', required=False),
             OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
         ],
-        responses={200: MessageSerializer(many=True)},
+        responses={200: PaginatedMessageSerializer},
         description="Retrieve paginated list of messages in a conversation (oldest first)."
     )
     def get(self, request, conversation_pk):
@@ -85,6 +98,7 @@ class MessageListView(APIView):
             ),
         ],
     )
+    @transaction.atomic
     def post(self, request, conversation_pk):
         conversation = get_object_or_404(Conversation, pk=conversation_pk)
         if request.user not in conversation.participants.all():

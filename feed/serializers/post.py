@@ -9,7 +9,20 @@ from feed.services.post import PostService
 from users.models.base import User
 from users.serializers.user import UserProfileSerializer
 
+# feed/serializers/post.py (add this new serializer)
 
+class PostCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating a new post. Excludes user field (set automatically)."""
+    class Meta:
+        model = Post
+        fields = ['content', 'post_type', 'media_url', 'is_public']
+        # user is not included; will be set in the view
+
+    def create(self, validated_data):
+        # user is passed from the view via save(user=request.user)
+        user = self.context['request'].user
+        return Post.objects.create(user=user, **validated_data)
+    
 class PostSerializer(serializers.ModelSerializer):
     """Serializer for Post model"""
 

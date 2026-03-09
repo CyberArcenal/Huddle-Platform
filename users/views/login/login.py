@@ -14,7 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 import random
 from datetime import timedelta
 from django.contrib.auth import get_user_model
-
+from django.db import transaction
 from users.enums import UserStatus
 from users.models.base import (
     LoginCheckpoint,
@@ -99,26 +99,22 @@ class LoginView(APIView):
         ],
         description="Authenticate user and return tokens. If 2FA is enabled, returns checkpoint_token.",
     )
+    @transaction.atomic
     def post(self, request):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
         device_name = user_agent[:100]  # Truncate to fit max_length=100
-        logger.debug(
-            f"Login request from IP: {client_ip}, User-Agent: {user_agent} data: {request.data}"
-        )
-        email = request.data.get("email")
-        password = request.data.get("password")
+        logger.debug(f"Login request from IP: {client_ip}, User-Agent: {user_agent}")
+
+        # Validate request data using serializer
+        serializer = LoginRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"]
+        password = serializer.validated_data["password"]
 
         logger.info(f"Login attempt for email: {email} from IP: {client_ip}")
-
-        if not email or not password:
-            return Response(
-                {
-                    "status": False,
-                    "detail": "Please provide both email and password",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         # Authenticate user
         try:
@@ -329,22 +325,19 @@ class Verify2FALoginView(APIView):
         ],
         description="Verify 2FA OTP and complete login.",
     )
+    @transaction.atomic
     def post(self, request):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
         device_name = user_agent[:100]
 
-        checkpoint_token = request.data.get("checkpoint_token")
-        otp_code = request.data.get("otp_code")
+        # Validate request data using serializer
+        serializer = Verify2FARequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not checkpoint_token or not otp_code:
-            return Response(
-                {
-                    "status": False,
-                    "detail": "Checkpoint token and OTP code are required",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        checkpoint_token = serializer.validated_data["checkpoint_token"]
+        otp_code = serializer.validated_data["otp_code"]
 
         try:
             # Find valid checkpoint
@@ -477,14 +470,14 @@ class Resend2FAOTPView(APIView):
         ],
         description="Resend 2FA OTP for an ongoing 2FA login.",
     )
+    @transaction.atomic
     def post(self, request):
-        checkpoint_token = request.data.get("checkpoint_token")
+        # Validate request data using serializer
+        serializer = Resend2FARequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not checkpoint_token:
-            return Response(
-                {"status": False, "detail": "Checkpoint token is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        checkpoint_token = serializer.validated_data["checkpoint_token"]
 
         try:
             # Find valid checkpoint

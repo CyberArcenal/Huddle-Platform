@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError, NotFound, PermissionDenie
 from django.utils import timezone
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
-
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from events.serializers.event import EventListSerializer
 from events.serializers.event_attendance import (
@@ -24,6 +24,48 @@ from ..serializers import (
 from ..services import EventAttendanceService, EventService
 from users.models import User
 from groups.services import GroupMemberService
+from rest_framework import serializers
+from events.serializers.event_attendance import EventAttendanceWithUserSerializer
+
+
+# ----- Input serializers for endpoints with raw request data -----
+class RSVPInputSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=["going", "maybe", "declined"], default="going", help_text="RSVP status"
+    )
+
+
+class UpdateStatusInputSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=["going", "maybe", "declined"],
+        required=True,
+        help_text="New RSVP status",
+    )
+
+
+class SendRemindersInputSerializer(serializers.Serializer):
+    hours_before = serializers.IntegerField(
+        default=24, min_value=1, help_text="Hours before event to send reminder"
+    )
+
+
+# ----------------------------------------------------------------
+
+
+# ----- Paginated response serializer for drf-spectacular -----
+class PaginatedEventAttendanceWithUserSerializer(serializers.Serializer):
+    """Matches the custom pagination response from EventsPagination"""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = EventAttendanceWithUserSerializer(many=True)
+
+
+# --------------------------------------------------------------
 
 
 class EventAttendanceListView(APIView):
@@ -33,12 +75,24 @@ class EventAttendanceListView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='status', type=str, description='Filter by status (going, maybe, declined)', required=False),
-            OpenApiParameter(name='page', type=int, description='Page number', required=False),
-            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+            OpenApiParameter(
+                name="status",
+                type=str,
+                description="Filter by status (going, maybe, declined)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
         ],
-        responses={200: EventAttendanceWithUserSerializer(many=True)},
-        description="List all attendees for an event, optionally filtered by status."
+        responses={200: PaginatedEventAttendanceWithUserSerializer},
+        description="List all attendees for an event, optionally filtered by status.",
     )
     def get(self, request, event_id):
         event = get_object_or_404(Event, id=event_id)
@@ -66,26 +120,23 @@ class EventAttendanceListView(APIView):
         responses={201: EventAttendanceSerializer},
         examples=[
             OpenApiExample(
-                'RSVP request',
-                value={
-                    'status': 'going'
-                },
-                request_only=True
+                "RSVP request", value={"status": "going"}, request_only=True
             ),
             OpenApiExample(
-                'RSVP response',
+                "RSVP response",
                 value={
-                    'id': 1,
-                    'event': 1,
-                    'user': 5,
-                    'status': 'going',
-                    'joined_at': '2025-03-07T12:34:56Z'
+                    "id": 1,
+                    "event": 1,
+                    "user": 5,
+                    "status": "going",
+                    "joined_at": "2025-03-07T12:34:56Z",
                 },
-                response_only=True
-            )
+                response_only=True,
+            ),
         ],
-        description="RSVP to an event (create attendance)."
+        description="RSVP to an event (create attendance).",
     )
+    @transaction.atomic
     def post(self, request, event_id):
         """RSVP to an event"""
         try:
@@ -145,7 +196,7 @@ class EventAttendanceDetailView(APIView):
 
     @extend_schema(
         responses={200: EventAttendanceSerializer},
-        description="Retrieve a specific attendance record."
+        description="Retrieve a specific attendance record.",
     )
     def get(self, request, event_id, user_id=None):
         """Get attendance record"""
@@ -168,13 +219,12 @@ class EventAttendanceDetailView(APIView):
         responses={200: EventAttendanceSerializer},
         examples=[
             OpenApiExample(
-                'Update status',
-                value={'status': 'maybe'},
-                request_only=True
+                "Update status", value={"status": "maybe"}, request_only=True
             )
         ],
-        description="Update attendance status (full update)."
+        description="Update attendance status (full update).",
     )
+    @transaction.atomic
     def put(self, request, event_id, user_id=None):
         """Update attendance status"""
         attendance = self.get_object(event_id, user_id)
@@ -201,12 +251,10 @@ class EventAttendanceDetailView(APIView):
         responses={200: EventAttendanceSerializer},
         examples=[
             OpenApiExample(
-                'Update status',
-                value={'status': 'declined'},
-                request_only=True
+                "Update status", value={"status": "declined"}, request_only=True
             )
         ],
-        description="Partially update attendance status."
+        description="Partially update attendance status.",
     )
     def patch(self, request, event_id, user_id=None):
         """Partial update attendance status"""
@@ -229,10 +277,8 @@ class EventAttendanceDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(
-        responses={204: None},
-        description="Remove attendance (un‑RSVP)."
-    )
+    @extend_schema(responses={204: None}, description="Remove attendance (un‑RSVP).")
+    @transaction.atomic
     def delete(self, request, event_id, user_id=None):
         """Remove attendance/RSVP"""
         attendance = self.get_object(event_id, user_id)
@@ -254,17 +300,14 @@ class EventRSVPView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        request={'application/json': {'status': 'string'}},
+        request=RSVPInputSerializer,
         responses={201: EventAttendanceSerializer},
         examples=[
-            OpenApiExample(
-                'RSVP request',
-                value={'status': 'going'},
-                request_only=True
-            )
+            OpenApiExample("RSVP request", value={"status": "going"}, request_only=True)
         ],
-        description="RSVP to an event (create or update attendance)."
+        description="RSVP to an event (create or update attendance).",
     )
+    @transaction.atomic
     def post(self, request, event_id):
         """RSVP to event"""
         try:
@@ -272,7 +315,11 @@ class EventRSVPView(APIView):
         except Event.DoesNotExist:
             raise NotFound(detail="Event not found")
 
-        status = request.data.get("status", "going")
+        serializer = RSVPInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        status = serializer.validated_data["status"]
 
         try:
             created, attendance = EventAttendanceService.rsvp_to_event(
@@ -303,16 +350,14 @@ class UpdateAttendanceStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        request={'application/json': {'status': 'string'}},
+        request=UpdateStatusInputSerializer,
         responses={200: EventAttendanceSerializer},
         examples=[
             OpenApiExample(
-                'Update request',
-                value={'status': 'maybe'},
-                request_only=True
+                "Update request", value={"status": "maybe"}, request_only=True
             )
         ],
-        description="Update attendance status."
+        description="Update attendance status.",
     )
     def patch(self, request, event_id):
         """Update attendance status"""
@@ -321,12 +366,11 @@ class UpdateAttendanceStatusView(APIView):
         except Event.DoesNotExist:
             raise NotFound(detail="Event not found")
 
-        new_status = request.data.get("status")
+        serializer = UpdateStatusInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not new_status:
-            return Response(
-                {"error": "Status is required"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        new_status = serializer.validated_data["status"]
 
         try:
             attendance = EventAttendanceService.update_attendance_status(
@@ -347,16 +391,48 @@ class UserEventsView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='user_id', type=int, description='User ID (optional, defaults to current)', required=False),
-            OpenApiParameter(name='status', type=str, description='Filter by RSVP status', required=False),
-            OpenApiParameter(name='upcoming_only', type=bool, description='Show only upcoming events', required=False),
-            OpenApiParameter(name='start_date', type=str, description='Start date (ISO format)', required=False),
-            OpenApiParameter(name='end_date', type=str, description='End date (ISO format)', required=False),
-            OpenApiParameter(name='page', type=int, description='Page number', required=False),
-            OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="User ID (optional, defaults to current)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="status",
+                type=str,
+                description="Filter by RSVP status",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="upcoming_only",
+                type=bool,
+                description="Show only upcoming events",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="start_date",
+                type=str,
+                description="Start date (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="end_date",
+                type=str,
+                description="End date (ISO format)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
         ],
-        responses={200: EventListSerializer(many=True)},
-        description="Get events a user is attending, with optional filters."
+        responses={200: PaginatedEventAttendanceWithUserSerializer},
+        description="Get events a user is attending, with optional filters.",
     )
     def get(self, request, user_id=None):
         if user_id is None:
@@ -431,24 +507,29 @@ class UserAttendanceStatisticsView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='user_id', type=int, description='User ID (optional, defaults to current)', required=False),
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="User ID (optional, defaults to current)",
+                required=False,
+            ),
         ],
         responses={200: UserAttendanceStatisticsSerializer},
         examples=[
             OpenApiExample(
-                'Statistics response',
+                "Statistics response",
                 value={
-                    'total_rsvps': 12,
-                    'status_breakdown': {'going': 8, 'maybe': 3, 'declined': 1},
-                    'upcoming_events': 5,
-                    'past_events_attended': 7,
-                    'events_organized': 2,
-                    'attendance_rate': 87.5
+                    "total_rsvps": 12,
+                    "status_breakdown": {"going": 8, "maybe": 3, "declined": 1},
+                    "upcoming_events": 5,
+                    "past_events_attended": 7,
+                    "events_organized": 2,
+                    "attendance_rate": 87.5,
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get attendance statistics for a user."
+        description="Get attendance statistics for a user.",
     )
     def get(self, request, user_id=None):
         """Get user's attendance statistics"""
@@ -484,22 +565,22 @@ class MutualAttendeesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={200: {'type': 'array', 'items': {'type': 'object'}}},
+        responses={200: {"type": "array", "items": {"type": "object"}}},
         examples=[
             OpenApiExample(
-                'Mutual attendees response',
+                "Mutual attendees response",
                 value=[
                     {
-                        'user': {'id': 2, 'username': 'alice', 'name': 'Alice Smith'},
-                        'is_following': True,
-                        'is_followed_by': True,
-                        'is_mutual': True
+                        "user": {"id": 2, "username": "alice", "name": "Alice Smith"},
+                        "is_following": True,
+                        "is_followed_by": True,
+                        "is_mutual": True,
                     }
                 ],
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Get list of attendees that the current user has a follow relationship with."
+        description="Get list of attendees that the current user has a follow relationship with.",
     )
     def get(self, request, event_id):
         """Get mutual attendees for an event"""
@@ -543,10 +624,15 @@ class AttendanceTrendView(APIView):
 
     @extend_schema(
         parameters=[
-            OpenApiParameter(name='hours_before', type=int, description='Hours before event to include', required=False),
+            OpenApiParameter(
+                name="hours_before",
+                type=int,
+                description="Hours before event to include",
+                required=False,
+            ),
         ],
-        responses={200: {'type': 'array', 'items': {'type': 'object'}}},
-        description="Get RSVP trend (counts per hour) for an event. Only event organizer can access."
+        responses={200: {"type": "array", "items": {"type": "object"}}},
+        description="Get RSVP trend (counts per hour) for an event. Only event organizer can access.",
     )
     def get(self, request, event_id):
         """Get attendance trend"""
@@ -573,24 +659,25 @@ class SendRemindersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        request={'application/json': {'hours_before': 24}},
-        responses={200: {'type': 'object'}},
+        request=SendRemindersInputSerializer,
+        responses={200: {"type": "object"}},
         examples=[
             OpenApiExample(
-                'Reminder response',
+                "Reminder response",
                 value={
-                    'event_id': 1,
-                    'hours_before': 24,
-                    'reminders_sent': 3,
-                    'attendees_to_remind': [
-                        {'user_id': 5, 'username': 'john', 'email': 'john@example.com'}
-                    ]
+                    "event_id": 1,
+                    "hours_before": 24,
+                    "reminders_sent": 3,
+                    "attendees_to_remind": [
+                        {"user_id": 5, "username": "john", "email": "john@example.com"}
+                    ],
                 },
-                response_only=True
+                response_only=True,
             )
         ],
-        description="Trigger reminders for attendees. Only event organizer can access."
+        description="Trigger reminders for attendees. Only event organizer can access.",
     )
+    @transaction.atomic
     def post(self, request, event_id):
         """Send reminders"""
         try:
@@ -602,7 +689,11 @@ class SendRemindersView(APIView):
         if event.organizer != request.user:
             raise PermissionDenied(detail="Only event organizer can send reminders")
 
-        hours_before = int(request.data.get("hours_before", 24))
+        serializer = SendRemindersInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        hours_before = serializer.validated_data["hours_before"]
 
         reminders = EventAttendanceService.send_reminders(event, hours_before)
 

@@ -9,7 +9,7 @@ from datetime import timedelta
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from global_utils.pagination import UsersPagination
-
+from django.db import transaction
 from ..serializers.admin import (
     AdminUserUpdateSerializer,
     AdminUserCreateSerializer,
@@ -21,6 +21,41 @@ from ..services.user import UserService
 from ..services.security_log import SecurityLogService
 from ..services.user_activity import UserActivityService
 from ..models import User, UserStatus, SecurityLog, UserActivity
+from rest_framework import serializers
+from ..serializers.admin import AdminUserListSerializer
+
+
+# ----- New input serializer for AdminCleanupView -----
+class CleanupActionInputSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(
+        choices=[
+            "cleanup_expired_sessions",
+            "cleanup_expired_tokens",
+            "cleanup_expired_otps",
+            "cleanup_expired_checkpoints",
+            "cleanup_old_logs",
+            "cleanup_old_activities",
+        ],
+        help_text="Cleanup action to perform",
+    )
+    days = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Number of days (used for old logs/activities)",
+    )
+
+
+# ------------------------------------------------------
+
+
+class PaginatedAdminUserListSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = AdminUserListSerializer(many=True)
 
 
 class AdminUserListView(APIView):
@@ -64,7 +99,7 @@ class AdminUserListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: AdminUserListSerializer(many=True).data},
+        responses={200: PaginatedAdminUserListSerializer},
         description="List users with admin filters and pagination.",
     )
     def get(self, request):
@@ -181,6 +216,7 @@ class AdminUserDetailView(APIView):
         ],
         description="Update a user's details as admin.",
     )
+    @transaction.atomic
     def put(self, request, user_id):
         try:
             user = get_object_or_404(User, id=user_id)
@@ -239,6 +275,7 @@ class AdminCreateUserView(APIView):
         ],
         description="Create a new user as admin.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = AdminUserCreateSerializer(
             data=request.data, context={"request": request}
@@ -291,6 +328,7 @@ class AdminBulkUserActionView(APIView):
         ],
         description="Perform a bulk action (e.g., deactivate, activate) on multiple users.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = BulkUserActionSerializer(
             data=request.data, context={"request": request}
@@ -422,7 +460,7 @@ class AdminCleanupView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
-        request={"application/json": {"action": "string", "days": "integer"}},
+        request=CleanupActionInputSerializer,  # ✅ Now using dedicated serializer
         responses={200: {"type": "object"}},
         examples=[
             OpenApiExample(
@@ -438,7 +476,15 @@ class AdminCleanupView(APIView):
         ],
         description="Perform cleanup operations (expired sessions, tokens, logs, etc.).",
     )
+    @transaction.atomic
     def post(self, request):
+        serializer = CleanupActionInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        action = data["action"]
+
         try:
             from ..services.login_session import LoginSessionService
             from ..services.blacklisted_access_token import (
@@ -446,8 +492,6 @@ class AdminCleanupView(APIView):
             )
             from ..services.otp_request import OtpRequestService
             from ..services.login_checkpoint import LoginCheckpointService
-
-            action = request.data.get("action")
 
             if action == "cleanup_expired_sessions":
                 count = LoginSessionService.cleanup_expired_sessions()
@@ -480,7 +524,7 @@ class AdminCleanupView(APIView):
                 )
 
             elif action == "cleanup_old_logs":
-                days = int(request.data.get("days", 90))
+                days = data.get("days", 90)
                 count = SecurityLogService.cleanup_old_logs(days)
                 return Response(
                     {
@@ -490,19 +534,13 @@ class AdminCleanupView(APIView):
                 )
 
             elif action == "cleanup_old_activities":
-                days = int(request.data.get("days", 365))
+                days = data.get("days", 365)
                 count = UserActivityService.cleanup_old_activities(days)
                 return Response(
                     {
                         "message": f"Cleaned up {count} activities older than {days} days",
                         "count": count,
                     }
-                )
-
-            else:
-                return Response(
-                    {"error": "Invalid cleanup action"},
-                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         except Exception as e:

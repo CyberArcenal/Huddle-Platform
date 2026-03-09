@@ -54,10 +54,14 @@ class PasswordResetRequestView(APIView):
         ],
         description="Request a password reset OTP to be sent to the user's email.",
     )
+    @transaction.atomic
     def post(self, request):
-        email = request.data.get("email")
-        if not email:
-            return Response({"message": "Email is required"}, status=400)
+        # Validate request data using serializer
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data["email"]
 
         try:
             user = User.objects.get(email=email)
@@ -139,18 +143,18 @@ class PasswordResetVerifyView(APIView):
         ],
         description="Verify the OTP for password reset and obtain a checkpoint token to complete the reset.",
     )
+    @transaction.atomic
     def post(self, request):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
-        email = request.data.get("email")
-        otp_code = request.data.get("otp_code")
+        # Validate request data using serializer
+        serializer = PasswordResetVerifyRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not email or not otp_code:
-            return Response(
-                {"detail": "Email and OTP code are required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        email = serializer.validated_data["email"]
+        otp_code = serializer.validated_data["otp_code"]
 
         try:
             otp_record = (
@@ -253,22 +257,13 @@ class PasswordResetCompleteView(APIView):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
-        checkpoint_token = request.data.get("checkpoint_token")
-        new_password = request.data.get("new_password")
-        confirm_password = request.data.get("confirm_password")
+        # Validate request data using serializer
+        serializer = PasswordResetCompleteRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not checkpoint_token or not new_password or not confirm_password:
-            return Response(
-                {
-                    "detail": "Checkpoint token, new password and confirmation are required"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if new_password != confirm_password:
-            return Response(
-                {"detail": "Passwords do not match"}, status=status.HTTP_400_BAD_REQUEST
-            )
+        checkpoint_token = serializer.validated_data["checkpoint_token"]
+        new_password = serializer.validated_data["new_password"]
 
         try:
             # Validate checkpoint
