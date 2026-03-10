@@ -114,7 +114,7 @@ class PostListView(APIView):
                 value={
                     "content": "Hello world!",
                     "post_type": "text",
-                    "is_public": True,
+                    "privacy": 'public',
                 },
                 request_only=True,
             ),
@@ -124,7 +124,7 @@ class PostListView(APIView):
                     "content": "Check out this photo",
                     "post_type": "image",
                     "media_url": "https://example.com/image.jpg",
-                    "is_public": True,
+                    "privacy": 'public',
                 },
                 request_only=True,
             ),
@@ -136,7 +136,7 @@ class PostListView(APIView):
                     "content": "Hello world!",
                     "post_type": "text",
                     "media_url": None,
-                    "is_public": True,
+                    "privacy": 'public',
                     "is_deleted": False,
                     "created_at": "2025-03-07T12:34:56Z",
                     "updated_at": "2025-03-07T12:34:56Z",
@@ -194,7 +194,7 @@ class PostDetailView(APIView):
             )
 
         # Check if post is public
-        if not post.is_public and request.user != post.user:
+        if not post.privacy == 'public' and request.user != post.user:
             return Response(
                 {"error": "You do not have permission to view this post"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -304,7 +304,7 @@ class PostStatisticsView(APIView):
     def get(self, request, post_id):
         post = get_object_or_404(Post, id=post_id, is_deleted=False)
 
-        if not post.is_public and request.user != post.user:
+        if not post.privacy == 'public' and request.user != post.user:
             return Response(
                 {
                     "error": "You do not have permission to view statistics for this post"

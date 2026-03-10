@@ -201,7 +201,7 @@ class Command(BaseCommand):
                 content=fake.paragraph(nb_sentences=5),
                 post_type=post_type,
                 media_url=None,
-                is_public=random.choice([True, False]),
+                privacy=random.choice(['followers', 'public', 'only_me']),
                 is_deleted=False,
                 created_at=created,
                 updated_at=updated,

@@ -104,7 +104,9 @@ class LoginView(APIView):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
         device_name = user_agent[:100]  # Truncate to fit max_length=100
-        logger.debug(f"Login request from IP: {client_ip}, User-Agent: {user_agent}")
+        logger.debug(
+            f"Login request from IP: {client_ip}, User-Agent: {user_agent} body: {request.data}"
+        )
 
         # Validate request data using serializer
         serializer = LoginRequestSerializer(data=request.data)

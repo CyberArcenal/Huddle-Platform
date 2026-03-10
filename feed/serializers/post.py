@@ -15,7 +15,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating a new post. Excludes user field (set automatically)."""
     class Meta:
         model = Post
-        fields = ['content', 'post_type', 'media_url', 'is_public']
+        fields = ['content', 'post_type', 'media_url', 'privacy']
         # user is not included; will be set in the view
 
     def create(self, validated_data):
@@ -42,7 +42,7 @@ class PostSerializer(serializers.ModelSerializer):
             "content",
             "post_type",
             "media_url",
-            "is_public",
+            "privacy",
             "is_deleted",
             "created_at",
             "updated_at",
@@ -122,7 +122,7 @@ class PostSerializer(serializers.ModelSerializer):
                 content=validated_data["content"],
                 post_type=validated_data.get("post_type", "text"),
                 media_url=validated_data.get("media_url"),
-                is_public=validated_data.get("is_public", True),
+                privacy=validated_data.get("privacy", 'followers'),
             )
             return post
         except ValidationError as e:
@@ -183,7 +183,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
         return {
             "comment_count": CommentService.get_post_comment_count(obj),
             "like_count": LikeService.get_like_count("post", obj.id),
-            "is_public": obj.is_public,
+            "privacy": obj.privacy,
         }
 
 
@@ -195,7 +195,7 @@ class PostStatisticsSerializer(serializers.Serializer):
     like_count = serializers.IntegerField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
-    is_public = serializers.BooleanField()
+    privacy = serializers.BooleanField()
     post_type = serializers.CharField()
 
 

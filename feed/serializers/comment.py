@@ -8,7 +8,17 @@ from feed.services.post import PostService
 from users.models.base import User
 from users.serializers.user import UserProfileSerializer
 
+class CommentCreateSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(write_only=True)
+    post_id = serializers.IntegerField(write_only=True)
+    parent_comment_id = serializers.IntegerField(
+        write_only=True, required=False, allow_null=True
+    )
 
+    class Meta:
+        model = Comment
+        fields = ["user_id", "post_id", "parent_comment_id", "content"]
+        
 class CommentSerializer(serializers.ModelSerializer):
     """Serializer for Comment model"""
 

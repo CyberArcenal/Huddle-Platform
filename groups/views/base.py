@@ -147,7 +147,7 @@ class GroupListView(APIView):
                 value={
                     "name": "Secret Project",
                     "description": "Invite only",
-                    "privacy": "private",
+                    "privacy": "secret",
                 },
                 request_only=True,
             ),
@@ -554,7 +554,7 @@ class GroupPrivacyView(APIView):
         responses={200: GroupSerializer},
         examples=[
             OpenApiExample(
-                "Change privacy", value={"privacy": "private"}, request_only=True
+                "Change privacy", value={"privacy": "secret"}, request_only=True
             )
         ],
         description="Change group privacy (public, private, secret). Only creator can do this.",

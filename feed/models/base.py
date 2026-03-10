@@ -8,12 +8,17 @@ class Post(models.Model):
         ('video', 'Video'),
         ('poll', 'Poll'),
     ]
+    PRIVACY_TYPES = [
+        ('public', 'Public'),
+        ('followers', 'Followers'),
+        ('secret', 'Secret')
+    ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField()
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default='text')
     media_url = models.FileField(upload_to='posts/', blank=True, null=True)
-    is_public = models.BooleanField(default=True)
+    privacy = models.CharField(max_length=10, choices=PRIVACY_TYPES, default='followers')
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

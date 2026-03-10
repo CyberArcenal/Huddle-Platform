@@ -235,14 +235,14 @@ class ObjectLikesView(APIView):
             )
         if content_type == "post":
             post = get_object_or_404(Post, id=object_id)
-            if not post.is_public and request.user != post.user:
+            if not post.privacy == 'public' and request.user != post.user:
                 return Response(
                     {"error": "You do not have permission to view likes for this post"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
         elif content_type == "comment":
             comment = get_object_or_404(Comment, id=object_id)
-            if not comment.post.is_public and request.user != comment.post.user:
+            if not comment.post.privacy == 'public' and request.user != comment.post.user:
                 return Response(
                     {
                         "error": "You do not have permission to view likes for this comment"
@@ -339,7 +339,7 @@ class RecentLikersView(APIView):
             )
         if content_type == "post":
             post = get_object_or_404(Post, id=object_id)
-            if not post.is_public and request.user != post.user:
+            if not post.privacy == 'public' and request.user != post.user:
                 return Response(
                     {
                         "error": "You do not have permission to view likers for this post"

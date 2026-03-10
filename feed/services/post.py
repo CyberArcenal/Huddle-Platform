@@ -16,7 +16,7 @@ class PostService:
         content: str,
         post_type: str = 'text',
         media_url: Optional[str] = None,
-        is_public: bool = True,
+        privacy: str = 'followers',
         **extra_fields
     ) -> Post:
         """Create a new post"""
@@ -38,7 +38,7 @@ class PostService:
                     content=content,
                     post_type=post_type,
                     media_url=media_url,
-                    is_public=is_public,
+                    privacy=privacy,
                     **extra_fields
                 )
                 return post
@@ -75,7 +75,7 @@ class PostService:
         offset: int = 0
     ) -> List[Post]:
         """Get public posts from all users"""
-        queryset = Post.objects.filter(is_public=True, is_deleted=False)
+        queryset = Post.objects.filter(privacy='followers', is_deleted=False)
         
         if exclude_user:
             queryset = queryset.exclude(user=exclude_user)
@@ -182,7 +182,7 @@ class PostService:
             'like_count': like_count,
             'created_at': post.created_at,
             'updated_at': post.updated_at,
-            'is_public': post.is_public,
+            'privacy': post.privacy,
             'post_type': post.post_type
         }
     
@@ -190,7 +190,7 @@ class PostService:
     def get_user_post_statistics(user: User) -> Dict[str, Any]:
         """Get post statistics for a user"""
         total_posts = Post.objects.filter(user=user, is_deleted=False).count()
-        public_posts = Post.objects.filter(user=user, is_public=True, is_deleted=False).count()
+        public_posts = Post.objects.filter(user=user, privacy='followers', is_deleted=False).count()
         private_posts = total_posts - public_posts
         
         # Post type breakdown
@@ -221,7 +221,7 @@ class PostService:
         recent_posts = Post.objects.filter(
             created_at__gte=time_threshold,
             is_deleted=False,
-            is_public=True
+            privacy='followers'
         )
         
         # Calculate like counts and filter

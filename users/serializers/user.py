@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from typing import Dict, Any, Optional, List
 
+
 from users.services.user import UserService
 
 from ..models import User, UserStatus, UserFollow, UserSecuritySettings, UserActivity
@@ -277,6 +278,7 @@ class UserProfileSerializer(UserBaseSerializer):
     followers_count = serializers.SerializerMethodField()
     following_count = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
+    posts_count = serializers.SerializerMethodField()
 
     class Meta(UserBaseSerializer.Meta):
         fields = UserBaseSerializer.Meta.fields + [
@@ -285,6 +287,7 @@ class UserProfileSerializer(UserBaseSerializer):
             "followers_count",
             "following_count",
             "is_following",
+            "posts_count",
             "status",
         ]
         read_only_fields = UserBaseSerializer.Meta.read_only_fields + ["status"]
@@ -297,6 +300,10 @@ class UserProfileSerializer(UserBaseSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+    
+    def get_posts_count(self, obj):
+        from feed.models.base import Post
+        return Post.objects.filter(user_id=obj.id).count()
 
     def get_cover_photo_url(self, obj: User) -> Optional[str]:
         """Get full URL for cover photo"""

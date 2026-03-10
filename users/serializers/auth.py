@@ -2,7 +2,7 @@ from rest_framework import serializers
 from users.serializers.user import UserProfileSerializer, UserMinimalSerializer
 
 class LoginRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    email = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
 class LoginResponseSerializer(serializers.Serializer):

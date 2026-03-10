@@ -10,7 +10,7 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from feed.models import Comment, Post
-from feed.serializers.comment import CommentSerializer
+from feed.serializers.comment import CommentCreateSerializer, CommentSerializer
 from feed.services import CommentService
 from global_utils.pagination import StandardResultsSetPagination
 
@@ -79,7 +79,7 @@ class CommentListView(APIView):
         if post_id:
             # Get comments for a specific post
             post = get_object_or_404(Post, id=post_id, is_deleted=False)
-            if not post.is_public and request.user != post.user:
+            if not post.privacy == 'public' and request.user != post.user:
                 return Response(
                     {
                         "error": "You do not have permission to view comments for this post"
@@ -114,29 +114,45 @@ class CommentListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
-        request=CommentSerializer,
+        request=CommentCreateSerializer,
         responses={201: CommentSerializer},
         examples=[
             OpenApiExample(
                 "Create comment",
-                value={"content": "Great post!", "parent_comment_id": None},
+                value={
+                    "user_id": 1,
+                    "post_id": 10,
+                    "content": "Great post!",
+                    "parent_comment_id": None,
+                },
                 request_only=True,
             ),
             OpenApiExample(
                 "Create reply",
-                value={"content": "I agree!", "parent_comment_id": 5},
+                value={
+                    "user_id": 1,
+                    "post_id": 10,
+                    "content": "I agree!",
+                    "parent_comment_id": 5,
+                },
                 request_only=True,
             ),
             OpenApiExample(
                 "Comment response",
                 value={
                     "id": 123,
-                    "post": 1,
-                    "user": 1,
+                    "post": 10,
+                    "user": {
+                        "id": 1,
+                        "username": "darius",
+                        "profile_pic": "https://example.com/avatar.jpg",
+                    },
                     "content": "Great post!",
                     "parent_comment": None,
                     "created_at": "2025-03-07T12:34:56Z",
-                    "is_deleted": False,
+                    "like_count": 3,
+                    "has_liked": True,
+                    "replies": [],
                 },
                 response_only=True,
             ),
@@ -149,7 +165,7 @@ class CommentListView(APIView):
         post = get_object_or_404(Post, id=post_id, is_deleted=False)
 
         # Check if post is public or user is owner
-        if not post.is_public and request.user != post.user:
+        if not post.privacy == 'public' and request.user != post.user:
             return Response(
                 {"error": "You do not have permission to comment on this post"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -194,7 +210,7 @@ class CommentDetailView(APIView):
         comment = self.get_object(comment_id)
 
         # Check if associated post is accessible
-        if not comment.post.is_public and request.user != comment.post.user:
+        if not comment.post.privacy == 'public' and request.user != comment.post.user:
             return Response(
                 {"error": "You do not have permission to view this comment"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -204,7 +220,7 @@ class CommentDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        request=CommentSerializer,
+        request=CommentCreateSerializer,
         responses={200: CommentSerializer},
         examples=[
             OpenApiExample(
@@ -315,7 +331,7 @@ class CommentRepliesView(APIView):
     )
     def get(self, request, comment_id):
         comment = get_object_or_404(Comment, id=comment_id)
-        if not comment.post.is_public and request.user != comment.post.user:
+        if not comment.post.privacy == 'public' and request.user != comment.post.user:
             return Response(
                 {
                     "error": "You do not have permission to view replies for this comment"
@@ -345,7 +361,7 @@ class CommentRepliesView(APIView):
 
         # Check if parent comment's post is accessible
         if (
-            not parent_comment.post.is_public
+            not parent_comment.post.privacy == 'public'
             and request.user != parent_comment.post.user
         ):
             return Response(
@@ -401,7 +417,7 @@ class CommentThreadView(APIView):
         comment = get_object_or_404(Comment, id=comment_id)
 
         # Check if associated post is accessible
-        if not comment.post.is_public and request.user != comment.post.user:
+        if not comment.post.privacy == 'public' and request.user != comment.post.user:
             return Response(
                 {"error": "You do not have permission to view this thread"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -471,7 +487,7 @@ class CommentSearchView(APIView):
         post = None
         if post_id:
             post = get_object_or_404(Post, id=post_id, is_deleted=False)
-            if not post.is_public and request.user != post.user:
+            if not post.privacy == 'public' and request.user != post.user:
                 return Response(
                     {
                         "error": "You do not have permission to search comments on this post"

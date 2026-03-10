@@ -14,8 +14,8 @@ class CommentInline(admin.TabularInline):
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'post_type', 'is_public', 'is_deleted', 'created_at')
-    list_filter = ('post_type', 'is_public', 'is_deleted', 'created_at')
+    list_display = ('id', 'user', 'post_type', 'privacy', 'is_deleted', 'created_at')
+    list_filter = ('post_type', 'privacy', 'is_deleted', 'created_at')
     search_fields = ('content', 'user__username')
     raw_id_fields = ('user',)
     date_hierarchy = 'created_at'
