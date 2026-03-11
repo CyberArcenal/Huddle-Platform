@@ -247,6 +247,7 @@ class GroupDetailView(APIView):
         try:
             updated_group = GroupService.update_group(group, serializer.validated_data)
         except Exception as e:
+            logger.debug(e)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
             GroupSerializer(updated_group, context={"request": request}).data
@@ -426,6 +427,7 @@ class GroupMemberRoleView(APIView):
                 changed_by=request.user,
             )
         except Exception as e:
+            logger.debug(e)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(GroupMemberSerializer(membership).data)
 

@@ -4,267 +4,356 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 from PIL import Image
 import os
-from typing import Dict, Any, Tuple, Optional
 
 from ..models import User, UserActivity
+from io import BytesIO
+from django.core.files.base import ContentFile
+from PIL import Image
 
+class NormalizedImageField(serializers.ImageField):
+    
+    """
+    ImageField that ensures uploaded file has a sensible filename extension
+    (detects format with Pillow and appends extension if missing) BEFORE
+    running the normal ImageField validation.
+    """
+
+    FORMAT_EXT_MAP = {
+        "JPEG": ".jpg",
+        "JPG": ".jpg",
+        "PNG": ".png",
+        "GIF": ".gif",
+        "WEBP": ".webp",
+        "TIFF": ".tiff",
+    }
+
+    def _ensure_name_has_extension(self, uploaded_file):
+        from PIL import Image
+        # If name already has extension, nothing to do
+        name = getattr(uploaded_file, "name", "") or ""
+        base, ext = os.path.splitext(name)
+        if ext:
+            return
+
+        # Try detect format from file bytes
+        try:
+            uploaded_file.seek(0)
+            img = Image.open(uploaded_file)
+            fmt = (img.format or "").upper()
+            detected_ext = self.FORMAT_EXT_MAP.get(fmt)
+            if detected_ext:
+                uploaded_file.name = f"{base or 'upload'}{detected_ext}"
+        except Exception:
+            # fallback: give a safe default extension so validators won't fail
+            uploaded_file.name = f"{base or 'upload'}.jpg"
+        finally:
+            uploaded_file.seek(0)
+
+    def to_internal_value(self, data):
+        # data is usually an InMemoryUploadedFile or TemporaryUploadedFile
+        try:
+            if hasattr(data, "name"):
+                self._ensure_name_has_extension(data)
+        except Exception:
+            # don't break validation flow; let parent handle any remaining errors
+            pass
+
+        return super().to_internal_value(data)
 
 class ProfilePictureUploadSerializer(serializers.Serializer):
-    """Serializer for uploading profile pictures"""
-    
-    image = serializers.ImageField(
+    image_file = NormalizedImageField(
         required=True,
-        max_length=100,
         allow_empty_file=False,
-        help_text="Profile picture image file (JPG, PNG, GIF)"
+        help_text="Profile picture image file (JPG, PNG, GIF, WEBP)"
     )
     crop_x = serializers.IntegerField(required=False, min_value=0, default=0)
     crop_y = serializers.IntegerField(required=False, min_value=0, default=0)
-    crop_width = serializers.IntegerField(required=False, min_value=50)
-    crop_height = serializers.IntegerField(required=False, min_value=50)
-    
-    def validate_image(self, value):
-        """Validate uploaded image"""
-        # Check file size (max 5MB)
-        max_size = 5 * 1024 * 1024  # 5MB
-        if value.size > max_size:
-            raise serializers.ValidationError(
-                f"Image size must be less than 5MB. Current size: {value.size / 1024 / 1024:.2f}MB"
-            )
-        
-        # Check image dimensions
+    crop_width = serializers.IntegerField(required=False, min_value=50, allow_null=True)
+    crop_height = serializers.IntegerField(
+        required=False, min_value=50, allow_null=True
+    )
+
+    def validate_image_file(self, value):
+        # verify image integrity
         try:
-            image = Image.open(value)
-            width, height = image.size
-            
-            # Minimum dimensions
-            if width < 100 or height < 100:
-                raise serializers.ValidationError(
-                    f"Image must be at least 100x100 pixels. Current: {width}x{height}"
-                )
-            
-            # Maximum dimensions (to prevent extremely large images)
-            if width > 5000 or height > 5000:
-                raise serializers.ValidationError(
-                    f"Image dimensions cannot exceed 5000x5000 pixels. Current: {width}x{height}"
-                )
-            
-            # Check format
-            if image.format not in ['JPEG', 'PNG', 'GIF', 'WEBP']:
-                raise serializers.ValidationError(
-                    "Image must be in JPEG, PNG, GIF, or WEBP format"
-                )
-            
-            return value
-            
+            value.seek(0)
+            img = Image.open(value)
+            img.verify()
         except Exception as e:
-            raise serializers.ValidationError(f"Invalid image file: {str(e)}")
-    
-    def save(self, **kwargs) -> User:
-        """Save profile picture"""
-        request = self.context.get('request')
+            raise serializers.ValidationError(f"Invalid image file: {e}")
+
+        # reopen to inspect format
+        value.seek(0)
+        img = Image.open(value)
+        fmt = (img.format or "").upper()
+
+        # allowed formats
+        allowed = {"JPEG", "JPG", "PNG", "GIF", "WEBP", "TIFF"}
+        if fmt not in allowed:
+            value.seek(0)
+            raise serializers.ValidationError("Image must be in JPEG, PNG, GIF, or WEBP format")
+
+        # max size check (keep this)
+        max_size = 5 * 1024 * 1024
+        if getattr(value, "size", 0) > max_size:
+            value.seek(0)
+            raise serializers.ValidationError("Image size must be less than 5MB.")
+
+        # ensure filename has extension so validators won't fail
+        name = getattr(value, "name", "") or ""
+        base, current_ext = os.path.splitext(name)
+        format_ext_map = {"JPEG": ".jpg", "JPG": ".jpg", "PNG": ".png", "GIF": ".gif", "WEBP": ".webp", "TIFF": ".tiff"}
+        detected_ext = format_ext_map.get(fmt)
+        if not current_ext and detected_ext:
+            value.name = f"{base or 'upload'}{detected_ext}"
+
+        value.seek(0)
+        return value
+
+    def _has_crop(self) -> bool:
+        cd = self.validated_data
+        return (
+            cd.get("crop_width") is not None
+            and cd.get("crop_height") is not None
+            and cd.get("crop_width") >= 50
+            and cd.get("crop_height") >= 50
+        )
+
+    def save(self, **kwargs):
+        request = self.context.get("request")
+        if request is None:
+            raise serializers.ValidationError("Request context is required")
         user = request.user
-        image = self.validated_data['image']
-        
-        # Generate unique filename
-        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
-        file_name, file_ext = os.path.splitext(image.name)
+        image_file = self.validated_data["image_file"]
+
+        # detect extension from image_file.name (validate_image_file ensured it exists)
+        _, file_ext = os.path.splitext(image_file.name or "")
+        file_ext = file_ext or ".jpg"
+        timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
         new_filename = f"profile_{user.id}_{timestamp}{file_ext}"
-        
-        # Process image if crop parameters provided
-        if all(k in self.validated_data for k in ['crop_x', 'crop_y', 'crop_width', 'crop_height']):
-            try:
-                # Open and crop image
-                img = Image.open(image)
-                cropped = img.crop((
-                    self.validated_data['crop_x'],
-                    self.validated_data['crop_y'],
-                    self.validated_data['crop_x'] + self.validated_data['crop_width'],
-                    self.validated_data['crop_y'] + self.validated_data['crop_height']
-                ))
-                
-                # Convert to RGB if necessary
-                if cropped.mode in ('RGBA', 'LA'):
-                    background = Image.new('RGB', cropped.size, (255, 255, 255))
+
+        try:
+            if self._has_crop():
+                image_file.seek(0)
+                img = Image.open(image_file).convert("RGBA")
+                crop_x = self.validated_data.get("crop_x", 0)
+                crop_y = self.validated_data.get("crop_y", 0)
+                crop_w = self.validated_data["crop_width"]
+                crop_h = self.validated_data["crop_height"]
+
+                cropped = img.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+
+                if cropped.mode in ("RGBA", "LA"):
+                    background = Image.new("RGB", cropped.size, (255, 255, 255))
                     background.paste(cropped, mask=cropped.split()[-1])
                     cropped = background
-                
-                # Resize to optimal profile picture size (500x500)
+                else:
+                    cropped = cropped.convert("RGB")
+
                 cropped.thumbnail((500, 500), Image.Resampling.LANCZOS)
-                
-                # Save cropped image
-                from io import BytesIO
                 buffer = BytesIO()
-                cropped.save(buffer, format='JPEG', quality=85)
-                image_file = ContentFile(buffer.getvalue(), name=new_filename)
-                
-                # Update user profile picture
-                if user.profile_picture:
-                    user.profile_picture.delete(save=False)
-                
-                user.profile_picture = image_file
-                
-            except Exception as e:
-                raise serializers.ValidationError(f"Failed to process image: {str(e)}")
-        else:
-            # Save original image
-            user.profile_picture = image
-        
-        user.save()
-        
-        # Log activity
-        UserActivity.objects.create(
-            user=user,
-            action='profile_picture_update',
-            description='User updated profile picture',
-            ip_address=request.META.get('REMOTE_ADDR'),
-            user_agent=request.META.get('HTTP_USER_AGENT'),
-            metadata={'filename': new_filename}
-        )
-        
-        return user
+                cropped.save(buffer, format="JPEG", quality=85)
+                image_content = ContentFile(buffer.getvalue(), name=new_filename)
+
+                if getattr(user, "profile_picture", None):
+                    try:
+                        user.profile_picture.delete(save=False)
+                    except Exception:
+                        pass
+                user.profile_picture = image_content
+            else:
+                image_file.seek(0)
+                content = ContentFile(image_file.read(), name=new_filename)
+                if getattr(user, "profile_picture", None):
+                    try:
+                        user.profile_picture.delete(save=False)
+                    except Exception:
+                        pass
+                user.profile_picture = content
+
+            user.save()
+
+            # optional: log activity (non‑blocking)
+            try:
+                UserActivity.objects.create(
+                    user=user,
+                    action="profile_picture_update",
+                    description="User updated profile picture",
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                    user_agent=request.META.get("HTTP_USER_AGENT"),
+                    metadata={"filename": new_filename},
+                )
+            except Exception:
+                pass
+
+            return user
+
+        except serializers.ValidationError:
+            raise
+        except Exception as e:
+            raise serializers.ValidationError(f"Failed to process image: {str(e)}")
 
 
 class CoverPhotoUploadSerializer(serializers.Serializer):
-    """Serializer for uploading cover photos"""
-    
-    image = serializers.ImageField(
+    image_file = NormalizedImageField(
         required=True,
-        max_length=100,
         allow_empty_file=False,
-        help_text="Cover photo image file (JPG, PNG)"
+        help_text="Cover photo image file (JPG, PNG, GIF, WEBP)"
     )
-    
-    def validate_image(self, value):
-        """Validate cover photo"""
-        # Check file size (max 10MB for cover photos)
-        max_size = 10 * 1024 * 1024  # 10MB
-        if value.size > max_size:
-            raise serializers.ValidationError(
-                f"Cover photo must be less than 10MB. Current size: {value.size / 1024 / 1024:.2f}MB"
-            )
-        
-        # Check image dimensions (recommended cover photo size)
+
+    def validate_image_file(self, value):
+        # verify image integrity
         try:
-            image = Image.open(value)
-            width, height = image.size
-            
-            # Minimum dimensions for cover photo
-            if width < 800 or height < 200:
-                raise serializers.ValidationError(
-                    f"Cover photo must be at least 800x200 pixels. Current: {width}x{height}"
-                )
-            
-            # Aspect ratio recommendation
-            aspect_ratio = width / height
-            if aspect_ratio < 2 or aspect_ratio > 4:
-                # Warn but don't fail - different platforms have different requirements
-                pass
-            
-            return value
-            
+            value.seek(0)
+            img = Image.open(value)
+            img.verify()
         except Exception as e:
-            raise serializers.ValidationError(f"Invalid image file: {str(e)}")
-    
+            raise serializers.ValidationError(f"Invalid image file: {e}")
+
+        value.seek(0)
+        img = Image.open(value)
+        fmt = (img.format or "").upper()
+        allowed = {"JPEG", "JPG", "PNG", "GIF", "WEBP", "TIFF"}
+        if fmt not in allowed:
+            value.seek(0)
+            raise serializers.ValidationError("Cover photo must be in JPEG, PNG, GIF, or WEBP format")
+
+        # keep max size (10MB)
+        max_size = 10 * 1024 * 1024
+        if getattr(value, "size", 0) > max_size:
+            value.seek(0)
+            raise serializers.ValidationError("Cover photo must be less than 10MB.")
+
+        # ensure filename extension exists
+        name = getattr(value, "name", "") or ""
+        base, current_ext = os.path.splitext(name)
+        format_ext_map = {"JPEG": ".jpg", "JPG": ".jpg", "PNG": ".png", "GIF": ".gif", "WEBP": ".webp", "TIFF": ".tiff"}
+        detected_ext = format_ext_map.get(fmt)
+        if not current_ext and detected_ext:
+            value.name = f"{base or 'upload'}{detected_ext}"
+
+        value.seek(0)
+        return value
+
     def save(self, **kwargs) -> User:
-        """Save cover photo"""
-        request = self.context.get('request')
+        """Save processed cover photo and return updated user"""
+        request = self.context.get("request")
+        if request is None:
+            raise serializers.ValidationError("Request context is required")
+
         user = request.user
-        image = self.validated_data['image']
-        
-        # Generate unique filename
-        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
-        file_name, file_ext = os.path.splitext(image.name)
+        image_file = self.validated_data["image_file"]
+
+        # determine extension (validate_image_file ensured it exists)
+        _, file_ext = os.path.splitext(image_file.name or "")
+        file_ext = file_ext or ".jpg"
+        timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
         new_filename = f"cover_{user.id}_{timestamp}{file_ext}"
-        
-        # Process image for optimal cover photo size
+
         try:
-            img = Image.open(image)
-            
-            # Resize to optimal cover photo dimensions (1500x500)
+            image_file.seek(0)
+            img = Image.open(image_file)
+
+            # Resize to recommended cover dimensions (max 1500x500)
             img.thumbnail((1500, 500), Image.Resampling.LANCZOS)
-            
-            # Convert to RGB if necessary
-            if img.mode in ('RGBA', 'LA'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
+
+            # Convert to RGB if has alpha
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, (255, 255, 255))
                 background.paste(img, mask=img.split()[-1])
                 img = background
-            
-            # Save processed image
-            from io import BytesIO
+            else:
+                img = img.convert("RGB")
+
             buffer = BytesIO()
-            img.save(buffer, format='JPEG', quality=85)
-            image_file = ContentFile(buffer.getvalue(), name=new_filename)
-            
-            # Update user cover photo
-            if user.cover_photo:
-                user.cover_photo.delete(save=False)
-            
-            user.cover_photo = image_file
-            
+            img.save(buffer, format="JPEG", quality=85)
+            image_content = ContentFile(buffer.getvalue(), name=new_filename)
+
+            # remove old cover if exists
+            if getattr(user, "cover_photo", None):
+                try:
+                    user.cover_photo.delete(save=False)
+                except Exception:
+                    pass
+
+            user.cover_photo = image_content
+            user.save()
+
+            # log activity (non-blocking)
+            try:
+                UserActivity.objects.create(
+                    user=user,
+                    action="cover_photo_update",
+                    description="User updated cover photo",
+                    ip_address=request.META.get("REMOTE_ADDR"),
+                    user_agent=request.META.get("HTTP_USER_AGENT"),
+                    metadata={"filename": new_filename},
+                )
+            except Exception:
+                pass
+
+            return user
+
+        except serializers.ValidationError:
+            raise
         except Exception as e:
             raise serializers.ValidationError(f"Failed to process cover photo: {str(e)}")
-        
-        user.save()
-        
-        # Log activity
-        UserActivity.objects.create(
-            user=user,
-            action='cover_photo_update',
-            description='User updated cover photo',
-            ip_address=request.META.get('REMOTE_ADDR'),
-            user_agent=request.META.get('HTTP_USER_AGENT'),
-            metadata={'filename': new_filename}
-        )
-        
-        return user
+
 
 
 class RemoveProfilePictureSerializer(serializers.Serializer):
     """Serializer for removing profile picture"""
-    
+
     def save(self, **kwargs) -> User:
         """Remove profile picture"""
-        request = self.context.get('request')
+        request = self.context.get("request")
         user = request.user
-        
+
         if user.profile_picture:
             user.profile_picture.delete(save=False)
             user.profile_picture = None
             user.save()
-            
+
             # Log activity
             UserActivity.objects.create(
                 user=user,
-                action='profile_picture_removed',
-                description='User removed profile picture',
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT')
+                action="profile_picture_removed",
+                description="User removed profile picture",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT"),
             )
-        
+
         return user
 
 
 class RemoveCoverPhotoSerializer(serializers.Serializer):
     """Serializer for removing cover photo"""
-    
+
     def save(self, **kwargs) -> User:
         """Remove cover photo"""
-        request = self.context.get('request')
+        request = self.context.get("request")
         user = request.user
-        
+
         if user.cover_photo:
             user.cover_photo.delete(save=False)
             user.cover_photo = None
             user.save()
-            
+
             # Log activity
             UserActivity.objects.create(
                 user=user,
-                action='cover_photo_removed',
-                description='User removed cover photo',
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT')
+                action="cover_photo_removed",
+                description="User removed cover photo",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT"),
             )
-        
+
         return user
+    
+    
+
+
+
+
+
+

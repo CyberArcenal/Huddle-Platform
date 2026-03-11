@@ -14,7 +14,7 @@ class StoryService:
         user: User,
         story_type: str,
         content: Optional[str] = None,
-        media_url: Optional[str] = None,
+        media_file: Optional[str] = None,
         expires_in_hours: int = 24,
         **extra_fields
     ) -> Story:
@@ -27,8 +27,8 @@ class StoryService:
         # Validate based on story type
         if story_type == 'text' and not content:
             raise ValidationError("Text stories require content")
-        elif story_type in ['image', 'video'] and not media_url:
-            raise ValidationError(f"{story_type.capitalize()} stories require media_url")
+        elif story_type in ['image', 'video'] and not media_file:
+            raise ValidationError(f"{story_type.capitalize()} stories require media_file")
         
         # Calculate expiration time
         expires_at = timezone.now() + timezone.timedelta(hours=expires_in_hours)
@@ -39,7 +39,7 @@ class StoryService:
                     user=user,
                     story_type=story_type,
                     content=content,
-                    media_url=media_url,
+                    media_url=media_file,
                     expires_at=expires_at,
                     **extra_fields
                 )

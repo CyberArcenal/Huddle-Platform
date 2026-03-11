@@ -17,7 +17,7 @@ class Post(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     content = models.TextField()
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default='text')
-    media_url = models.FileField(upload_to='posts/', blank=True, null=True)
+    # media_url removed
     privacy = models.CharField(max_length=10, choices=PRIVACY_TYPES, default='followers')
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -27,6 +27,17 @@ class Post(models.Model):
         db_table = 'posts'
         ordering = ['-created_at']
 
+
+class PostMedia(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='media')
+    file = models.FileField(upload_to='posts/', blank=True, null=True)  # Accepts any file (images, videos)
+    order = models.PositiveIntegerField(default=0, help_text="Order of display")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'post_media'
+        ordering = ['order', 'created_at']
+    
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(User, on_delete=models.CASCADE)

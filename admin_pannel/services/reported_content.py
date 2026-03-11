@@ -259,6 +259,8 @@ class ReportedContentService:
                 action_result["error"] = f"Unknown action: {action}"
 
         except Exception as e:
+            logger.debug(e)
+            logger.debug(e)
             action_result["error"] = str(e)
 
         return action_result

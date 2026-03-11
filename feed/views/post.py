@@ -1,5 +1,7 @@
 # feed/views/post_views.py
 
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -28,6 +30,7 @@ from feed.services import PostService
 from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
 
+logger = logging.getLogger(__name__)
 
 # ----- Paginated response serializers for drf-spectacular -----
 class PaginatedPostFeedSerializer(serializers.Serializer):
@@ -96,11 +99,12 @@ class PostListView(APIView):
 
             paginator = StandardResultsSetPagination()
             page = paginator.paginate_queryset(posts, request)
-            serializer = PostFeedSerializer(page, many=True)
+            serializer = PostFeedSerializer(page, many=True, context={'request': request})
             response = paginator.get_paginated_response(serializer.data)
             return response
 
         except Exception as e:
+            logger.debug(e)
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
@@ -149,16 +153,11 @@ class PostListView(APIView):
     @transaction.atomic
     def post(self, request):
         """Create a new post"""
-        serializer = PostSerializer(data=request.data, context={"request": request})
+        logger.debug(request.data)
+        serializer = PostCreateSerializer(data=request.data, context={"request": request})
+        
 
-        if serializer.is_valid():
-            # Ensure user_id matches authenticated user
-            if request.data.get("user_id") != request.user.id:
-                return Response(
-                    {"error": "Cannot create post for another user"},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
+        if serializer.is_valid(raise_exception=True):
             post = serializer.save()
             return Response(
                 PostSerializer(post, context={"request": request}).data,

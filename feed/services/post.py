@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q, Count
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import Post, User
+from ..models import Post, PostMedia, User
 import uuid
 
 
@@ -15,11 +15,11 @@ class PostService:
         user: User,
         content: str,
         post_type: str = 'text',
-        media_url: Optional[str] = None,
+        media_files: Optional[List] = None,  # list of uploaded files
         privacy: str = 'followers',
         **extra_fields
     ) -> Post:
-        """Create a new post"""
+        """Create a new post with optional media files"""
         # Validate post type
         valid_types = [choice[0] for choice in Post.POST_TYPES]
         if post_type not in valid_types:
@@ -28,8 +28,8 @@ class PostService:
         # Validate based on post type
         if post_type == 'text' and not content.strip():
             raise ValidationError("Text posts require content")
-        elif post_type in ['image', 'video'] and not media_url:
-            raise ValidationError(f"{post_type.capitalize()} posts require media_url")
+        elif post_type in ['image', 'video'] and not media_files:
+            raise ValidationError(f"{post_type.capitalize()} posts require at least one media file.")
         
         try:
             with transaction.atomic():
@@ -37,10 +37,12 @@ class PostService:
                     user=user,
                     content=content,
                     post_type=post_type,
-                    media_url=media_url,
                     privacy=privacy,
                     **extra_fields
                 )
+                if media_files:
+                    for order, file in enumerate(media_files):
+                        PostMedia.objects.create(post=post, file=file, order=order)
                 return post
         except IntegrityError as e:
             raise ValidationError(f"Failed to create post: {str(e)}")
@@ -75,7 +77,7 @@ class PostService:
         offset: int = 0
     ) -> List[Post]:
         """Get public posts from all users"""
-        queryset = Post.objects.filter(privacy='followers', is_deleted=False)
+        queryset = Post.objects.filter(privacy='public', is_deleted=False)
         
         if exclude_user:
             queryset = queryset.exclude(user=exclude_user)
@@ -104,7 +106,7 @@ class PostService:
     
     @staticmethod
     def update_post(post: Post, update_data: Dict[str, Any]) -> Post:
-        """Update post information"""
+        """Update post information (excluding media)"""
         # Only allow update if post is not deleted
         if post.is_deleted:
             raise ValidationError("Cannot update a deleted post")
@@ -190,7 +192,7 @@ class PostService:
     def get_user_post_statistics(user: User) -> Dict[str, Any]:
         """Get post statistics for a user"""
         total_posts = Post.objects.filter(user=user, is_deleted=False).count()
-        public_posts = Post.objects.filter(user=user, privacy='followers', is_deleted=False).count()
+        public_posts = Post.objects.filter(user=user, privacy='public', is_deleted=False).count()
         private_posts = total_posts - public_posts
         
         # Post type breakdown
@@ -221,7 +223,7 @@ class PostService:
         recent_posts = Post.objects.filter(
             created_at__gte=time_threshold,
             is_deleted=False,
-            privacy='followers'
+            privacy='public'
         )
         
         # Calculate like counts and filter

@@ -1,5 +1,7 @@
 # feed/views/like_views.py
 
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,6 +10,7 @@ from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+
 
 from feed.models import Like, Post, Comment
 from feed.serializers.like import LikeSerializer, LikeToggleSerializer
@@ -28,7 +31,7 @@ class PaginatedLikeSerializer(serializers.Serializer):
     previous = serializers.URLField(allow_null=True)
     results = LikeSerializer(many=True)
 
-
+logger = logging.getLogger(__name__)
 # --------------------------------------------------------------
 
 
@@ -136,6 +139,7 @@ class LikeToggleView(APIView):
 
         if serializer.is_valid():
             result = serializer.save()
+            logger.debug(result)
             return Response(
                 {
                     "liked": result["liked"],

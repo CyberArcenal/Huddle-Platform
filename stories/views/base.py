@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -78,6 +80,8 @@ class PaginatedStoryViewSerializer(serializers.Serializer):
 
 # --------------------------------------------------------------
 
+logger = logging.getLogger(__name__)
+
 
 class StoryListView(APIView):
     """Get active stories or create new story"""
@@ -115,7 +119,7 @@ class StoryListView(APIView):
                 "Create image story",
                 value={
                     "story_type": "image",
-                    "media_url": "https://example.com/story.jpg",
+                    "media_file": "(binary file upload)",
                     "content": "Optional caption",
                 },
                 request_only=True,
@@ -131,13 +135,16 @@ class StoryListView(APIView):
     @transaction.atomic
     def post(self, request):
         """Create new story"""
+        logger.debug(request.data)
         serializer = StoryCreateSerializer(
             data=request.data, context={"request": request}
         )
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             story = serializer.save()
+            data = StorySerializer(story, context={"request": request}).data
+            # logger.debug(data)
             return Response(
-                StorySerializer(story, context={"request": request}).data,
+                data,
                 status=status.HTTP_201_CREATED,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -263,7 +270,7 @@ class StoryFeedView(APIView):
             max_users=max_users,
         )
 
-        serializer = StoryFeedSerializer(feed, many=True)
+        serializer = StoryFeedSerializer(feed, many=True, context={'request': request})
         return Response(serializer.data)
 
 

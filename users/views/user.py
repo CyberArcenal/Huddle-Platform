@@ -15,6 +15,7 @@ from ..services.security_log import SecurityLogService
 from ..services.login_session import LoginSessionService
 from ..serializers.user import (
     UserCreateSerializer,
+    UserProfileSchemaUpdateSerializer,
     UserUpdateSerializer,
     UserProfileSerializer,
     UserListSerializer,
@@ -142,7 +143,7 @@ class UserProfileView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        request=UserUpdateSerializer,
+        request=UserProfileSchemaUpdateSerializer,
         responses={
             200: {
                 "type": "object",

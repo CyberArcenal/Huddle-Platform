@@ -17,7 +17,7 @@ from search.serializers.base import (
     PopularSearchSerializer,
     SearchHistorySerializer,
     SearchStatisticsSerializer,
-    RecordSearchInputSerializer,          # <-- new import
+    RecordSearchInputSerializer,  # <-- new import
 )
 from search.services.search_history import SearchHistoryService
 from users.models import User
@@ -91,12 +91,13 @@ class SearchHistoryAPIView(APIView):
             return paginator.get_paginated_response(serializer.data)
 
         except Exception as e:
+            logger.debug(e)
             return Response(
                 {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
 
     @extend_schema(
-        request=RecordSearchInputSerializer,      # ✅ Now using dedicated serializer
+        request=RecordSearchInputSerializer,  # ✅ Now using dedicated serializer
         responses={201: SearchHistorySerializer},
         examples=[
             OpenApiExample(

@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -17,6 +19,7 @@ from ..models import User, UserStatus
 from rest_framework import serializers
 from ..serializers.search import SearchResultSerializer
 
+
 class PaginatedSearchResultSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     page = serializers.IntegerField()
@@ -26,6 +29,10 @@ class PaginatedSearchResultSerializer(serializers.Serializer):
     previous = serializers.URLField(allow_null=True)
     results = SearchResultSerializer(many=True)
 
+
+logger = logging.getLogger(__name__)
+
+
 class UserSearchView(APIView):
     """View for searching users with basic search"""
 
@@ -34,27 +41,21 @@ class UserSearchView(APIView):
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                name="q",
+                name="query",
                 type=str,
-                description="Search query (minimum 2 characters)",
+                description="Search term for username, email, or name",
                 required=True,
             ),
-            OpenApiParameter(
-                name="page", type=int, description="Page number", required=False
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=int,
-                description="Results per page",
-                required=False,
-            ),
+            OpenApiParameter(name="page", type=int, description="Page number (default 1)", required=False),
+            OpenApiParameter(name="page_size", type=int, description="Results per page (default 20, max 100)", required=False),
         ],
         responses={200: PaginatedSearchResultSerializer},
-        description="Basic user search by username, first name, or last name.",
+        description="Basic user search by username, email, or name.",
     )
     def get(self, request):
+        logger.debug(request.data)
         serializer = UserSearchSerializer(data=request.query_params)
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             try:
                 users = serializer.search()
                 paginator = UsersPagination()
@@ -77,57 +78,24 @@ class AdvancedUserSearchView(APIView):
 
     @extend_schema(
         parameters=[
+            OpenApiParameter(name="username", type=str, description="Filter by username (partial match)", required=False),
+            OpenApiParameter(name="email", type=str, description="Filter by email (partial match)", required=False),
+            OpenApiParameter(name="first_name", type=str, description="Filter by first name (partial match)", required=False),
+            OpenApiParameter(name="last_name", type=str, description="Filter by last name (partial match)", required=False),
+            OpenApiParameter(name="is_verified", type=bool, description="Filter by verification status", required=False),
+            OpenApiParameter(name="created_after", type=str, description="Filter users created after this datetime (ISO 8601)", required=False),
+            OpenApiParameter(name="created_before", type=str, description="Filter users created before this datetime (ISO 8601)", required=False),
             OpenApiParameter(
-                name="q", type=str, description="Search query", required=True
-            ),
-            OpenApiParameter(
-                name="status",
+                name="order_by",
                 type=str,
-                description="Filter by account status",
+                description="Order results by field (username, -username, created_at, -created_at, last_login, -last_login)",
                 required=False,
             ),
-            OpenApiParameter(
-                name="is_verified",
-                type=bool,
-                description="Filter by verification status",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="min_followers",
-                type=int,
-                description="Minimum follower count",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="max_followers",
-                type=int,
-                description="Maximum follower count",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="joined_after",
-                type=str,
-                description="Join date after (YYYY-MM-DD)",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="joined_before",
-                type=str,
-                description="Join date before (YYYY-MM-DD)",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="page", type=int, description="Page number", required=False
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=int,
-                description="Results per page",
-                required=False,
-            ),
+            OpenApiParameter(name="page", type=int, description="Page number (default 1)", required=False),
+            OpenApiParameter(name="page_size", type=int, description="Results per page (default 20, max 100)", required=False),
         ],
         responses={200: PaginatedSearchResultSerializer},
-        description="Advanced user search with multiple filters. Returns paginated results with additional metadata.",
+        description="Advanced user search with filters, ordering, and pagination.",
     )
     def get(self, request):
         serializer = AdvancedSearchSerializer(data=request.query_params)
@@ -159,7 +127,7 @@ class SearchAutocompleteView(APIView):
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                name="q",
+                name="query",
                 type=str,
                 description="Search prefix (minimum 2 characters)",
                 required=True,
@@ -200,7 +168,7 @@ class SearchAutocompleteView(APIView):
         description="Get autocomplete suggestions for usernames/full names based on a prefix.",
     )
     def get(self, request):
-        query = request.query_params.get("q", "").strip()
+        query = request.query_params.get("query", "").strip()
 
         if not query or len(query) < 2:
             return Response({"query": query, "suggestions": []})

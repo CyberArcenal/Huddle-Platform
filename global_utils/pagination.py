@@ -1,4 +1,8 @@
+import logging
+
 from rest_framework.pagination import PageNumberPagination, Response
+
+logger = logging.getLogger(__name__)
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -7,17 +11,17 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class AdminPanelPagination(PageNumberPagination):
@@ -26,17 +30,17 @@ class AdminPanelPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class AnalyticsPagination(PageNumberPagination):
@@ -45,17 +49,17 @@ class AnalyticsPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class EventsPagination(PageNumberPagination):
@@ -64,17 +68,17 @@ class EventsPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class GroupsPagination(PageNumberPagination):
@@ -83,17 +87,17 @@ class GroupsPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class SearchPagination(PageNumberPagination):
@@ -102,17 +106,17 @@ class SearchPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class StoriesPagination(PageNumberPagination):
@@ -121,17 +125,17 @@ class StoriesPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class UsersPagination(PageNumberPagination):
@@ -140,17 +144,17 @@ class UsersPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class NotificationPagination(PageNumberPagination):
@@ -159,17 +163,17 @@ class NotificationPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)
 
 
 class MessagingPagination(PageNumberPagination):
@@ -178,14 +182,14 @@ class MessagingPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response(
-            {
-                "count": self.page.paginator.count,
-                "page": self.page.number,
-                "hasNext": self.page.has_next(),
-                "hasPrev": self.page.has_previous(),
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "results": data,
-            }
-        )
+        response = {
+            "count": self.page.paginator.count,
+            "page": self.page.number,
+            "hasNext": self.page.has_next(),
+            "hasPrev": self.page.has_previous(),
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "results": data,
+        }
+        logger.debug(response)
+        return Response(response)

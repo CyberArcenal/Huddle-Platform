@@ -26,6 +26,7 @@ class UserBaseSerializer(serializers.ModelSerializer):
             "last_name",
             "date_of_birth",
             "phone_number",
+            "location",
             "bio",
             "is_verified",
             "created_at",
@@ -530,7 +531,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "profile_picture_url", "full_name"]
+        fields = ["id", "username", "profile_picture_url", "full_name", "location",]
         read_only_fields = fields
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
@@ -545,3 +546,16 @@ class UserMinimalSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj: User) -> str:
         """Get full name of the user"""
         return f"{obj.first_name} {obj.last_name}".strip()
+
+
+
+class UserProfileSchemaUpdateSerializer(serializers.Serializer):
+    """Serializer for updating non-sensitive user profile fields"""
+
+    bio = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    profile_picture = serializers.ImageField(required=False, allow_null=True)
+    location = serializers.CharField(required=False, allow_blank=True, max_length=100)
+
+    class Meta:
+        fields = ["bio", "phone_number", "profile_picture", "location"]

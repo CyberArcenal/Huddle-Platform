@@ -1,5 +1,7 @@
 # feed/views/comment_views.py
 
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,10 +13,11 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 from feed.models import Comment, Post
 from feed.serializers.comment import CommentCreateSerializer, CommentSerializer
+from feed.serializers.post import PostSerializer
 from feed.services import CommentService
 from global_utils.pagination import StandardResultsSetPagination
 
-
+logger = logging.getLogger(__name__)
 # ----- Paginated response serializers for drf-spectacular -----
 class PaginatedCommentSerializer(serializers.Serializer):
     """Matches the structure of paginator.get_paginated_response()"""
@@ -79,13 +82,26 @@ class CommentListView(APIView):
         if post_id:
             # Get comments for a specific post
             post = get_object_or_404(Post, id=post_id, is_deleted=False)
-            if not post.privacy == 'public' and request.user != post.user:
-                return Response(
-                    {
-                        "error": "You do not have permission to view comments for this post"
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            logger.debug(f"Post privacy: {post.privacy}")
+            if post.privacy == "public":
+                # kahit sino puwedeng makakita ng comments
+                pass
+
+            # elif post.privacy == "followers":
+            #     # i-check kung follower si request.user ng post.user
+            #     if not post.user.followers.filter(id=request.user.id).exists() and request.user != post.user:
+            #         return Response(
+            #             {"error": "Only followers can view comments for this post"},
+            #             status=status.HTTP_403_FORBIDDEN,
+            #         )
+
+            elif post.privacy == "secret":
+                # user lang puwedeng makakita ng comments
+                if request.user != post.user:
+                    return Response(
+                        {"error": "You do not have permission to view comments for this post"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
 
             include_replies = (
                 request.query_params.get("include_replies", "true").lower() == "true"
@@ -160,16 +176,34 @@ class CommentListView(APIView):
         description="Create a new comment on a post.",
     )
     @transaction.atomic
-    def post(self, request, post_id):
+    def post(self, request):
+        post_id = request.data.get('post_id', None)
         """Create a new comment on a post"""
+        logger.debug(f"Incoming post: {request.data}")
         post = get_object_or_404(Post, id=post_id, is_deleted=False)
 
-        # Check if post is public or user is owner
-        if not post.privacy == 'public' and request.user != post.user:
-            return Response(
-                {"error": "You do not have permission to comment on this post"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        # Check if post is public or user is user
+        # logger.debug(f"Post data: {PostSerializer(post).data}")
+        logger.debug(f"Post privacy: {post.privacy}")
+        if post.privacy == "public":
+            # kahit sino (authenticated user) puwedeng mag-comment
+            pass
+
+        # elif post.privacy == "followers":
+        #     # i-check kung follower si request.user ng post.user
+        #     if not post.user.followers.filter(id=request.user.id).exists():
+        #         return Response(
+        #             {"error": "Only followers can comment on this post"},
+        #             status=status.HTTP_403_FORBIDDEN,
+        #         )
+
+        elif post.privacy == "secret":
+            # i-check kung user lang ang puwedeng mag-comment
+            if post.user != request.user:
+                return Response(
+                    {"error": "You do not have permission to comment on this post"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # Add post_id and user_id to request data
         data = request.data.copy()
@@ -178,7 +212,7 @@ class CommentListView(APIView):
 
         serializer = CommentSerializer(data=data, context={"request": request})
 
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             comment = serializer.save()
             return Response(
                 CommentSerializer(comment, context={"request": request}).data,
@@ -258,7 +292,7 @@ class CommentDetailView(APIView):
             # Ensure user_id and post_id don't change
             if "user_id" in request.data and request.data["user_id"] != comment.user.id:
                 return Response(
-                    {"error": "Cannot change comment owner"},
+                    {"error": "Cannot change comment user"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 

@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -29,6 +31,8 @@ from rest_framework import serializers
 from ..serializers.security import SecurityLogSerializer
 from ..serializers.activity import LoginSessionSerializer
 
+
+logger = logging.getLogger(__name__)
 
 class PaginatedSecurityLogSerializer(serializers.Serializer):
     count = serializers.IntegerField()
@@ -326,6 +330,7 @@ class SecurityLogsView(APIView):
             serializer = SecurityLogSerializer(page, many=True)
             return paginator.get_paginated_response(serializer.data)
         except Exception as e:
+            logger.debug(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -463,6 +468,7 @@ class ActiveSessionsView(APIView):
             )
             return paginator.get_paginated_response(serializer.data)
         except Exception as e:
+            logger.debug(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 

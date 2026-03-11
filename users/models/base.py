@@ -26,6 +26,7 @@ class User(AbstractUser):
     profile_picture = models.ImageField(
         upload_to="profile_pics/", blank=True, null=True
     )
+    location = models.CharField(max_length=200, null=True)
     cover_photo = models.ImageField(upload_to="covers/", blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True)
@@ -166,6 +167,7 @@ class LoginSession(models.Model):
         related_name="login_sessions",
     )
     device_name = models.CharField(max_length=100)
+    user_agent = models.CharField(max_length=200, null=True)
     ip_address = models.GenericIPAddressField()
     created_at = models.DateTimeField(auto_now_add=True)
     last_used = models.DateTimeField(auto_now=True)

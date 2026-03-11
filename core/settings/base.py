@@ -25,7 +25,7 @@ from .components.mail               import *
 # from .components.pdfkit             import *
 from .components.jwt                import *
 
-from .components.cloudinary         import *
+# from .components.cloudinary         import *
 
 
 

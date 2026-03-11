@@ -1,135 +1,97 @@
-from django.core.exceptions import ValidationError
-from typing import Dict, Any, Optional
-from rest_framework import serializers
-from feed.models.base import Comment, Like, Post
+import logging
 
+from django.core.exceptions import ValidationError
+from typing import Dict, Any, Optional, List
+from rest_framework import serializers
+from feed.models.base import Comment, Like, Post, PostMedia
+
+from feed.serializers.comment import CommentSerializer
 from feed.services.comment import CommentService
 from feed.services.like import LikeService
 from feed.services.post import PostService
-from users.models.base import User
-from users.serializers.user import UserProfileSerializer
+from users.serializers.user import UserMinimalSerializer, UserProfileSerializer
 
-# feed/serializers/post.py (add this new serializer)
+logger = logging.getLogger(__name__)
 
+
+class PostMediaSerializer(serializers.ModelSerializer):
+    """Serializer for post media (images/videos)"""
+
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PostMedia
+        fields = ["id", "file", "file_url", "order", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def get_file_url(self, obj: PostMedia) -> Optional[str]:
+        request = self.context.get('request', None)
+        if request:
+            return request.build_absolute_uri(obj.file.url)
+        elif obj.file:
+            return obj.file.url
+        return None
+
+
+# FOR SCHEMA ONLY
 class PostCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating a new post. Excludes user field (set automatically)."""
-    class Meta:
-        model = Post
-        fields = ['content', 'post_type', 'media_url', 'privacy']
-        # user is not included; will be set in the view
+    """Serializer for creating a new post. Accepts multiple media files."""
 
-    def create(self, validated_data):
-        # user is passed from the view via save(user=request.user)
-        user = self.context['request'].user
-        return Post.objects.create(user=user, **validated_data)
-    
-class PostSerializer(serializers.ModelSerializer):
-    """Serializer for Post model"""
-
-    user = UserProfileSerializer(read_only=True)
-    user_id = serializers.IntegerField(write_only=True)
-    comments = serializers.SerializerMethodField()
-    comment_count = serializers.SerializerMethodField()
-    like_count = serializers.SerializerMethodField()
-    has_liked = serializers.SerializerMethodField()
+    content = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    media_files = serializers.ListField(
+        child=serializers.FileField(), write_only=True, required=False, allow_empty=True
+    )
 
     class Meta:
         model = Post
-        fields = [
-            "id",
-            "user",
-            "user_id",
-            "content",
-            "post_type",
-            "media_url",
-            "privacy",
-            "is_deleted",
-            "created_at",
-            "updated_at",
-            "comments",
-            "comment_count",
-            "like_count",
-            "has_liked",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
+        fields = ["content", "post_type", "privacy", "media_files"]
 
-    def get_comments(self, obj: Post) -> list:
-        from feed.serializers.comment import CommentSerializer
-
-        """Get top-level comments for this post"""
-        comments = CommentService.get_post_comments(
-            post=obj, include_replies=False, limit=10
-        )
-        return CommentSerializer(comments, many=True, context=self.context).data
-
-    def get_comment_count(self, obj: Post) -> int:
-        """Get total comment count for this post"""
-        return CommentService.get_post_comment_count(obj)
-
-    def get_like_count(self, obj: Post) -> int:
-        """Get like count for this post"""
-        return LikeService.get_like_count("post", obj.id)
-
-    def get_has_liked(self, obj: Post) -> bool:
-        """Check if current user has liked this post"""
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return LikeService.has_liked(
-                user=request.user, content_type="post", object_id=obj.id
-            )
-        return False
-
-    def validate_post_type(self, value: str) -> str:
-        """Validate post_type field"""
-        valid_types = [choice[0] for choice in Post.POST_TYPES]
-        if value not in valid_types:
-            raise serializers.ValidationError(f"post_type must be one of {valid_types}")
-        return value
-
-    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate post data"""
-        # Validate media_url based on post_type
+    def validate(self, data):
+        logger.debug(data)
         post_type = data.get("post_type", "text")
-        media_url = data.get("media_url")
+        media_files = data.get("media_files", [])
 
-        if post_type in ["image", "video"] and not media_url:
+        if post_type in ["image", "video"] and not media_files:
             raise serializers.ValidationError(
-                {"media_url": f"{post_type.capitalize()} posts require media_url"}
+                {
+                    "media_files": f"{post_type.capitalize()} posts require at least one media file."
+                }
             )
-
+        if post_type == "text" and media_files:
+            raise serializers.ValidationError(
+                {"media_files": "Text posts cannot have media."}
+            )
         if post_type == "text" and not data.get("content", "").strip():
-            raise serializers.ValidationError({"content": "Text posts require content"})
-
-        # Validate user exists
-        user_id = data.get("user_id")
-        if user_id:
-            try:
-                User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"user_id": "User with this ID does not exist"}
-                )
-
+            raise serializers.ValidationError(
+                {"content": "Text posts require content."}
+            )
         return data
 
     def create(self, validated_data: Dict[str, Any]) -> Post:
-        """Create a post using PostService"""
-        user = User.objects.get(id=validated_data["user_id"])
-
+        """Create a post using PostService (should handle media via separate method)"""
+        # Note: This method is rarely used because we use PostCreateSerializer for creation.
+        # Kept for completeness, but media creation would need to be handled separately.
+        request = self.context.get("request")
+        if not request:
+            raise Exception("Request not provided")
+        # For simple text-only creation (no media), we can still use this.
         try:
             post = PostService.create_post(
-                user=user,
+                user=request.user,
                 content=validated_data["content"],
                 post_type=validated_data.get("post_type", "text"),
-                media_url=validated_data.get("media_url"),
-                privacy=validated_data.get("privacy", 'followers'),
+                media_files=validated_data.get("media_files", []),
+                privacy=validated_data.get("privacy", "followers"),
             )
             return post
         except ValidationError as e:
             raise serializers.ValidationError(str(e))
 
     def update(self, instance: Post, validated_data: Dict[str, Any]) -> Post:
-        """Update a post using PostService"""
+        """Update a post (media updates not handled here)"""
         try:
             updated_post = PostService.update_post(
                 post=instance, update_data=validated_data
@@ -139,8 +101,67 @@ class PostSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(str(e))
 
 
+# //FOR DETAILS
+class PostSerializer(serializers.ModelSerializer):
+    """Serializer for Post model with multiple media"""
+
+    content = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    user = UserMinimalSerializer(read_only=True)
+    media = serializers.SerializerMethodField()
+    comments = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
+    like_count = serializers.SerializerMethodField()
+    liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Post
+        fields = [
+            "id",
+            "user",
+            "content",
+            "post_type",
+            "media",
+            "privacy",
+            "is_deleted",
+            "created_at",
+            "updated_at",
+            "comments",
+            "comment_count",
+            "like_count",
+            "liked",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
+        
+    def get_media(self, obj) -> Optional[List[Dict[str, Any]]]:
+        return PostMediaSerializer(obj.media, many=True).data
+    
+    def get_comments(self, obj: Post) -> List[Dict[str, Any]]:
+        """Get top-level comments for this post"""
+        comments = CommentService.get_post_comments(
+            post=obj, include_replies=False, limit=10
+        )
+        return CommentSerializer(comments, many=True, context=self.context).data
+
+    def get_comment_count(self, obj: Post) -> int:
+        return CommentService.get_post_comment_count(obj)
+
+    def get_like_count(self, obj: Post) -> int:
+        return LikeService.get_like_count("post", obj.id)
+
+    def get_liked(self, obj: Post) -> bool:
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return LikeService.has_liked(
+                user=request.user, content_type="post", object_id=obj.id
+            )
+        return False
+
+
 class PostDetailSerializer(PostSerializer):
-    """Extended serializer for detailed post view"""
+    """Extended serializer for detailed post view with statistics"""
 
     statistics = serializers.SerializerMethodField()
 
@@ -148,7 +169,6 @@ class PostDetailSerializer(PostSerializer):
         fields = PostSerializer.Meta.fields + ["statistics"]
 
     def get_statistics(self, obj: Post) -> Dict[str, Any]:
-        """Get detailed statistics for the post"""
         return PostService.get_post_statistics(obj)
 
 
@@ -158,6 +178,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
     preview = serializers.SerializerMethodField()
     statistics = serializers.SerializerMethodField()
+    media = PostMediaSerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
@@ -166,30 +187,39 @@ class PostFeedSerializer(serializers.ModelSerializer):
             "user",
             "content",
             "post_type",
-            "media_url",
+            "media",
             "preview",
             "created_at",
             "statistics",
         ]
 
     def get_preview(self, obj: Post) -> str:
-        """Get content preview (truncated)"""
         if obj.content:
             return obj.content[:150] + ("..." if len(obj.content) > 150 else "")
         return ""
 
     def get_statistics(self, obj: Post) -> Dict[str, Any]:
         """Get basic statistics for feed"""
+        request = self.context.get("request")
         return {
             "comment_count": CommentService.get_post_comment_count(obj),
             "like_count": LikeService.get_like_count("post", obj.id),
             "privacy": obj.privacy,
+            "comments": CommentSerializer(
+                CommentService.get_post_comments(obj, limit=10), many=True
+            ).data,
+            "liked": (
+                LikeService.has_liked(
+                    user=request.user, content_type="post", object_id=obj.id
+                )
+                if request and request.user.is_authenticated
+                else False
+            ),
         }
 
 
+# The following serializers remain unchanged as they don't directly involve media fields.
 class PostStatisticsSerializer(serializers.Serializer):
-    """Serializer for post statistics"""
-
     post_id = serializers.IntegerField()
     comment_count = serializers.IntegerField()
     like_count = serializers.IntegerField()
@@ -200,8 +230,6 @@ class PostStatisticsSerializer(serializers.Serializer):
 
 
 class UserPostStatisticsSerializer(serializers.Serializer):
-    """Serializer for user post statistics"""
-
     total_posts = serializers.IntegerField()
     public_posts = serializers.IntegerField()
     private_posts = serializers.IntegerField()
@@ -210,8 +238,6 @@ class UserPostStatisticsSerializer(serializers.Serializer):
 
 
 class SearchSerializer(serializers.Serializer):
-    """Serializer for search operations"""
-
     query = serializers.CharField(required=True, max_length=255)
     post_type = serializers.CharField(required=False, allow_null=True)
     limit = serializers.IntegerField(default=20, min_value=1, max_value=100)
@@ -219,8 +245,6 @@ class SearchSerializer(serializers.Serializer):
 
 
 class TrendingPostsSerializer(serializers.Serializer):
-    """Serializer for trending posts"""
-
     post = PostSerializer()
     like_count = serializers.IntegerField()
     comment_count = serializers.IntegerField()
