@@ -10,11 +10,11 @@ from django.db import transaction
 import datetime
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from admin_pannel.serializers.admin_log import AdminLogDisplaySerializer
 from global_utils.pagination import AdminPanelPagination
 
 from ..services.admin_log import AdminLogService
 from ..serializers.base import (
-    AdminLogSerializer,
     AdminLogFilterSerializer,
     AdminStatisticsSerializer,
     BanUserInputSerializer,
@@ -36,7 +36,7 @@ class PaginatedAdminLogSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = AdminLogSerializer(many=True)
+    results = AdminLogDisplaySerializer(many=True)
 
 
 # --------------------------------------------------------------
@@ -113,7 +113,7 @@ class AdminLogListView(APIView):
 
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(logs, request)
-        log_serializer = AdminLogSerializer(page, many=True)
+        log_serializer = AdminLogDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(log_serializer.data)
 
 
@@ -121,7 +121,7 @@ class AdminLogDetailView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
-        responses={200: AdminLogSerializer},
+        responses={200: AdminLogDisplaySerializer},
         description="Retrieve a single admin log by its ID.",
     )
     def get(self, request, log_id):
@@ -130,7 +130,7 @@ class AdminLogDetailView(APIView):
             return Response(
                 {"error": "Log not found"}, status=status.HTTP_404_NOT_FOUND
             )
-        serializer = AdminLogSerializer(log)
+        serializer = AdminLogDisplaySerializer(log)
         return Response(serializer.data)
 
 
@@ -163,7 +163,7 @@ class AdminLogRecentView(APIView):
         logs = AdminLogService.get_recent_admin_actions(days=days)
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(logs, request)
-        serializer = AdminLogSerializer(page, many=True)
+        serializer = AdminLogDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 
@@ -206,7 +206,7 @@ class AdminLogUserView(APIView):
         )
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(logs, request)
-        serializer = AdminLogSerializer(page, many=True)
+        serializer = AdminLogDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 
@@ -280,7 +280,7 @@ class AdminLogSearchView(APIView):
         )
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(logs, request)
-        log_serializer = AdminLogSerializer(page, many=True)
+        log_serializer = AdminLogDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(log_serializer.data)
 
 

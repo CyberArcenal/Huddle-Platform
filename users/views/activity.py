@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from global_utils.pagination import UsersPagination
+from users.models.base import ACTION_TYPES
 
 from ..services.user_activity import UserActivityService
 from ..serializers.activity import UserActivitySerializer, ActivitySummarySerializer
@@ -18,7 +19,7 @@ from django.db import transaction
 # ----- New input serializer for LogActivityView -----
 class LogActivityInputSerializer(serializers.Serializer):
     action = serializers.ChoiceField(
-        choices=[choice[0] for choice in UserActivityService.ACTION_TYPES],
+        choices=[choice[0] for choice in ACTION_TYPES],
         help_text="Action type",
     )
     description = serializers.CharField(

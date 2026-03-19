@@ -3,24 +3,34 @@ from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from faker import Faker
 
 # Import all models from your apps
-from admin_pannel.models.base import AdminLog, ReportedContent
+from admin_pannel.models.admin_log import AdminLog
+from admin_pannel.models.reported_content import ReportedContent
+from events.models.base import Event, EventAttendance
 from events.models.event_analytics import EventAnalytics
-from feed.models.base import Comment, Like, Post
+from feed.models.comment import Comment
+from feed.models.post import Post
+from feed.models.post_media import PostMedia
+from feed.models.reaction import Reaction, REACTION_TYPES
+from feed.models.reel import Reel
+from feed.models.reel_comment import ReelComment
+from feed.models.share import Share
 from users.models import (
     UserFollow, BlacklistedAccessToken, SecurityLog, UserSecuritySettings,
     LoginSession, LoginCheckpoint, OtpRequest, UserActivity
 )
-from groups.models import Group, GroupMember
-from messaging.models import Conversation, Message
-from stories.models import Story, StoryView
-from events.models import Event, EventAttendance
-from notifications.models import Notification
-from search.models import SearchHistory
-from analytics.models import UserAnalytics, PlatformAnalytics
+from groups.models.group import Group
+from groups.models.member import GroupMember
+from messaging.models.base import Conversation, Message
+from stories.models.base import Story, StoryView
+from notifications.models.base import Notification
+from search.models.base import SearchHistory
+from analytics.models.user_analytics import UserAnalytics
+from analytics.models.platform_analytics import PlatformAnalytics
 
 User = get_user_model()
 fake = Faker()
@@ -49,12 +59,14 @@ class Command(BaseCommand):
                     # Order matters to avoid FK constraints
                     models_to_delete = [
                         EventAnalytics, PlatformAnalytics, UserAnalytics,
-                        Notification, SearchHistory, AdminLog, ReportedContent,
+                        Share, Reaction, ReelComment, Reel, PostMedia,
+                        Notification, SearchHistory,
                         EventAttendance, Event, StoryView, Story,
-                        Message, Conversation, Like, Comment, Post,
+                        Message, Conversation, Comment, Post,
                         GroupMember, Group, UserFollow,
                         UserActivity, OtpRequest, LoginCheckpoint, LoginSession,
                         UserSecuritySettings, SecurityLog, BlacklistedAccessToken,
+                        AdminLog, ReportedContent,
                         User
                     ]
                     for model in models_to_delete:
@@ -66,8 +78,12 @@ class Command(BaseCommand):
                 self.seed_follows()
                 self.seed_groups()
                 self.seed_posts()
+                self.seed_post_media()
                 self.seed_comments()
-                self.seed_likes()
+                self.seed_reactions()
+                self.seed_reels()
+                self.seed_reel_comments()
+                self.seed_shares()
                 self.seed_conversations()
                 self.seed_messages()
                 self.seed_stories()
@@ -78,6 +94,7 @@ class Command(BaseCommand):
                 self.seed_reported_content()
                 self.seed_notifications()
                 self.seed_search_history()
+                self.seed_user_activity()
                 self.seed_analytics()
                 self.stdout.write(self.style.SUCCESS('Database seeded successfully!'))
         except Exception as e:
@@ -90,7 +107,6 @@ class Command(BaseCommand):
         for i in range(count):
             username = fake.user_name() + str(i)
             email = fake.email()
-            # Generate aware datetimes
             date_joined = make_aware(fake.date_time_between(start_date='-2y', end_date='-30d'))
             last_login = make_aware(fake.date_time_between(start_date='-30d', end_date='now'))
             user = User(
@@ -190,26 +206,47 @@ class Command(BaseCommand):
     def seed_posts(self, count=100):
         self.stdout.write('Creating posts...')
         users = list(User.objects.all())
+        groups = list(Group.objects.all())
         posts = []
         for _ in range(count):
             user = random.choice(users)
+            group = random.choice([None] + groups) if groups else None  # 50% chance of being in a group
             post_type = random.choice(['text', 'image', 'video', 'poll'])
             created = make_aware(fake.date_time_between(start_date='-90d', end_date='now'))
             updated = make_aware(fake.date_time_between(start_date=created, end_date='now'))
             post = Post(
                 user=user,
+                group=group,
                 content=fake.paragraph(nb_sentences=5),
                 post_type=post_type,
-                media_url=None,
-                privacy=random.choice(['followers', 'public', 'only_me']),
+                privacy=random.choice(['public', 'followers', 'secret']),
                 is_deleted=False,
                 created_at=created,
                 updated_at=updated,
-                # group field removed – Post model does not have it
             )
             posts.append(post)
         Post.objects.bulk_create(posts)
         self.stdout.write(f'Created {len(posts)} posts.')
+
+    def seed_post_media(self, count=150):
+        self.stdout.write('Creating post media...')
+        posts = list(Post.objects.filter(post_type__in=['image', 'video']))
+        if not posts:
+            self.stdout.write(self.style.WARNING('No image/video posts found, skipping post media.'))
+            return
+        media_list = []
+        for _ in range(count):
+            post = random.choice(posts)
+            order = random.randint(0, 5)
+            created = make_aware(fake.date_time_between(start_date=post.created_at, end_date='now'))
+            media_list.append(PostMedia(
+                post=post,
+                file=None,  # No actual file for seeding
+                order=order,
+                created_at=created
+            ))
+        PostMedia.objects.bulk_create(media_list)
+        self.stdout.write(f'Created {len(media_list)} post media entries.')
 
     def seed_comments(self, count=200):
         self.stdout.write('Creating comments...')
@@ -219,12 +256,10 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('No posts found, skipping comments.'))
             return
 
-        # Determine how many top-level comments and replies
         top_level_count = count // 2
         reply_count = count - top_level_count
 
         top_comments = []
-        # 1. Create top-level comments (no parent)
         for _ in range(top_level_count):
             user = random.choice(users)
             post = random.choice(posts)
@@ -238,20 +273,14 @@ class Command(BaseCommand):
                 created_at=created
             ))
 
-        # Bulk insert top-level comments
         Comment.objects.bulk_create(top_comments)
         self.stdout.write(f'Created {len(top_comments)} top-level comments.')
 
-        # Retrieve all top-level comments (now saved) to use as possible parents
-        # We also need all posts again, but we already have them.
-        # For replies, we can also allow replies to any existing comment (including newly created replies)
-        # but to keep it simple, we'll only allow replies to top-level comments.
         parents = list(Comment.objects.filter(parent_comment__isnull=True))
-
         replies = []
         for _ in range(reply_count):
             if not parents:
-                break  # no parents left, stop creating replies
+                break
             user = random.choice(users)
             post = random.choice(posts)
             parent = random.choice(parents)
@@ -265,24 +294,27 @@ class Command(BaseCommand):
                 created_at=created
             ))
 
-        # Bulk insert replies
         if replies:
             Comment.objects.bulk_create(replies)
             self.stdout.write(f'Created {len(replies)} replies.')
         else:
             self.stdout.write('No replies created.')
 
-    def seed_likes(self, count=500):
-        self.stdout.write('Creating likes...')
+    def seed_reactions(self, count=500):
+        self.stdout.write('Creating reactions...')
         users = list(User.objects.all())
         posts = list(Post.objects.all())
         comments = list(Comment.objects.all())
         stories = list(Story.objects.all()) if Story.objects.exists() else []
-        likes = []
-        content_types = []
+        reels = list(Reel.objects.all()) if Reel.objects.exists() else []
+        reactions = []
+        content_types = []  # to avoid duplicates (user, content_type, object_id)
+
+        reaction_choices = [choice[0] for choice in REACTION_TYPES]
+
         for _ in range(count):
             user = random.choice(users)
-            content_type = random.choice(['post', 'comment', 'story'])
+            content_type = random.choice(['post', 'comment', 'story', 'reel'])
             obj = None
             if content_type == 'post' and posts:
                 obj = random.choice(posts)
@@ -290,18 +322,138 @@ class Command(BaseCommand):
                 obj = random.choice(comments)
             elif content_type == 'story' and stories:
                 obj = random.choice(stories)
-            if obj:
-                if (user.id, content_type, obj.id) not in content_types:
-                    content_types.append((user.id, content_type, obj.id))
-                    created = make_aware(fake.date_time_between(start_date='-60d', end_date='now'))
-                    likes.append(Like(
-                        user=user,
-                        content_type=content_type,
-                        object_id=obj.id,
-                        created_at=created
-                    ))
-        Like.objects.bulk_create(likes, ignore_conflicts=True)
-        self.stdout.write(f'Created {len(likes)} likes.')
+            elif content_type == 'reel' and reels:
+                obj = random.choice(reels)
+
+            if obj and (user.id, content_type, obj.id) not in content_types:
+                content_types.append((user.id, content_type, obj.id))
+                created = make_aware(fake.date_time_between(start_date='-60d', end_date='now'))
+                reactions.append(Reaction(
+                    user=user,
+                    content_type=content_type,
+                    object_id=obj.id,
+                    reaction_type=random.choice(reaction_choices),
+                    created_at=created
+                ))
+
+        Reaction.objects.bulk_create(reactions, ignore_conflicts=True)
+        self.stdout.write(f'Created {len(reactions)} reactions.')
+
+    def seed_reels(self, count=30):
+        self.stdout.write('Creating reels...')
+        users = list(User.objects.all())
+        reels = []
+        for _ in range(count):
+            user = random.choice(users)
+            created = make_aware(fake.date_time_between(start_date='-60d', end_date='now'))
+            updated = make_aware(fake.date_time_between(start_date=created, end_date='now'))
+            reel = Reel(
+                user=user,
+                caption=fake.sentence(nb_words=10),
+                video=None,  # No actual file
+                thumbnail=None,
+                audio=None,
+                duration=random.uniform(5.0, 60.0),
+                privacy=random.choice(['public', 'followers', 'secret']),
+                is_deleted=False,
+                created_at=created,
+                updated_at=updated
+            )
+            reels.append(reel)
+        Reel.objects.bulk_create(reels)
+        self.stdout.write(f'Created {len(reels)} reels.')
+
+    def seed_reel_comments(self, count=100):
+        self.stdout.write('Creating reel comments...')
+        users = list(User.objects.all())
+        reels = list(Reel.objects.all())
+        if not reels:
+            self.stdout.write(self.style.WARNING('No reels found, skipping reel comments.'))
+            return
+
+        top_level_count = count // 2
+        reply_count = count - top_level_count
+
+        top_comments = []
+        for _ in range(top_level_count):
+            user = random.choice(users)
+            reel = random.choice(reels)
+            created = make_aware(fake.date_time_between(start_date=reel.created_at, end_date='now'))
+            top_comments.append(ReelComment(
+                reel=reel,
+                user=user,
+                parent_comment=None,
+                content=fake.sentence(nb_words=15),
+                is_deleted=False,
+                created_at=created
+            ))
+
+        ReelComment.objects.bulk_create(top_comments)
+        self.stdout.write(f'Created {len(top_comments)} top-level reel comments.')
+
+        parents = list(ReelComment.objects.filter(parent_comment__isnull=True))
+        replies = []
+        for _ in range(reply_count):
+            if not parents:
+                break
+            user = random.choice(users)
+            reel = random.choice(reels)
+            parent = random.choice(parents)
+            created = make_aware(fake.date_time_between(start_date=parent.created_at, end_date='now'))
+            replies.append(ReelComment(
+                reel=reel,
+                user=user,
+                parent_comment=parent,
+                content=fake.sentence(nb_words=15),
+                is_deleted=False,
+                created_at=created
+            ))
+
+        if replies:
+            ReelComment.objects.bulk_create(replies)
+            self.stdout.write(f'Created {len(replies)} reel comment replies.')
+        else:
+            self.stdout.write('No reel comment replies created.')
+
+    def seed_shares(self, count=80):
+        self.stdout.write('Creating shares...')
+        users = list(User.objects.all())
+        # Get ContentType instances for Post, Comment, Reel, Story
+        content_types = []
+        for model in [Post, Comment, Reel, Story]:
+            ct = ContentType.objects.get_for_model(model)
+            if model.objects.exists():
+                content_types.append(ct)
+
+        if not content_types:
+            self.stdout.write(self.style.WARNING('No shareable content found, skipping shares.'))
+            return
+
+        shares = []
+        for _ in range(count):
+            user = random.choice(users)
+            ct = random.choice(content_types)
+            # Get a random object of that type
+            model_class = ct.model_class()
+            obj_ids = list(model_class.objects.values_list('id', flat=True))
+            if not obj_ids:
+                continue
+            object_id = random.choice(obj_ids)
+            created = make_aware(fake.date_time_between(start_date='-30d', end_date='now'))
+            share = Share(
+                user=user,
+                content_type=ct,
+                object_id=object_id,
+                caption=fake.sentence() if random.random() < 0.7 else '',
+                privacy=random.choice(['public', 'followers', 'private']),
+                is_deleted=False,
+                created_at=created,
+                updated_at=created + timedelta(hours=random.randint(1, 48))
+            )
+            shares.append(share)
+
+        Share.objects.bulk_create(shares, ignore_conflicts=True)
+        self.stdout.write(f'Created {len(shares)} shares.')
 
     def seed_conversations(self, count=30):
         self.stdout.write('Creating conversations...')
@@ -540,6 +692,30 @@ class Command(BaseCommand):
             searches.append(search)
         SearchHistory.objects.bulk_create(searches)
         self.stdout.write(f'Created {len(searches)} search records.')
+
+    def seed_user_activity(self, count=200):
+        self.stdout.write('Creating user activities...')
+        users = list(User.objects.all())
+        # Get all valid action choices from ACTION_TYPES defined in users.models
+        from users.models.base import ACTION_TYPES
+        action_choices = [choice[0] for choice in ACTION_TYPES]
+        activities = []
+        for _ in range(count):
+            user = random.choice(users)
+            timestamp = make_aware(fake.date_time_between(start_date='-30d', end_date='now'))
+            activity = UserActivity(
+                user=user,
+                action=random.choice(action_choices),
+                description=fake.sentence(),
+                ip_address=fake.ipv4(),
+                user_agent=fake.user_agent(),
+                timestamp=timestamp,
+                location=fake.city(),
+                metadata={}
+            )
+            activities.append(activity)
+        UserActivity.objects.bulk_create(activities)
+        self.stdout.write(f'Created {len(activities)} user activities.')
 
     def seed_analytics(self):
         self.stdout.write('Creating analytics...')

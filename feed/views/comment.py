@@ -2,7 +2,7 @@
 
 import logging
 
-from rest_framework.views import APIView
+from rest_framework.views import APIView, settings
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -12,12 +12,13 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from feed.models import Comment, Post
-from feed.serializers.comment import CommentCreateSerializer, CommentSerializer
-from feed.serializers.post import PostSerializer
+from feed.serializers.comment import CommentCreateSerializer, CommentDisplaySerializer
 from feed.services import CommentService
 from global_utils.pagination import StandardResultsSetPagination
 
 logger = logging.getLogger(__name__)
+
+
 # ----- Paginated response serializers for drf-spectacular -----
 class PaginatedCommentSerializer(serializers.Serializer):
     """Matches the structure of paginator.get_paginated_response()"""
@@ -28,7 +29,7 @@ class PaginatedCommentSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = CommentSerializer(many=True)
+    results = CommentDisplaySerializer(many=True)
 
 
 # --------------------------------------------------------------
@@ -87,19 +88,24 @@ class CommentListView(APIView):
                 # kahit sino puwedeng makakita ng comments
                 pass
 
-            # elif post.privacy == "followers":
-            #     # i-check kung follower si request.user ng post.user
-            #     if not post.user.followers.filter(id=request.user.id).exists() and request.user != post.user:
-            #         return Response(
-            #             {"error": "Only followers can view comments for this post"},
-            #             status=status.HTTP_403_FORBIDDEN,
-            #         )
+            elif post.privacy == "followers" and not settings.DEBUG:
+                # i-check kung follower si request.user ng post.user
+                if (
+                    not post.user.followers.filter(id=request.user.id).exists()
+                    and request.user != post.user
+                ):
+                    return Response(
+                        {"error": "Only followers can view comments for this post"},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
 
             elif post.privacy == "secret":
                 # user lang puwedeng makakita ng comments
                 if request.user != post.user:
                     return Response(
-                        {"error": "You do not have permission to view comments for this post"},
+                        {
+                            "error": "You do not have permission to view comments for this post"
+                        },
                         status=status.HTTP_403_FORBIDDEN,
                     )
 
@@ -126,12 +132,14 @@ class CommentListView(APIView):
         # Apply pagination
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(comments, request)
-        serializer = CommentSerializer(page, many=True, context={"request": request})
+        serializer = CommentDisplaySerializer(
+            page, many=True, context={"request": request}
+        )
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
         request=CommentCreateSerializer,
-        responses={201: CommentSerializer},
+        responses={201: CommentDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Create comment",
@@ -177,25 +185,25 @@ class CommentListView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        post_id = request.data.get('post_id', None)
+        post_id = request.data.get("post_id", None)
         """Create a new comment on a post"""
         logger.debug(f"Incoming post: {request.data}")
         post = get_object_or_404(Post, id=post_id, is_deleted=False)
 
         # Check if post is public or user is user
         # logger.debug(f"Post data: {PostSerializer(post).data}")
-        logger.debug(f"Post privacy: {post.privacy}")
+        # logger.debug(f"Post privacy: {post.privacy}")
         if post.privacy == "public":
             # kahit sino (authenticated user) puwedeng mag-comment
             pass
 
-        # elif post.privacy == "followers":
-        #     # i-check kung follower si request.user ng post.user
-        #     if not post.user.followers.filter(id=request.user.id).exists():
-        #         return Response(
-        #             {"error": "Only followers can comment on this post"},
-        #             status=status.HTTP_403_FORBIDDEN,
-        #         )
+        elif post.privacy == "followers" and not settings.DEBUG:
+            # i-check kung follower si request.user ng post.user
+            if not post.user.followers.filter(id=request.user.id).exists():
+                return Response(
+                    {"error": "Only followers can comment on this post"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         elif post.privacy == "secret":
             # i-check kung user lang ang puwedeng mag-comment
@@ -210,12 +218,12 @@ class CommentListView(APIView):
         data["post_id"] = post_id
         data["user_id"] = request.user.id
 
-        serializer = CommentSerializer(data=data, context={"request": request})
+        serializer = CommentCreateSerializer(data=data, context={"request": request})
 
         if serializer.is_valid(raise_exception=True):
             comment = serializer.save()
             return Response(
-                CommentSerializer(comment, context={"request": request}).data,
+                CommentDisplaySerializer(comment, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
             )
 
@@ -236,7 +244,7 @@ class CommentDetailView(APIView):
         return get_object_or_404(Comment, id=comment_id)
 
     @extend_schema(
-        responses={200: CommentSerializer},
+        responses={200: CommentDisplaySerializer},
         description="Retrieve a single comment by ID.",
     )
     def get(self, request, comment_id):
@@ -244,18 +252,18 @@ class CommentDetailView(APIView):
         comment = self.get_object(comment_id)
 
         # Check if associated post is accessible
-        if not comment.post.privacy == 'public' and request.user != comment.post.user:
+        if not comment.post.privacy == "public" and request.user != comment.post.user:
             return Response(
                 {"error": "You do not have permission to view this comment"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = CommentSerializer(comment, context={"request": request})
+        serializer = CommentDisplaySerializer(comment, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
         request=CommentCreateSerializer,
-        responses={200: CommentSerializer},
+        responses={200: CommentDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Update comment",
@@ -284,7 +292,7 @@ class CommentDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        serializer = CommentSerializer(
+        serializer = CommentCreateSerializer(
             comment, data=request.data, partial=True, context={"request": request}
         )
 
@@ -304,7 +312,9 @@ class CommentDetailView(APIView):
 
             updated_comment = serializer.save()
             return Response(
-                CommentSerializer(updated_comment, context={"request": request}).data
+                CommentDisplaySerializer(
+                    updated_comment, context={"request": request}
+                ).data
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -365,7 +375,7 @@ class CommentRepliesView(APIView):
     )
     def get(self, request, comment_id):
         comment = get_object_or_404(Comment, id=comment_id)
-        if not comment.post.privacy == 'public' and request.user != comment.post.user:
+        if not comment.post.privacy == "public" and request.user != comment.post.user:
             return Response(
                 {
                     "error": "You do not have permission to view replies for this comment"
@@ -375,12 +385,14 @@ class CommentRepliesView(APIView):
         replies = CommentService.get_comment_replies(comment=comment)
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(replies, request)
-        serializer = CommentSerializer(page, many=True, context={"request": request})
+        serializer = CommentDisplaySerializer(
+            page, many=True, context={"request": request}
+        )
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
-        request=CommentSerializer,
-        responses={201: CommentSerializer},
+        request=CommentCreateSerializer,
+        responses={201: CommentDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Create reply", value={"content": "This is a reply"}, request_only=True
@@ -395,7 +407,7 @@ class CommentRepliesView(APIView):
 
         # Check if parent comment's post is accessible
         if (
-            not parent_comment.post.privacy == 'public'
+            not parent_comment.post.privacy == "public"
             and request.user != parent_comment.post.user
         ):
             return Response(
@@ -416,12 +428,12 @@ class CommentRepliesView(APIView):
         data["user_id"] = request.user.id
         data["parent_comment_id"] = comment_id
 
-        serializer = CommentSerializer(data=data, context={"request": request})
+        serializer = CommentDisplaySerializer(data=data, context={"request": request})
 
         if serializer.is_valid():
             comment = serializer.save()
             return Response(
-                CommentSerializer(comment, context={"request": request}).data,
+                CommentDisplaySerializer(comment, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
             )
 
@@ -440,7 +452,7 @@ class CommentThreadView(APIView):
                 "properties": {
                     "comment_id": {"type": "integer"},
                     "post_id": {"type": "integer"},
-                    "thread": CommentSerializer(many=True).data,
+                    "thread": CommentDisplaySerializer(many=True).data,
                 },
             }
         },
@@ -451,14 +463,16 @@ class CommentThreadView(APIView):
         comment = get_object_or_404(Comment, id=comment_id)
 
         # Check if associated post is accessible
-        if not comment.post.privacy == 'public' and request.user != comment.post.user:
+        if not comment.post.privacy == "public" and request.user != comment.post.user:
             return Response(
                 {"error": "You do not have permission to view this thread"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         thread = CommentService.get_comment_thread(comment)
-        serializer = CommentSerializer(thread, many=True, context={"request": request})
+        serializer = CommentDisplaySerializer(
+            thread, many=True, context={"request": request}
+        )
 
         return Response(
             {
@@ -521,7 +535,7 @@ class CommentSearchView(APIView):
         post = None
         if post_id:
             post = get_object_or_404(Post, id=post_id, is_deleted=False)
-            if not post.privacy == 'public' and request.user != post.user:
+            if not post.privacy == "public" and request.user != post.user:
                 return Response(
                     {
                         "error": "You do not have permission to search comments on this post"
@@ -532,5 +546,7 @@ class CommentSearchView(APIView):
         comments = CommentService.search_comments(query=query, user=user, post=post)
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(comments, request)
-        serializer = CommentSerializer(page, many=True, context={"request": request})
+        serializer = CommentDisplaySerializer(
+            page, many=True, context={"request": request}
+        )
         return paginator.get_paginated_response(serializer.data)

@@ -3,7 +3,7 @@ from django.utils import timezone
 import logging
 from django.contrib.auth import get_user_model
 
-from users.models.base import OtpRequest
+from users.models.base import OtpRequest, OtpRequestStatus
 from users.serializers.user import UserMinimalSerializer
 
 User = get_user_model()
@@ -52,7 +52,7 @@ class OtpRequestSerializer(serializers.ModelSerializer):
             "attempt_count"
         ]
     
-    def get_status_display(self, obj):
+    def get_status_display(self, obj) -> str:
         if obj.is_used:
             return "Used"
         elif timezone.now() > obj.expires_at:

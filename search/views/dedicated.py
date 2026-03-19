@@ -8,8 +8,8 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 import logging
 
 from events.serializers.event import EventSerializer
-from feed.serializers.post import PostFeedSerializer, PostSerializer
-from groups.serializers.base import GroupSerializer
+from feed.serializers.post import PostFeedSerializer
+from groups.serializers.group import GroupDisplaySerializer
 from search.serializers.pagination import PaginatedEventSearchSerializer, PaginatedGroupSearchSerializer, PaginatedPostSearchSerializer, PaginatedUserSearchSerializer
 from search.services.content_search import SearchService
 from search.services.search_history import SearchHistoryService
@@ -129,7 +129,7 @@ class UserSearchView(BaseSearchView):
     description="Search groups by name or description."
 )
 class GroupSearchView(BaseSearchView):
-    serializer_class = GroupSerializer
+    serializer_class = GroupDisplaySerializer
     search_method = 'search_groups'
     search_type_label = 'groups'
 

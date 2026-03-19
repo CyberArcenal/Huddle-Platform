@@ -1,3 +1,4 @@
+from enum import Enum
 import uuid
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
@@ -7,18 +8,77 @@ from django.db import models
 
 from users.enums import UserStatus
 
+ACTION_TYPES = [
+    ("login", "Login"),
+    ("logout", "Logout"),
+    ("update_profile", "Update Profile"),
+    ("create_post", "Create Post"),
+    ("like_post", "Like Post"),
+    ("comment", "Comment"),
+    ("follow", "Follow"),
+    ("unfollow", "Unfollow"),
+    ("join_group", "Join Group"),
+    ("leave_group", "Leave Group"),
+    ("admin_created_account", "Admin Created Account"),
+    ("admin_profile_update", "Admin Profile Update"),
+    ("admin_bulk_activate", "Admin Bulk Activate"),
+    ("admin_bulk_deactivate", "Admin Bulk Deactivate"),
+    ("admin_bulk_soft_delete", "Admin Bulk Soft Delete"),
+    ("admin_bulk_hard_delete", "Admin Bulk Hard Delete"),
+    ("admin_bulk_verify", "Admin Bulk Verify"),
+    ("admin_bulk_unverify", "Admin Bulk Unverify"),
+    # Session actions
+    ("bulk_session_termination", "Bulk Session Termination"),
+    ("session_terminated", "Session Terminated"),
+    # User actions
+    ("account_created", "Account Created"),
+    ("follow_user", "Follow User"),
+    ("unfollow_user", "Unfollow User"),
+    ("profile_picture_update", "Profile Picture Update"),
+    ("profile_picture_removed", "Profile Picture Removed"),
+    ("cover_photo_update", "Cover Photo Update"),
+    ("cover_photo_removed", "Cover Photo Removed"),
+    ("password_change", "Password Change"),
+    ("status_change", "Status Change"),  # bagong dagdag
+    # Security actions
+    ("2fa_enabled", "Two-Factor Authentication Enabled"),
+    ("2fa_disabled", "Two-Factor Authentication Disabled"),
+    ("security_settings_update", "Security Settings Update"),
+]
+
+
+class OtpRequestStatus(str, Enum):
+    USED = "used"
+    EXPIRED = "expired"
+
+
+class OtpRequestTypes(str, Enum):
+    EMAIL = "email"
+    PHONE = "phone"
+
+
+USER_STATUS_CHOICES = (
+    ("active", "Active"),
+    ("restricted", "Restricted"),
+    ("suspended", "Suspended"),
+    ("deleted", "Deleted"),
+)
+
+SECURITY_EVENT_TYPES = [
+    ("login", "Login"),
+    ("logout", "Logout"),
+    ("password_change", "Password Change"),
+    ("2fa_enabled", "2FA Enabled"),
+    ("2fa_disabled", "2FA Disabled"),
+    ("failed_login", "Failed Login"),
+]
+
 
 class User(AbstractUser):
-    STATUS_CHOICES = (
-        (UserStatus.ACTIVE, "Active"),
-        (UserStatus.RESTRICTED, "Restricted"),
-        (UserStatus.SUSPENDED, "Suspended"),
-        (UserStatus.DELETED, "Deleted"),
-    )
 
     status = models.CharField(
         max_length=20,
-        choices=STATUS_CHOICES,
+        choices=USER_STATUS_CHOICES,
         default=UserStatus.ACTIVE,
         help_text="Account status",
     )
@@ -83,20 +143,12 @@ class BlacklistedAccessToken(models.Model):
 
 
 class SecurityLog(models.Model):
-    EVENT_TYPES = [
-        ("login", "Login"),
-        ("logout", "Logout"),
-        ("password_change", "Password Change"),
-        ("2fa_enabled", "2FA Enabled"),
-        ("2fa_disabled", "2FA Disabled"),
-        ("failed_login", "Failed Login"),
-    ]
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="security_logs"
     )
 
-    event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
+    event_type = models.CharField(max_length=50, choices=SECURITY_EVENT_TYPES)
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     user_agent = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -231,12 +283,11 @@ class LoginCheckpoint(models.Model):
 class OtpRequest(models.Model):
     """One-time password request for email verification or login"""
 
-    EMAIL = "email"
-    PHONE = "phone"
     OTP_TYPES = [
-        (EMAIL, "Email"),
-        (PHONE, "Phone"),
+        (OtpRequestTypes.EMAIL, "Email"),
+        (OtpRequestTypes.PHONE, "Phone"),
     ]
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -251,7 +302,9 @@ class OtpRequest(models.Model):
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
     attempt_count = models.IntegerField(default=0)
-    type = models.CharField(max_length=10, choices=OTP_TYPES, default=EMAIL)
+    type = models.CharField(
+        max_length=10, choices=OTP_TYPES, default=OtpRequestTypes.EMAIL
+    )
     is_email_delivered = models.BooleanField(default=False)
     is_phone_delivered = models.BooleanField(default=False)
 
@@ -276,12 +329,6 @@ class OtpRequest(models.Model):
 
 
 class UserActivity(models.Model):
-    ACTION_TYPES = [
-        ("login", "Login"),
-        ("logout", "Logout"),
-        ("update_profile", "Update Profile"),
-    ]
-
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="activities"
     )
@@ -298,7 +345,7 @@ class UserActivity(models.Model):
 
     def save(self, *args, **kwargs):
         # checker: dapat valid ang action
-        valid_actions = [choice[0] for choice in self.ACTION_TYPES]
+        valid_actions = [choice[0] for choice in ACTION_TYPES]
         if self.action not in valid_actions:
             raise ValidationError(
                 f"Invalid action '{self.action}'. Must be one of {valid_actions}"

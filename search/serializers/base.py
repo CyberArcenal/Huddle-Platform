@@ -16,7 +16,7 @@ class SearchHistorySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'searched_at']
     
-    def get_formatted_time(self, obj):
+    def get_formatted_time(self, obj) -> str:
         """Format date time for better readability"""
         from django.utils import timezone
         from django.utils.timesince import timesince

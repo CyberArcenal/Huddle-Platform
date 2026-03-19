@@ -1,19 +1,8 @@
 from rest_framework import serializers
-from analytics.models.base import PlatformAnalytics, UserAnalytics
-from users.models import User
 import datetime
 
-class PlatformAnalyticsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PlatformAnalytics
-        fields = '__all__'
-
-class UserAnalyticsSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='user.username', read_only=True)
-
-    class Meta:
-        model = UserAnalytics
-        fields = '__all__'
+# All utility serializers remain exactly as they were, except the model serializers are removed.
+# Below is a truncated version showing only the utility ones (kept intact).
 
 class PlatformAnalyticsSummarySerializer(serializers.Serializer):
     period_days = serializers.IntegerField()
@@ -76,7 +65,6 @@ class DailyReportSerializer(serializers.Serializer):
     messages_per_active_user = serializers.FloatField()
     report_generated_at = serializers.DateTimeField()
 
-# User analytics serializers
 class UserAnalyticsSummarySerializer(serializers.Serializer):
     period_days = serializers.IntegerField()
     start_date = serializers.DateField()

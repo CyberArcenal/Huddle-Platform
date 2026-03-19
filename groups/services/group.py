@@ -3,6 +3,9 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q
 from typing import Optional, List, Dict, Any, Tuple
+
+from feed.models.post import Post
+from groups.models.group import GROUP_PRIVACY_CHOICES
 from ..models import Group, User
 import uuid
 
@@ -22,7 +25,7 @@ class GroupService:
     ) -> Group:
         """Create a new group"""
         # Validate privacy setting
-        valid_privacy = [choice[0] for choice in Group.PRIVACY_CHOICES]
+        valid_privacy = [choice[0] for choice in GROUP_PRIVACY_CHOICES]
         if privacy not in valid_privacy:
             raise ValidationError(f"Privacy must be one of {valid_privacy}")
         
@@ -239,7 +242,7 @@ class GroupService:
     @staticmethod
     def change_privacy(group: Group, new_privacy: str) -> Group:
         """Change group privacy setting"""
-        valid_privacy = [choice[0] for choice in Group.PRIVACY_CHOICES]
+        valid_privacy = [choice[0] for choice in Group.GROUP_PRIVACY_CHOICES]
         if new_privacy not in valid_privacy:
             raise ValidationError(f"Privacy must be one of {valid_privacy}")
         
@@ -323,6 +326,19 @@ class GroupService:
         return timeline
     
     @staticmethod
+    def get_group_posts(group: Group, user: Optional[User] = None, limit=50, offset=0) -> List[Post]:
+        # Check if user can view group posts
+        if not GroupService.is_user_allowed_to_view(user, group):
+            return []
+
+        posts = Post.objects.filter(group=group, is_deleted=False)
+
+        # Optionally filter by privacy within group
+        # (e.g., if user is not member, only public group posts)
+
+        return list(posts.order_by('-created_at')[offset:offset+limit])
+    
+    @staticmethod
     def cleanup_inactive_groups(days_inactive: int = 365, min_members: int = 0) -> List[Group]:
         """Find inactive groups (no activity for X days, few members)"""
         # This is a placeholder - you'll need to define what "inactive" means
@@ -332,3 +348,4 @@ class GroupService:
         ).order_by('member_count', 'created_at')
         
         return list(inactive_groups)
+    

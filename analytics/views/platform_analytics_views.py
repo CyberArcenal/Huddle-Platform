@@ -9,13 +9,13 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from analytics.serializers.base import (
     DailyReportSerializer,
-    PlatformAnalyticsSerializer,
     PlatformAnalyticsSummarySerializer,
     PlatformCorrelationSerializer,
     PlatformHealthSerializer,
     PlatformTopDaySerializer,
     PlatformTrendSerializer,
 )
+from analytics.serializers.platform_analytics import PlatformAnalyticsDisplaySerializer
 from global_utils.pagination import AnalyticsPagination
 from ..services.platform_analytics import PlatformAnalyticsService
 import datetime
@@ -31,7 +31,7 @@ class PaginatedPlatformAnalyticsSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = PlatformAnalyticsSerializer(many=True)
+    results = PlatformAnalyticsDisplaySerializer(many=True)
 
 
 class PaginatedPlatformTrendSerializer(serializers.Serializer):
@@ -87,7 +87,7 @@ class PlatformAnalyticsDailyView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PlatformAnalyticsSerializer},
+        responses={200: PlatformAnalyticsDisplaySerializer},
         description="Retrieve daily platform analytics for a specific date. If not found, creates a new record with zero values.",
     )
     def get(self, request):
@@ -107,12 +107,12 @@ class PlatformAnalyticsDailyView(APIView):
         if not analytics:
             analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
 
-        serializer = PlatformAnalyticsSerializer(analytics)
+        serializer = PlatformAnalyticsDisplaySerializer(analytics)
         return Response(serializer.data)
 
     @extend_schema(
         request=UpdatePlatformAnalyticsInputSerializer,
-        responses={200: PlatformAnalyticsSerializer},
+        responses={200: PlatformAnalyticsDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Update request",
@@ -152,7 +152,7 @@ class PlatformAnalyticsDailyView(APIView):
                 setattr(analytics, field, data[field])
         analytics.save()
 
-        output_serializer = PlatformAnalyticsSerializer(analytics)
+        output_serializer = PlatformAnalyticsDisplaySerializer(analytics)
         return Response(output_serializer.data, status=status.HTTP_200_OK)
 
 
@@ -221,7 +221,7 @@ class PlatformAnalyticsRangeView(APIView):
         )
         paginator = AnalyticsPagination()
         page = paginator.paginate_queryset(analytics, request)
-        serializer = PlatformAnalyticsSerializer(page, many=True)
+        serializer = PlatformAnalyticsDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 

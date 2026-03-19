@@ -4,7 +4,8 @@ from django.db import transaction, IntegrityError
 from django.db.models import Q, Count
 from typing import Optional, List, Dict, Any, Tuple
 
-from admin_pannel.models.base import AdminLog
+from admin_pannel.models.admin_log import AdminLog
+from core.settings import logger
 from ..models import ReportedContent, User
 import datetime
 

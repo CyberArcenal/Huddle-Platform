@@ -1,7 +1,7 @@
 # feed/admin.py
 
 from django.contrib import admin
-from .models import Post, Comment, Like
+from .models import Post, Comment, Reaction
 
 
 class CommentInline(admin.TabularInline):
@@ -33,8 +33,8 @@ class CommentAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at',)
 
 
-@admin.register(Like)
-class LikeAdmin(admin.ModelAdmin):
+@admin.register(Reaction)
+class ReactionAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'content_type', 'object_id', 'created_at')
     list_filter = ('content_type', 'created_at')
     search_fields = ('user__username',)

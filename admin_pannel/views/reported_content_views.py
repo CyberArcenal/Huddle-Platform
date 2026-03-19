@@ -9,11 +9,11 @@ from django.utils import timezone
 import datetime
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from admin_pannel.serializers.reported_content import ReportedContentDisplaySerializer
 from global_utils.pagination import AdminPanelPagination
 
 from ..services.reported_content import ReportedContentService
 from ..serializers.base import (
-    ReportedContentSerializer,
     ReportContentInputSerializer,
     ReportFilterSerializer,
     ReportStatusUpdateSerializer,
@@ -36,7 +36,7 @@ class PaginatedReportedContentSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = ReportedContentSerializer(many=True)
+    results = ReportedContentDisplaySerializer(many=True)
 
 
 # --------------------------------------------------------------
@@ -47,7 +47,7 @@ class ReportCreateView(APIView):
 
     @extend_schema(
         request=ReportContentInputSerializer,
-        responses={201: ReportedContentSerializer},
+        responses={201: ReportedContentDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Report request",
@@ -89,7 +89,7 @@ class ReportCreateView(APIView):
                 object_id=data["object_id"],
                 reason=data["reason"],
             )
-            output_serializer = ReportedContentSerializer(report)
+            output_serializer = ReportedContentDisplaySerializer(report)
             return Response(output_serializer.data, status=status.HTTP_201_CREATED)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -167,7 +167,7 @@ class ReportListView(APIView):
 
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(reports, request)
-        output_serializer = ReportedContentSerializer(page, many=True)
+        output_serializer = ReportedContentDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(output_serializer.data)
 
 
@@ -200,7 +200,7 @@ class ReportPendingView(APIView):
         reports = ReportedContentService.get_pending_reports(content_type)
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(reports, request)
-        serializer = ReportedContentSerializer(page, many=True)
+        serializer = ReportedContentDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 
@@ -208,7 +208,7 @@ class ReportDetailView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
-        responses={200: ReportedContentSerializer},
+        responses={200: ReportedContentDisplaySerializer},
         description="Retrieve a single report by ID.",
     )
     def get(self, request, report_id):
@@ -217,7 +217,7 @@ class ReportDetailView(APIView):
             return Response(
                 {"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND
             )
-        serializer = ReportedContentSerializer(report)
+        serializer = ReportedContentDisplaySerializer(report)
         return Response(serializer.data)
 
 
@@ -226,7 +226,7 @@ class ReportUpdateStatusView(APIView):
 
     @extend_schema(
         request=ReportStatusUpdateSerializer,
-        responses={200: ReportedContentSerializer},
+        responses={200: ReportedContentDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Update status request",
@@ -269,7 +269,7 @@ class ReportUpdateStatusView(APIView):
                 resolved_by=request.user,
                 resolution_notes=data.get("resolution_notes"),
             )
-            output_serializer = ReportedContentSerializer(updated_report)
+            output_serializer = ReportedContentDisplaySerializer(updated_report)
             return Response(output_serializer.data)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -339,7 +339,7 @@ class ReportResolveView(APIView):
             )
             return Response(
                 {
-                    "report": ReportedContentSerializer(resolved_report).data,
+                    "report": ReportedContentDisplaySerializer(resolved_report).data,
                     "action_result": action_result,
                 }
             )
@@ -352,7 +352,7 @@ class ReportDismissView(APIView):
 
     @extend_schema(
         request=DismissReportInputSerializer,  # <-- using dedicated serializer
-        responses={200: ReportedContentSerializer},
+        responses={200: ReportedContentDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Dismiss request",
@@ -393,7 +393,7 @@ class ReportDismissView(APIView):
             dismissed_report = ReportedContentService.dismiss_report(
                 report=report, dismissed_by=request.user, reason=reason
             )
-            output_serializer = ReportedContentSerializer(dismissed_report)
+            output_serializer = ReportedContentDisplaySerializer(dismissed_report)
             return Response(output_serializer.data)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -486,7 +486,7 @@ class ReportUserHistoryView(APIView):
         reports = ReportedContentService.get_user_report_history(user, as_reporter)
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(reports, request)
-        serializer = ReportedContentSerializer(page, many=True)
+        serializer = ReportedContentDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 
@@ -529,7 +529,7 @@ class ReportSearchView(APIView):
         )
         paginator = AdminPanelPagination()
         page = paginator.paginate_queryset(reports, request)
-        output_serializer = ReportedContentSerializer(page, many=True)
+        output_serializer = ReportedContentDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(output_serializer.data)
 
 

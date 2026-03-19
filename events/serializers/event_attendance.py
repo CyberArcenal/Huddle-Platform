@@ -135,7 +135,7 @@ class EventAttendanceWithUserSerializer(serializers.ModelSerializer):
         fields = ["id", "user", "status", "joined_at", "is_following", "is_followed_by"]
         read_only_fields = fields
 
-    def get_is_following(self, obj):
+    def get_is_following(self, obj) -> bool:
         """Check if current user is following this attendee"""
         request = self.context.get("request")
         if request and request.user.is_authenticated and request.user != obj.user:
@@ -148,7 +148,7 @@ class EventAttendanceWithUserSerializer(serializers.ModelSerializer):
                 return False
         return False
 
-    def get_is_followed_by(self, obj):
+    def get_is_followed_by(self, obj) -> bool:
         """Check if this attendee is following current user"""
         request = self.context.get("request")
         if request and request.user.is_authenticated and request.user != obj.user:

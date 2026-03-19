@@ -1,7 +1,9 @@
 # feed/urls.py
 
 from django.urls import path, include
-from feed.views import comment, post, like
+from feed.views import comment, post, like, share
+from feed.views import reel, reel_comment   # new imports
+
 urlpatterns = [
     # Post URLs
     path('posts/', post.PostListView.as_view(), name='post-list'),
@@ -10,6 +12,7 @@ urlpatterns = [
     path('posts/<int:post_id>/', post.PostDetailView.as_view(), name='post-detail'),
     path('posts/<int:post_id>/statistics/', post.PostStatisticsView.as_view(), name='post-statistics'),
     path('posts/<int:post_id>/restore/', post.PostRestoreView.as_view(), name='post-restore'),
+    path('posts/<int:post_id>/share-to-group/', post.SharePostToGroupView.as_view(), name='post-share-to-group'),
     
     # User post statistics
     path('users/<int:user_id>/post-statistics/', post.UserPostStatisticsView.as_view(), name='user-post-statistics'),
@@ -41,7 +44,31 @@ urlpatterns = [
     path('likes/statistics/', like.UserLikeStatisticsView.as_view(), name='my-like-statistics'),
     path('likes/statistics/<int:user_id>/', like.UserLikeStatisticsView.as_view(), name='user-like-statistics'),
     path('likes/mutual/<int:user_id>/', like.MutualLikesView.as_view(), name='mutual-likes'),
+    path('reactions/', like.ReactionView.as_view(), name='reaction-set'),
+    
+
+    # ==================== Reels ====================
+    # Main reel endpoints
+    path('reels/', reel.ReelListView.as_view(), name='reel-list'),
+    path('reels/search/', reel.ReelSearchView.as_view(), name='reel-search'),
+    path('reels/trending/', reel.TrendingReelsView.as_view(), name='trending-reels'),  # optional
+    path('reels/<int:reel_id>/', reel.ReelDetailView.as_view(), name='reel-detail'),
+    path('reels/<int:reel_id>/statistics/', reel.ReelStatisticsView.as_view(), name='reel-statistics'),
+    path('reels/<int:reel_id>/restore/', reel.ReelRestoreView.as_view(), name='reel-restore'),
+
+    # User reel statistics
+    path('users/<int:user_id>/reel-statistics/', reel.UserReelStatisticsView.as_view(), name='user-reel-statistics'),
+    path('users/me/reel-statistics/', reel.UserReelStatisticsView.as_view(), name='my-reel-statistics'),
+
+    
+    
+    # ====================== SHARE =============================
+    
+    path('shares/', share.ShareListView.as_view(), name='share-list'),
+    path('shares/<int:share_id>/', share.ShareDetailView.as_view(), name='share-detail'),
+    path('shares/object/', share.ShareObjectSharesView.as_view(), name='share-object-list'),
+    path('shares/statistics/user/', share.ShareUserStatisticsView.as_view(), name='share-user-stats'),
+    path('shares/<int:share_id>/restore/', share.ShareRestoreView.as_view(), name='share-restore'),
 ]
 
-# For including in main urls.py
 app_name = 'feed'

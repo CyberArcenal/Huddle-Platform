@@ -1,143 +1,210 @@
-from django.core.exceptions import ValidationError
 from typing import Dict, Any, Optional
+
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from feed.models.base import Comment, Like, Post
+
+from feed.models.base import Comment, Post, User
+from feed.models.reaction import ReactionType
+from feed.serializers.base import ReactionCountSerializer
 from feed.services.comment import CommentService
-from feed.services.like import LikeService
-from feed.services.post import PostService
-from users.models.base import User
-from users.serializers.user import UserProfileSerializer
+from feed.services.reaction import ReactionService
+from users.serializers.user import UserMinimalSerializer
+
+
+from rest_framework import serializers
+from django.contrib.contenttypes.models import ContentType
+
+from feed.models.base import Comment
+from feed.services.comment import CommentService
+from users.serializers.user import UserMinimalSerializer
+
+
+class CommentMinimalSerializer(serializers.ModelSerializer):
+    """Lightweight list view for comments."""
+
+    user = UserMinimalSerializer(read_only=True)
+    content_preview = serializers.SerializerMethodField()
+    target_type = serializers.SerializerMethodField()
+    target_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = ["id", "user", "content_preview", "created_at", "target_type", "target_id"]
+        read_only_fields = fields
+
+    def get_content_preview(self, obj) -> str:
+        return (
+            obj.content[:100] + ("..." if len(obj.content) > 100 else "")
+            if obj.content
+            else ""
+        )
+
+    def get_target_type(self, obj):
+        return obj.content_type.model
+
+    def get_target_id(self, obj):
+        return obj.object_id
+
 
 class CommentCreateSerializer(serializers.ModelSerializer):
-    user_id = serializers.IntegerField(write_only=True)
-    post_id = serializers.IntegerField(write_only=True)
-    parent_comment_id = serializers.IntegerField(
-        write_only=True, required=False, allow_null=True
+    """Serializer for creating a comment on any content object."""
+
+    target_type = serializers.CharField(write_only=True)
+    target_id = serializers.IntegerField(write_only=True)
+    parent_comment_id = serializers.PrimaryKeyRelatedField(
+        queryset=Comment.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+        source="parent_comment"
     )
 
     class Meta:
         model = Comment
-        fields = ["user_id", "post_id", "parent_comment_id", "content"]
-        
-class CommentSerializer(serializers.ModelSerializer):
-    """Serializer for Comment model"""
+        fields = ["target_type", "target_id", "parent_comment_id", "content"]
 
-    user = UserProfileSerializer(read_only=True)
-    user_id = serializers.IntegerField(write_only=True)
-    post_id = serializers.IntegerField(write_only=True)
-    parent_comment_id = serializers.IntegerField(
-        write_only=True, required=False, allow_null=True
-    )
-    replies = serializers.SerializerMethodField()
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if not request:
+            raise serializers.ValidationError({"request": "Request context not found"})
+
+        user = request.user
+        target_type = validated_data["target_type"]
+        target_id = validated_data["target_id"]
+
+        try:
+            ct = ContentType.objects.get(model=target_type)
+            model_class = ct.model_class()
+            content_object = model_class.objects.get(pk=target_id)
+        except Exception:
+            raise serializers.ValidationError({"target": "Invalid target object"})
+
+        return CommentService.create_comment(
+            user=user,
+            content_object=content_object,
+            content=validated_data["content"],
+            parent_comment=validated_data.get("parent_comment"),
+        )
+
+    def update(self, instance, validated_data):
+        return CommentService.update_comment(
+            comment=instance,
+            new_content=validated_data.get("content", instance.content),
+        )
+
+class CommentDisplaySerializerNoReplies(serializers.ModelSerializer):
+    """Detailed view for a comment without nested replies."""
+
+    user = UserMinimalSerializer(read_only=True)
+
     like_count = serializers.SerializerMethodField()
-    has_liked = serializers.SerializerMethodField()
+    liked = serializers.SerializerMethodField()
+    reaction_counts = serializers.SerializerMethodField()
+    user_reaction = serializers.SerializerMethodField()
+    target_type = serializers.SerializerMethodField()
+    target_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
         fields = [
             "id",
-            "post",
-            "post_id",
             "user",
-            "user_id",
             "parent_comment",
-            "parent_comment_id",
             "content",
             "created_at",
-            "replies",
+            "target_type",
+            "target_id",
             "like_count",
-            "has_liked",
+            "liked",
+            "reaction_counts",
+            "user_reaction",
         ]
         read_only_fields = ["id", "created_at", "is_deleted"]
-        extra_kwargs = {
-            "post": {"read_only": True},
-            "parent_comment": {"read_only": True},
-        }
 
-    def get_replies(self, obj: Comment) -> list:
-        """Get serialized replies for this comment"""
-        replies = CommentService.get_comment_replies(obj, limit=10)
-        return CommentSerializer(replies, many=True, context=self.context).data
+    def get_target_type(self, obj):
+        return obj.content_type.model
 
-    def get_like_count(self, obj: Comment) -> int:
-        """Get like count for this comment"""
-        return LikeService.get_like_count("comment", obj.id)
+    def get_target_id(self, obj):
+        return obj.object_id
 
-    def get_has_liked(self, obj: Comment) -> bool:
-        """Check if current user has liked this comment"""
+    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
+        return ReactionService.get_reaction_counts("comment", obj.id)
+
+    def get_user_reaction(self, obj) -> Optional[ReactionType]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return LikeService.has_liked(
+            return ReactionService.get_user_reaction(request.user, "comment", obj.id)
+        return None
+
+    def get_like_count(self, obj) -> int:
+        return ReactionService.get_like_count("comment", obj.id)
+
+    def get_liked(self, obj) -> bool:
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return ReactionService.has_liked(
                 user=request.user, content_type="comment", object_id=obj.id
             )
         return False
 
-    def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate comment data"""
-        post_id = data.get("post_id")
-        parent_comment_id = data.get("parent_comment_id")
-        user_id = data.get("user_id")
 
-        # Validate post exists and not deleted
-        try:
-            post = Post.objects.get(id=post_id, is_deleted=False)
-        except Post.DoesNotExist:
-            raise serializers.ValidationError(
-                {"post_id": "Post with this ID does not exist or is deleted"}
+class CommentDisplaySerializer(serializers.ModelSerializer):
+    """Detailed view for a comment with nested replies."""
+
+    user = UserMinimalSerializer(read_only=True)
+    replies = serializers.SerializerMethodField()
+
+    like_count = serializers.SerializerMethodField()
+    liked = serializers.SerializerMethodField()
+    reaction_counts = serializers.SerializerMethodField()
+    user_reaction = serializers.SerializerMethodField()
+    target_type = serializers.SerializerMethodField()
+    target_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = [
+            "id",
+            "user",
+            "parent_comment",
+            "content",
+            "created_at",
+            "replies",
+            "target_type",
+            "target_id",
+            "like_count",
+            "liked",
+            "reaction_counts",
+            "user_reaction",
+        ]
+        read_only_fields = ["id", "created_at", "is_deleted"]
+
+    def get_target_type(self, obj):
+        return obj.content_type.model
+
+    def get_target_id(self, obj):
+        return obj.object_id
+
+    def get_replies(self, obj) -> CommentDisplaySerializerNoReplies:
+        replies = CommentService.get_comment_replies(obj, limit=10)
+        return CommentDisplaySerializerNoReplies(replies, many=True, context=self.context).data
+
+    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
+        return ReactionService.get_reaction_counts("comment", obj.id)
+
+    def get_user_reaction(self, obj) -> Optional[ReactionType]:
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return ReactionService.get_user_reaction(request.user, "comment", obj.id)
+        return None
+
+    def get_like_count(self, obj) -> int:
+        return ReactionService.get_like_count("comment", obj.id)
+
+    def get_liked(self, obj) -> bool:
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return ReactionService.has_liked(
+                user=request.user, content_type="comment", object_id=obj.id
             )
-
-        # Validate user exists
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            raise serializers.ValidationError(
-                {"user_id": "User with this ID does not exist"}
-            )
-
-        # Validate parent comment if provided
-        if parent_comment_id:
-            try:
-                parent_comment = Comment.objects.get(id=parent_comment_id)
-                if parent_comment.post.id != post_id:
-                    raise serializers.ValidationError(
-                        {
-                            "parent_comment_id": "Parent comment must belong to the same post"
-                        }
-                    )
-            except Comment.DoesNotExist:
-                raise serializers.ValidationError(
-                    {"parent_comment_id": "Parent comment with this ID does not exist"}
-                )
-
-        return data
-
-    def create(self, validated_data: Dict[str, Any]) -> Comment:
-        """Create a comment using CommentService"""
-        post = Post.objects.get(id=validated_data["post_id"])
-        user = User.objects.get(id=validated_data["user_id"])
-        parent_comment = None
-
-        if validated_data.get("parent_comment_id"):
-            parent_comment = Comment.objects.get(id=validated_data["parent_comment_id"])
-
-        try:
-            comment = CommentService.create_comment(
-                post=post,
-                user=user,
-                content=validated_data["content"],
-                parent_comment=parent_comment,
-            )
-            return comment
-        except ValidationError as e:
-            raise serializers.ValidationError(str(e))
-
-    def update(self, instance: Comment, validated_data: Dict[str, Any]) -> Comment:
-        """Update a comment using CommentService"""
-        try:
-            updated_comment = CommentService.update_comment(
-                comment=instance,
-                new_content=validated_data.get("content", instance.content),
-            )
-            return updated_comment
-        except ValidationError as e:
-            raise serializers.ValidationError(str(e))
+        return False

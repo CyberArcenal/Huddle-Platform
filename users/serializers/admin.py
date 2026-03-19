@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from typing import Dict, Any, List, Optional
 
+from users.serializers.base import ActivitySerializer, FollowerSerializer, FollowingSerializer, LoginSessionSerializer, SecurityLogSerializer
 from users.serializers.user import UserProfileSerializer
 from users.services.user import UserService
 
@@ -311,13 +312,13 @@ class BulkUserActionSerializer(serializers.Serializer):
 
 class UserExportSerializer(serializers.ModelSerializer):
     """Serializer for GDPR/data export compliance"""
-    
+
     followers = serializers.SerializerMethodField()
     following = serializers.SerializerMethodField()
     activities = serializers.SerializerMethodField()
     security_logs = serializers.SerializerMethodField()
     login_sessions = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = User
         fields = [
@@ -327,36 +328,31 @@ class UserExportSerializer(serializers.ModelSerializer):
             'followers', 'following', 'activities',
             'security_logs', 'login_sessions'
         ]
-    
-    def get_followers(self, obj) -> List[Dict[str, Any]]:
-        """Get follower data"""
-        return list(obj.followers.values(
+
+    def get_followers(self, obj) -> FollowerSerializer:
+        return FollowerSerializer(obj.followers.values(
             'follower_id', 'follower__username', 'created_at'
-        ))
-    
-    def get_following(self, obj) -> List[Dict[str, Any]]:
-        """Get following data"""
-        return list(obj.following.values(
+        ), many=True).data
+
+    def get_following(self, obj) -> FollowingSerializer:
+        return FollowingSerializer(obj.following.values(
             'following_id', 'following__username', 'created_at'
-        ))
-    
-    def get_activities(self, obj) -> List[Dict[str, Any]]:
-        """Get activity log data"""
-        return list(obj.activities.values(
+        ), many=True).data
+
+    def get_activities(self, obj) -> ActivitySerializer:
+        return ActivitySerializer(obj.activities.values(
             'action', 'description', 'timestamp',
             'ip_address', 'location', 'metadata'
-        ))
-    
-    def get_security_logs(self, obj) -> List[Dict[str, Any]]:
-        """Get security log data"""
-        return list(obj.security_logs.values(
+        ), many=True).data
+
+    def get_security_logs(self, obj) -> SecurityLogSerializer:
+        return SecurityLogSerializer(obj.security_logs.values(
             'event_type', 'created_at', 'ip_address',
             'user_agent', 'details'
-        ))
-    
-    def get_login_sessions(self, obj) -> List[Dict[str, Any]]:
-        """Get login session data"""
-        return list(obj.login_sessions.values(
+        ), many=True).data
+
+    def get_login_sessions(self, obj) -> LoginSessionSerializer:
+        return LoginSessionSerializer(obj.login_sessions.values(
             'device_name', 'ip_address', 'created_at',
             'last_used', 'expires_at', 'is_active'
-        ))
+        ), many=True).data

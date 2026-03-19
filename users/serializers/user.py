@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 
 
 from users.services.user import UserService
+from users.services.user_follow import UserFollowService
 
 from ..models import User, UserStatus, UserFollow, UserSecuritySettings, UserActivity
 from ..enums import UserStatus as UserStatusEnum
@@ -292,6 +293,11 @@ class UserProfileSerializer(UserBaseSerializer):
             "status",
         ]
         read_only_fields = UserBaseSerializer.Meta.read_only_fields + ["status"]
+        extra_kwargs = {
+            "id": {"required": True, "allow_null": False},
+            "username": {"required": True, "allow_null": False},
+        }
+
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
         """Get full URL for profile picture"""
@@ -302,7 +308,7 @@ class UserProfileSerializer(UserBaseSerializer):
             return obj.profile_picture.url
         return None
     
-    def get_posts_count(self, obj):
+    def get_posts_count(self, obj) -> int:
         from feed.models.base import Post
         return Post.objects.filter(user_id=obj.id).count()
 
@@ -327,9 +333,7 @@ class UserProfileSerializer(UserBaseSerializer):
         """Check if requesting user is following this user"""
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return UserFollow.objects.filter(
-                follower=request.user, following=obj
-            ).exists()
+            return UserFollowService.is_following(request.user, obj)
         return False
 
 
@@ -337,7 +341,7 @@ class UserListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for user listings/search results"""
 
     profile_picture_url = serializers.SerializerMethodField()
-
+    is_following = serializers.SerializerMethodField()
     class Meta:
         model = User
         fields = [
@@ -346,9 +350,15 @@ class UserListSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "profile_picture_url",
+            "is_following",
             "is_verified",
         ]
         read_only_fields = fields
+        extra_kwargs = {
+            "id": {"required": True, "allow_null": False},
+            "username": {"required": True, "allow_null": False},
+        }
+
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
         """Get profile picture URL"""
@@ -358,6 +368,13 @@ class UserListSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
+    
+    def get_is_following(self, obj: User) -> bool:
+        """Check if requesting user is following this user"""
+        request = self.context.get("request")
+        if request:
+            return UserFollowService.is_following(request.user, obj)
+        return False
 
 
 class UserStatusSerializer(serializers.Serializer):
@@ -525,7 +542,7 @@ class UserActivitySerializer(serializers.ModelSerializer):
 
 class UserMinimalSerializer(serializers.ModelSerializer):
     """Minimal serializer for user references (e.g. in followers list)"""
-
+    
     profile_picture_url = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
 
@@ -533,6 +550,11 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "username", "profile_picture_url", "full_name", "location",]
         read_only_fields = fields
+        extra_kwargs = {
+            "id": {"required": True, "allow_null": False},
+            "username": {"required": True, "allow_null": False},
+        }
+
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
         """Get profile picture URL"""

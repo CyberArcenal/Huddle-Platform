@@ -16,7 +16,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['user', 'actor', 'created_at']
 
-    def get_time_ago(self, obj):
+    def get_time_ago(self, obj) -> str:
         from django.utils import timezone
         delta = timezone.now() - obj.created_at
         if delta.days > 0:

@@ -4,7 +4,7 @@ from django.utils import timezone
 import logging
 from django.contrib.auth import get_user_model
 
-from users.models.base import LoginCheckpoint
+from users.models.base import LoginCheckpoint, OtpRequestStatus
 from users.serializers.user import UserMinimalSerializer
 
 User = get_user_model()
@@ -48,7 +48,7 @@ class LoginCheckpointSerializer(serializers.ModelSerializer):
             'token': {'read_only': True},
         }
     
-    def get_status_display(self, obj):
+    def get_status_display(self, obj) -> str:
         if obj.is_used:
             return "Used"
         elif timezone.now() > obj.expires_at:

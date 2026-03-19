@@ -1,3 +1,5 @@
+from typing import Optional
+
 from rest_framework import serializers
 from messaging.models import Conversation, Message
 from users.serializers.user import UserMinimalSerializer
@@ -13,7 +15,7 @@ class MessageSerializer(serializers.ModelSerializer):
                   'media', 'media_url', 'media_type', 'is_read', 'is_deleted', 'created_at']
         read_only_fields = ['id', 'created_at']
 
-    def get_media_url(self, obj):
+    def get_media_url(self, obj) -> str:
         if obj.media:
             return obj.media.url
         return None
@@ -29,7 +31,7 @@ class ConversationSerializer(serializers.ModelSerializer):
                   'participants_details', 'last_message', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-    def get_last_message(self, obj):
+    def get_last_message(self, obj) -> Optional[MessageSerializer]:
         last_msg = obj.messages.filter(is_deleted=False).order_by('-created_at').first()
         if last_msg:
             return MessageSerializer(last_msg).data

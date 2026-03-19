@@ -17,17 +17,16 @@ from drf_spectacular.utils import (
 )
 from django.db import transaction
 from feed.models import Post
+from feed.serializers.base import PostStatisticsSerializer, SearchSerializer, UserPostStatisticsSerializer
 from feed.serializers.post import (
     PostCreateSerializer,
     PostDetailSerializer,
+    PostDisplaySerializer,
     PostFeedSerializer,
-    PostSerializer,
-    PostStatisticsSerializer,
-    SearchSerializer,
-    UserPostStatisticsSerializer,
 )
 from feed.services import PostService
 from global_utils.pagination import StandardResultsSetPagination
+from groups.models.group import Group
 from users.models import User
 
 logger = logging.getLogger(__name__)
@@ -111,7 +110,7 @@ class PostListView(APIView):
 
     @extend_schema(
         request=PostCreateSerializer,
-        responses={201: PostSerializer},
+        responses={201: PostDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Create text post",
@@ -160,7 +159,7 @@ class PostListView(APIView):
         if serializer.is_valid(raise_exception=True):
             post = serializer.save()
             return Response(
-                PostSerializer(post, context={"request": request}).data,
+                PostDisplaySerializer(post, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
             )
 
@@ -203,8 +202,8 @@ class PostDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        request=PostSerializer,
-        responses={200: PostSerializer},
+        request=PostCreateSerializer,
+        responses={200: PostDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Update post", value={"content": "Updated content"}, request_only=True
@@ -227,7 +226,7 @@ class PostDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = PostSerializer(
+        serializer = PostDisplaySerializer(
             post, data=request.data, partial=True, context={"request": request}
         )
 
@@ -241,7 +240,7 @@ class PostDetailView(APIView):
 
             updated_post = serializer.save()
             return Response(
-                PostSerializer(updated_post, context={"request": request}).data
+                PostDisplaySerializer(updated_post, context={"request": request}).data
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -463,8 +462,8 @@ class PostRestoreView(APIView):
             200: inline_serializer(
                 name="PostRestoreResponse",
                 fields={
-                    "message": serializers.CharField(),
-                    "post": PostSerializer(),
+                    "message": serializers.CharField,
+                    "post": PostDisplaySerializer,
                 },
             )
         },
@@ -486,7 +485,7 @@ class PostRestoreView(APIView):
             return Response(
                 {
                     "message": "Post restored successfully",
-                    "post": PostSerializer(post, context={"request": request}).data,
+                    "post": PostDisplaySerializer(post, context={"request": request}).data,
                 }
             )
 
@@ -494,3 +493,37 @@ class PostRestoreView(APIView):
             {"error": "Post is not deleted or could not be restored"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    
+
+class SharePostToGroupView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=inline_serializer(
+            name="ShareToGroupRequest",
+            fields={
+                'group_id': serializers.IntegerField(),
+                'caption': serializers.CharField(required=False, allow_blank=True),
+            }
+        ),
+        responses={201: PostDisplaySerializer},
+        description="Share a post to a group, creating a new post in that group.",
+    )
+    def post(self, request, post_id):
+        post = get_object_or_404(Post, id=post_id, is_deleted=False)
+        group_id = request.data.get('group_id')
+        caption = request.data.get('caption', '')
+
+        group = get_object_or_404(Group, id=group_id)
+
+        try:
+            new_post = PostService.share_post_to_group(
+                user=request.user,
+                original_post=post,
+                group=group,
+                caption=caption
+            )
+            serializer = PostDisplaySerializer(new_post, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

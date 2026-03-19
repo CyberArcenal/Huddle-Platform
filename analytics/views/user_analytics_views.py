@@ -8,11 +8,11 @@ from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from analytics.serializers.user_analytics import UserAnalyticsDisplaySerializer
 from global_utils.pagination import AnalyticsPagination
 from users.models import User
 from ..services.user_analytics import UserAnalyticsService
 from ..serializers.base import (
-    UserAnalyticsSerializer,
     UserAnalyticsSummarySerializer,
     UserTrendSerializer,
     UserEngagementSerializer,
@@ -32,7 +32,7 @@ class PaginatedUserAnalyticsSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = UserAnalyticsSerializer(many=True)
+    results = UserAnalyticsDisplaySerializer(many=True)
 
 
 class PaginatedUserTrendSerializer(serializers.Serializer):
@@ -69,7 +69,7 @@ class UserAnalyticsDailyView(APIView):
                 required=False,
             ),
         ],
-        responses={200: UserAnalyticsSerializer},
+        responses={200: UserAnalyticsDisplaySerializer},
         description="Get daily analytics for a user. User ID in URL is optional; defaults to current user.",
     )
     def get(self, request, user_id=None):
@@ -103,7 +103,7 @@ class UserAnalyticsDailyView(APIView):
                 target_user, date
             )
 
-        serializer = UserAnalyticsSerializer(analytics)
+        serializer = UserAnalyticsDisplaySerializer(analytics)
         return Response(serializer.data)
 
 
@@ -181,7 +181,7 @@ class UserAnalyticsRangeView(APIView):
         )
         paginator = AnalyticsPagination()
         page = paginator.paginate_queryset(analytics, request)
-        serializer = UserAnalyticsSerializer(page, many=True)
+        serializer = UserAnalyticsDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
 

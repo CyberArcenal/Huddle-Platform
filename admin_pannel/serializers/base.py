@@ -1,28 +1,7 @@
 from rest_framework import serializers
-from admin_pannel.models.base import AdminLog, ReportedContent
+from admin_pannel.models.admin_log import AdminLog
+from admin_pannel.models.reported_content import ReportedContent
 from admin_pannel.services.reported_content import ReportedContentService
-from users.models import User
-from users.serializers.user import UserMinimalSerializer
-
-# ---------- Model Serializers ----------
-class AdminLogSerializer(serializers.ModelSerializer):
-    admin_user = UserMinimalSerializer(read_only=True)
-    target_user = UserMinimalSerializer(read_only=True)
-
-    class Meta:
-        model = AdminLog
-        fields = '__all__'
-
-
-class ReportedContentSerializer(serializers.ModelSerializer):
-    reporter = UserMinimalSerializer(read_only=True)
-    content_type_display = serializers.CharField(
-        source='get_content_type_display', read_only=True
-    )
-
-    class Meta:
-        model = ReportedContent
-        fields = '__all__'
 
 
 # ---------- Input Serializers for Reporting ----------
@@ -57,9 +36,7 @@ class BanUserInputSerializer(serializers.Serializer):
 class WarnUserInputSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
     reason = serializers.CharField(max_length=500)
-    severity = serializers.ChoiceField(
-        choices=['low', 'medium', 'high'], default='low'
-    )
+    severity = serializers.ChoiceField(choices=['low', 'medium', 'high'], default='low')
 
 
 class RemoveContentInputSerializer(serializers.Serializer):
@@ -75,23 +52,15 @@ class AdminLogFilterSerializer(serializers.Serializer):
     target_user_id = serializers.IntegerField(required=False)
     start_date = serializers.DateTimeField(required=False)
     end_date = serializers.DateTimeField(required=False)
-    
-    
 
 
 class ReportFilterSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(
-        choices=ReportedContentService.STATUS_CHOICES, required=False
-    )
-    content_type = serializers.ChoiceField(
-        choices=ReportedContent.CONTENT_TYPES, required=False
-    )
+    status = serializers.ChoiceField(choices=ReportedContentService.STATUS_CHOICES, required=False)
+    content_type = serializers.ChoiceField(choices=ReportedContent.CONTENT_TYPES, required=False)
     reporter_id = serializers.IntegerField(required=False)
     start_date = serializers.DateTimeField(required=False)
     end_date = serializers.DateTimeField(required=False)
     unresolved_only = serializers.BooleanField(default=True)
-    
-    
 
 
 class SearchAdminLogsSerializer(serializers.Serializer):
@@ -125,15 +94,16 @@ class ReportStatisticsSerializer(serializers.Serializer):
     avg_resolution_hours = serializers.FloatField(allow_null=True)
     most_reported_objects = serializers.ListField(child=serializers.DictField())
     resolution_rate = serializers.FloatField()
-    
 
-# For admin_log_views
+
+# ---------- Cleanup / Dismiss Serializers ----------
 class CleanupLogsInputSerializer(serializers.Serializer):
     days_to_keep = serializers.IntegerField(default=365, help_text="Delete logs older than this many days")
 
-# For reported_content_views
+
 class DismissReportInputSerializer(serializers.Serializer):
     reason = serializers.CharField(help_text="Reason for dismissal", default="Report dismissed")
+
 
 class CleanupReportsInputSerializer(serializers.Serializer):
     days_to_keep = serializers.IntegerField(default=180, help_text="Delete reports older than this many days")

@@ -7,24 +7,20 @@ from django.db.models import Q
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
+from core.settings import logger
 from global_utils.pagination import GroupsPagination
-from groups.models.base import Group
+from groups.models.group import GROUP_PRIVACY_CHOICES, Group
 from groups.serializers.base import (
-    GroupCreateSerializer,
-    GroupMemberCreateSerializer,
-    GroupMemberSerializer,
-    GroupMemberUpdateSerializer,
     GroupSearchSerializer,
-    GroupSerializer,
     GroupStatisticsSerializer,
-    GroupUpdateSerializer,
     TransferOwnershipSerializer,
 )
+from groups.serializers.group import GroupCreateSerializer, GroupDisplaySerializer
+from groups.serializers.member import GroupMemberCreateSerializer, GroupMemberDisplaySerializer, GroupMemberUpdateSerializer
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
 from users.models.base import User
 from rest_framework import serializers
-from groups.serializers.base import GroupSerializer, GroupMemberSerializer
 
 
 # ----- New input serializers for endpoints that previously used raw dicts -----
@@ -36,7 +32,7 @@ class RemoveMemberInputSerializer(serializers.Serializer):
 
 class ChangePrivacyInputSerializer(serializers.Serializer):
     privacy = serializers.ChoiceField(
-        choices=Group.PRIVACY_CHOICES, help_text="New privacy setting"
+        choices=GROUP_PRIVACY_CHOICES, help_text="New privacy setting"
     )
 
 
@@ -53,7 +49,7 @@ class PaginatedGroupSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = GroupSerializer(many=True)
+    results = GroupDisplaySerializer(many=True)
 
 
 class PaginatedGroupMemberSerializer(serializers.Serializer):
@@ -65,7 +61,7 @@ class PaginatedGroupMemberSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = GroupMemberSerializer(many=True)
+    results = GroupMemberDisplaySerializer(many=True)
 
 
 # --------------------------------------------------------------
@@ -124,14 +120,14 @@ class GroupListView(APIView):
         # Apply pagination
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(groups, request)
-        group_serializer = GroupSerializer(
+        group_serializer = GroupDisplaySerializer(
             page, many=True, context={"request": request}
         )
         return paginator.get_paginated_response(group_serializer.data)
 
     @extend_schema(
         request=GroupCreateSerializer,
-        responses={201: GroupSerializer},
+        responses={201: GroupDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Create public group",
@@ -177,7 +173,7 @@ class GroupListView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         group = serializer.save()
         return Response(
-            GroupSerializer(group, context={"request": request}).data,
+            GroupDisplaySerializer(group, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -186,7 +182,7 @@ class GroupDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={200: GroupSerializer},
+        responses={200: GroupDisplaySerializer},
         description="Retrieve details of a specific group.",
     )
     def get(self, request, group_id):
@@ -196,12 +192,12 @@ class GroupDetailView(APIView):
                 {"detail": "You do not have permission to view this group"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = GroupSerializer(group, context={"request": request})
+        serializer = GroupDisplaySerializer(group, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
-        request=GroupUpdateSerializer,
-        responses={200: GroupSerializer},
+        request=GroupCreateSerializer,
+        responses={200: GroupDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Update group",
@@ -216,8 +212,8 @@ class GroupDetailView(APIView):
         return self._update_group(request, group_id, partial=False)
 
     @extend_schema(
-        request=GroupUpdateSerializer,
-        responses={200: GroupSerializer},
+        request=GroupCreateSerializer,
+        responses={200: GroupDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Partial update",
@@ -239,7 +235,7 @@ class GroupDetailView(APIView):
                     {"detail": "Only admins can update group details"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
-        serializer = GroupUpdateSerializer(
+        serializer = GroupCreateSerializer(
             group, data=request.data, partial=partial, context={"request": request}
         )
         if not serializer.is_valid():
@@ -250,7 +246,7 @@ class GroupDetailView(APIView):
             logger.debug(e)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
-            GroupSerializer(updated_group, context={"request": request}).data
+            GroupDisplaySerializer(updated_group, context={"request": request}).data
         )
 
     @extend_schema(
@@ -304,12 +300,12 @@ class GroupMembersView(APIView):
         members = GroupMemberService.get_group_members(group)
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(members, request)
-        serializer = GroupMemberSerializer(page, many=True)
+        serializer = GroupMemberDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
         request=GroupMemberCreateSerializer,
-        responses={201: GroupMemberSerializer},
+        responses={201: GroupMemberDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Add member", value={"user_id": 42, "role": "member"}, request_only=True
@@ -342,7 +338,7 @@ class GroupMembersView(APIView):
         )
         if success:
             return Response(
-                GroupMemberSerializer(membership).data, status=status.HTTP_201_CREATED
+                GroupMemberDisplaySerializer(membership).data, status=status.HTTP_201_CREATED
             )
         return Response(
             {"detail": "User is already a member"}, status=status.HTTP_400_BAD_REQUEST
@@ -357,13 +353,8 @@ class GroupMembersView(APIView):
         description="Remove a user from the group. Requires appropriate permissions.",
     )
     @transaction.atomic
-    def delete(self, request, group_id):
+    def delete(self, request, group_id, user_id):
         group = get_object_or_404(Group, id=group_id)
-        serializer = RemoveMemberInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        user_id = serializer.validated_data["user_id"]
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
@@ -404,7 +395,7 @@ class GroupMemberRoleView(APIView):
 
     @extend_schema(
         request=GroupMemberUpdateSerializer,
-        responses={200: GroupMemberSerializer},
+        responses={200: GroupMemberDisplaySerializer},
         examples=[
             OpenApiExample("Update role", value={"role": "admin"}, request_only=True)
         ],
@@ -429,14 +420,14 @@ class GroupMemberRoleView(APIView):
         except Exception as e:
             logger.debug(e)
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(GroupMemberSerializer(membership).data)
+        return Response(GroupMemberDisplaySerializer(membership).data)
 
 
 class GroupJoinView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={201: GroupMemberSerializer},
+        responses={201: GroupMemberDisplaySerializer},
         description="Join a public group. For private groups, the user must be invited.",
     )
     @transaction.atomic
@@ -450,7 +441,7 @@ class GroupJoinView(APIView):
         )
         if success:
             return Response(
-                GroupMemberSerializer(membership).data, status=status.HTTP_201_CREATED
+                GroupMemberDisplaySerializer(membership).data, status=status.HTTP_201_CREATED
             )
         return Response(
             {"detail": "Already a member" if membership else "Failed to join"},
@@ -553,7 +544,7 @@ class GroupPrivacyView(APIView):
 
     @extend_schema(
         request=ChangePrivacyInputSerializer,  # ✅ Now using proper serializer
-        responses={200: GroupSerializer},
+        responses={200: GroupDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Change privacy", value={"privacy": "secret"}, request_only=True
@@ -577,7 +568,7 @@ class GroupPrivacyView(APIView):
         try:
             updated_group = GroupService.change_privacy(group, new_privacy)
             return Response(
-                GroupSerializer(updated_group, context={"request": request}).data
+                GroupDisplaySerializer(updated_group, context={"request": request}).data
             )
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -605,7 +596,7 @@ class GroupRecommendationsView(APIView):
         recommendations = GroupService.get_recommended_groups(
             user=request.user, limit=limit
         )
-        serializer = GroupSerializer(
+        serializer = GroupDisplaySerializer(
             recommendations, many=True, context={"request": request}
         )
         return Response(serializer.data)
@@ -642,7 +633,7 @@ class GroupPopularView(APIView):
         popular_groups = GroupService.get_popular_groups(
             min_members=min_members, days=days, limit=limit
         )
-        serializer = GroupSerializer(
+        serializer = GroupDisplaySerializer(
             popular_groups, many=True, context={"request": request}
         )
         return Response(serializer.data)
@@ -690,5 +681,5 @@ class GroupSearchMembersView(APIView):
         members = GroupMemberService.search_members(group=group, query=query)
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(members, request)
-        serializer = GroupMemberSerializer(page, many=True)
+        serializer = GroupMemberDisplaySerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)

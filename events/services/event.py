@@ -4,8 +4,7 @@ from django.db import transaction, IntegrityError
 from django.db.models import Q
 from typing import Optional, List, Dict, Any, Tuple
 import uuid
-
-from groups.models.base import Group
+from groups.models.group import Group
 from users.models.base import User
 from events.models import Event
 

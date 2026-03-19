@@ -23,6 +23,7 @@ urlpatterns = [
     path("<int:group_id>/", GroupDetailView.as_view(), name="group-detail"),
     # Group members management
     path("<int:group_id>/members/", GroupMembersView.as_view(), name="group-members"),
+    path("<int:group_id>/members/<int:user_id>/", GroupMembersView.as_view(), name="group-members-delete"),
     path(
         "<int:group_id>/members/<int:user_id>/role/",
         GroupMemberRoleView.as_view(),

@@ -1,11 +1,14 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
-
+from django.db.models import Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-
 from global_utils.pagination import UsersPagination
+from users.serializers.user import UserListSerializer
+from users.views.user import PaginatedUserListSerializer
 
 from ..services.user_follow import UserFollowService
 from ..services.user_activity import UserActivityService
@@ -19,27 +22,8 @@ from ..serializers.follow import (
 from django.db import transaction
 from ..models import User
 from rest_framework import serializers
-from ..serializers.follow import FollowerListSerializer, FollowingListSerializer
 
-
-class PaginatedFollowerListSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
-    page = serializers.IntegerField()
-    hasNext = serializers.BooleanField()
-    hasPrev = serializers.BooleanField()
-    next = serializers.URLField(allow_null=True)
-    previous = serializers.URLField(allow_null=True)
-    results = FollowerListSerializer(many=True)
-
-
-class PaginatedFollowingListSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
-    page = serializers.IntegerField()
-    hasNext = serializers.BooleanField()
-    hasPrev = serializers.BooleanField()
-    next = serializers.URLField(allow_null=True)
-    previous = serializers.URLField(allow_null=True)
-    results = FollowingListSerializer(many=True)
+logger = logging.getLogger(__name__)
 
 
 class FollowUserView(APIView):
@@ -74,19 +58,9 @@ class FollowUserView(APIView):
             data=request.data, context={"request": request}
         )
 
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             try:
                 follow = serializer.save()
-
-                UserActivityService.log_activity(
-                    user=request.user,
-                    action="follow",
-                    description=f"Started following user ID: {follow.following.id}",
-                    ip_address=request.META.get("REMOTE_ADDR"),
-                    user_agent=request.META.get("HTTP_USER_AGENT"),
-                    metadata={"following_id": follow.following.id},
-                )
-
                 return Response(
                     {
                         "message": f"Now following {follow.following.username}",
@@ -101,6 +75,7 @@ class FollowUserView(APIView):
                 )
 
             except Exception as e:
+                logger.error(e)
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
@@ -134,7 +109,7 @@ class UnfollowUserView(APIView):
             data=request.data, context={"request": request}
         )
 
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             try:
                 success = serializer.unfollow()
 
@@ -269,7 +244,7 @@ class FollowersListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedFollowerListSerializer},
+        responses={200: PaginatedUserListSerializer},
         description="List followers of a user (paginated).",
     )
     def get(self, request, user_id=None):
@@ -283,7 +258,7 @@ class FollowersListView(APIView):
 
             paginator = UsersPagination()
             page = paginator.paginate_queryset(followers, request)
-            serializer = FollowerListSerializer(
+            serializer = UserListSerializer(
                 page, many=True, context={"request": request, "following": user}
             )
             return paginator.get_paginated_response(serializer.data)
@@ -293,6 +268,7 @@ class FollowersListView(APIView):
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            logger.debug(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -319,7 +295,7 @@ class FollowingListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedFollowingListSerializer},
+        responses={200: PaginatedUserListSerializer},
         description="List users followed by a user (paginated).",
     )
     def get(self, request, user_id=None):
@@ -333,7 +309,7 @@ class FollowingListView(APIView):
 
             paginator = UsersPagination()
             page = paginator.paginate_queryset(following, request)
-            serializer = FollowingListSerializer(
+            serializer = UserListSerializer(
                 page, many=True, context={"request": request, "follower": user}
             )
             return paginator.get_paginated_response(serializer.data)
@@ -352,7 +328,18 @@ class MutualFollowsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={200: {"type": "object"}},
+        parameters=[
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: PaginatedUserListSerializer},
         description="Get mutual followers between the current user and another user.",
     )
     def get(self, request, user_id):
@@ -363,20 +350,15 @@ class MutualFollowsView(APIView):
                 user1=request.user, user2=other_user
             )
 
-            from ..serializers.user import UserListSerializer
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(mutual_follows, request)
 
             serializer = UserListSerializer(
-                mutual_follows, many=True, context={"request": request}
+                page, many=True, context={"request": request}
             )
 
-            return Response(
-                {
-                    "user1_id": request.user.id,
-                    "user2_id": other_user.id,
-                    "count": len(mutual_follows),
-                    "mutual_follows": serializer.data,
-                }
-            )
+            # Return standard paginated response matching PaginatedUserListSerializer
+            return paginator.get_paginated_response(serializer.data)
 
         except User.DoesNotExist:
             return Response(
@@ -394,13 +376,19 @@ class SuggestedUsersView(APIView):
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                name="limit",
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
                 type=int,
-                description="Number of suggestions (default 10)",
+                description="Results per page",
                 required=False,
             ),
+            OpenApiParameter(
+                name="limit", type=int, description="Suggested Limit Number", required=False
+            ),
         ],
-        responses={200: {"type": "object"}},
+        responses={200: PaginatedUserListSerializer},
         description="Get suggested users to follow based on mutual connections.",
     )
     def get(self, request):
@@ -409,16 +397,90 @@ class SuggestedUsersView(APIView):
             suggested_users = UserFollowService.get_suggested_users(
                 user=request.user, limit=limit
             )
-
-            from ..serializers.user import UserListSerializer
-
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(suggested_users, request)
             serializer = UserListSerializer(
-                suggested_users, many=True, context={"request": request}
+                page, many=True, context={"request": request}
             )
 
-            return Response(
-                {"count": len(suggested_users), "suggested_users": serializer.data}
-            )
+            return paginator.get_paginated_response(serializer.data)
 
         except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MutualFriendsView(APIView):
+    """View for getting mutual friends of the current user (users who follow you back)"""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: PaginatedUserListSerializer},
+        description="Get paginated list of users who are mutual followers (you follow them and they follow you).",
+    )
+    def get(self, request):
+        try:
+            following = UserFollowService.get_following(request.user)
+            followers = UserFollowService.get_followers(request.user)
+
+            mutual_friends = following.filter(id__in=followers.values("id"))
+
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(mutual_friends, request)
+            serializer = UserListSerializer(
+                page, many=True, context={"request": request, "follower": request.user}
+            )
+            return paginator.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            logger.error(e)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PopularUsersView(APIView):
+    """View for getting popular users (most followed) with pagination"""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
+            ),
+        ],
+        responses={200: PaginatedUserListSerializer},
+        description="Get paginated list of users ordered by follower count (descending).",
+    )
+    def get(self, request):
+        try:
+            popular_users = User.objects.annotate(
+                follower_count=Count("followers")
+            ).order_by("-follower_count")
+
+            paginator = UsersPagination()
+            page = paginator.paginate_queryset(popular_users, request)
+            serializer = UserListSerializer(
+                page, many=True, context={"request": request, "follower": request.user}
+            )
+            return paginator.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            logger.error(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -3,7 +3,13 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q, Count
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import Post, PostMedia, User
+
+from feed.serializers.base import PostStatisticsSerializer
+from groups.services.group import GroupService
+from groups.services.group_member import GroupMemberService
+from users.models.base import User
+from users.services.user_follow import UserFollowService
+from ..models import Post, PostMedia
 import uuid
 
 
@@ -48,12 +54,27 @@ class PostService:
             raise ValidationError(f"Failed to create post: {str(e)}")
     
     @staticmethod
-    def get_post_by_id(post_id: int) -> Optional[Post]:
-        """Retrieve post by ID"""
+    def get_post_by_id(post_id: int, requesting_user: Optional[User] = None) -> Optional[Post]:
         try:
-            return Post.objects.get(id=post_id, is_deleted=False)
+            post = Post.objects.get(id=post_id, is_deleted=False)
         except Post.DoesNotExist:
             return None
+
+        # Kung may group, i-verify kung pwedeng makita ng requesting_user
+        if post.group:
+            if not GroupService.is_user_allowed_to_view(requesting_user, post.group):
+                return None
+            # O kaya i-check ang privacy ng post sa loob ng group
+            # (depende sa implementation)
+        else:
+            # Personal post: i-check kung public o following
+            if post.privacy == 'public':
+                return post
+            if requesting_user and (post.user == requesting_user or UserFollowService.is_following(requesting_user, post.user)):
+                return post
+            return None
+
+        return post
     
     @staticmethod
     def get_user_posts(
@@ -85,23 +106,24 @@ class PostService:
         return list(queryset.order_by('-created_at')[offset:offset + limit])
     
     @staticmethod
-    def get_feed_posts(
-        user: User,
-        limit: int = 50,
-        offset: int = 0
-    ) -> List[Post]:
-        """Get personalized feed posts for a user"""
-        from users.services import UserFollowService
-        
-        # Get users that the current user follows
+    def get_feed_posts(user: User, limit=50, offset=0) -> List[Post]:
+        from groups.services import GroupMemberService
+
         following_users = UserFollowService.get_following(user)
-        
-        # Get posts from followed users and user's own posts
+        user_groups = GroupMemberService.get_user_groups(user)
+
         feed_posts = Post.objects.filter(
-            Q(user__in=following_users) | Q(user=user),
+            (
+                Q(user__in=following_users) | Q(user=user),
+                Q(group__isnull=True)
+            ) |
+            (
+                Q(group__in=user_groups),
+                Q(group__isnull=False)
+            ),
             is_deleted=False
-        ).select_related('user').order_by('-created_at')[offset:offset + limit]
-        
+        ).select_related("user", "group").order_by("-created_at")[offset:offset+limit]
+
         return list(feed_posts)
     
     @staticmethod
@@ -170,17 +192,19 @@ class PostService:
         return list(queryset.order_by('-created_at')[offset:offset + limit])
     
     @staticmethod
-    def get_post_statistics(post: Post) -> Dict[str, Any]:
+    def get_post_statistics(post: Post) -> PostStatisticsSerializer:
         """Get statistics for a post"""
         from .comment import CommentService
-        from .like import LikeService
+        from .reaction import ReactionService
         
         comment_count = CommentService.get_post_comment_count(post)
-        like_count = LikeService.get_like_count('post', post.id)
+        like_count = ReactionService.get_like_count('post', post.id)
+        reaction_count = ReactionService.get_reaction_counts('post', post.id)
         
         return {
             'post_id': post.id,
             'comment_count': comment_count,
+            'reaction_count': reaction_count,
             'like_count': like_count,
             'created_at': post.created_at,
             'updated_at': post.updated_at,
@@ -215,7 +239,7 @@ class PostService:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """Get trending posts (most liked within a time period)"""
-        from .like import LikeService
+        from .reaction import ReactionService
         
         time_threshold = timezone.now() - timezone.timedelta(hours=hours)
         
@@ -229,7 +253,7 @@ class PostService:
         # Calculate like counts and filter
         trending = []
         for post in recent_posts:
-            like_count = LikeService.get_like_count('post', post.id)
+            like_count = ReactionService.get_like_count('post', post.id)
             if like_count >= min_likes:
                 trending.append({
                     'post': post,
@@ -255,3 +279,29 @@ class PostService:
         old_deleted_posts.delete()
         
         return count
+    
+    
+    @staticmethod
+    def share_post_to_group(user: User, original_post: Post, group, caption: str = '') -> Post:
+        """Share an existing post to a group, creating a new post in that group."""
+        # Check if user can post in group
+        if not GroupMemberService.is_member(group, user):
+            raise ValidationError("You must be a member of the group to share posts here.")
+
+        # Original post must not be deleted
+        if original_post.is_deleted:
+            raise ValidationError("Cannot share a deleted post.")
+
+        try:
+            with transaction.atomic():
+                shared_post = Post.objects.create(
+                    user=user,
+                    group=group,
+                    content=caption,           # optional caption from sharer
+                    post_type='share',
+                    privacy='public',           # group posts are visible per group rules
+                    shared_post=original_post,
+                )
+                return shared_post
+        except IntegrityError as e:
+            raise ValidationError(f"Failed to share post: {str(e)}")

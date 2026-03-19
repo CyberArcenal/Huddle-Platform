@@ -1,56 +1,81 @@
 import logging
+from typing import Dict, Any, List, Optional
 
 from django.core.exceptions import ValidationError
-from typing import Dict, Any, Optional, List
 from rest_framework import serializers
-from feed.models.base import Comment, Like, Post, PostMedia
 
-from feed.serializers.comment import CommentSerializer
+from feed.models.base import Post
+from feed.models.reaction import ReactionType
+from feed.serializers.base import (
+    PostStatisticsSerializer,
+    PostStatsSerializers,
+    ReactionCountSerializer,
+)
 from feed.services.comment import CommentService
-from feed.services.like import LikeService
-from feed.services.post import PostService
-from users.serializers.user import UserMinimalSerializer, UserProfileSerializer
+from feed.services.reaction import ReactionService
+
+from groups.models.group import Group
+from groups.serializers.group import GroupMinimalSerializer
+from users.serializers.user import UserMinimalSerializer, UserMinimalSerializer
+
+from .comment import CommentDisplaySerializer
+from .post_media import PostMediaDisplaySerializer, PostMediaCreateSerializer
 
 logger = logging.getLogger(__name__)
 
 
-class PostMediaSerializer(serializers.ModelSerializer):
-    """Serializer for post media (images/videos)"""
+class PostMinimalSerializer(serializers.ModelSerializer):
+    """Lightweight list view for posts."""
 
-    file_url = serializers.SerializerMethodField()
+    user = UserMinimalSerializer(read_only=True)
+    group = GroupMinimalSerializer(read_only=True)
+    preview = serializers.SerializerMethodField()
+    media_preview = serializers.SerializerMethodField()
 
     class Meta:
-        model = PostMedia
-        fields = ["id", "file", "file_url", "order", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        model = Post
+        fields = [
+            "id",
+            "user",
+            "preview",
+            "post_type",
+            "privacy",
+            "group",
+            "created_at",
+            "media_preview",
+        ]
+        read_only_fields = fields
 
-    def get_file_url(self, obj: PostMedia) -> Optional[str]:
-        request = self.context.get('request', None)
-        if request:
-            return request.build_absolute_uri(obj.file.url)
-        elif obj.file:
-            return obj.file.url
+    def get_preview(self, obj) -> str:
+        return (
+            obj.content[:150] + ("..." if len(obj.content) > 150 else "")
+            if obj.content
+            else ""
+        )
+
+    def get_media_preview(self, obj) -> PostMediaDisplaySerializer:
+        first_media = obj.media.first()
+        if first_media:
+            return PostMediaDisplaySerializer(first_media, context=self.context).data
         return None
 
 
-# FOR SCHEMA ONLY
 class PostCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating a new post. Accepts multiple media files."""
+    """Serializer for creating a new post."""
 
-    content = serializers.CharField(
-        required=False,
-        allow_blank=True,
-    )
+    content = serializers.CharField(required=False, allow_blank=True)
     media_files = serializers.ListField(
         child=serializers.FileField(), write_only=True, required=False, allow_empty=True
+    )
+    group = serializers.PrimaryKeyRelatedField(
+        queryset=Group.objects.all(), required=False, allow_null=True
     )
 
     class Meta:
         model = Post
-        fields = ["content", "post_type", "privacy", "media_files"]
+        fields = ["content", "group", "post_type", "privacy", "media_files"]
 
     def validate(self, data):
-        logger.debug(data)
         post_type = data.get("post_type", "text")
         media_files = data.get("media_files", [])
 
@@ -70,18 +95,17 @@ class PostCreateSerializer(serializers.ModelSerializer):
             )
         return data
 
-    def create(self, validated_data: Dict[str, Any]) -> Post:
-        """Create a post using PostService (should handle media via separate method)"""
-        # Note: This method is rarely used because we use PostCreateSerializer for creation.
-        # Kept for completeness, but media creation would need to be handled separately.
+    def create(self, validated_data):
+        from feed.services.post import PostService
+
         request = self.context.get("request")
         if not request:
-            raise Exception("Request not provided")
-        # For simple text-only creation (no media), we can still use this.
+            raise serializers.ValidationError("Request object required.")
+
         try:
             post = PostService.create_post(
                 user=request.user,
-                content=validated_data["content"],
+                content=validated_data.get("content", ""),
                 post_type=validated_data.get("post_type", "text"),
                 media_files=validated_data.get("media_files", []),
                 privacy=validated_data.get("privacy", "followers"),
@@ -90,8 +114,9 @@ class PostCreateSerializer(serializers.ModelSerializer):
         except ValidationError as e:
             raise serializers.ValidationError(str(e))
 
-    def update(self, instance: Post, validated_data: Dict[str, Any]) -> Post:
-        """Update a post (media updates not handled here)"""
+    def update(self, instance, validated_data):
+        from feed.services.post import PostService
+
         try:
             updated_post = PostService.update_post(
                 post=instance, update_data=validated_data
@@ -101,26 +126,27 @@ class PostCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(str(e))
 
 
-# //FOR DETAILS
-class PostSerializer(serializers.ModelSerializer):
-    """Serializer for Post model with multiple media"""
+class PostDisplaySerializer(serializers.ModelSerializer):
+    """Detailed view for a single post."""
 
-    content = serializers.CharField(
-        required=False,
-        allow_blank=True,
-    )
     user = UserMinimalSerializer(read_only=True)
-    media = serializers.SerializerMethodField()
+    group = GroupMinimalSerializer(read_only=True, allow_null=True)
+    shared_post = serializers.SerializerMethodField()
+    media = PostMediaDisplaySerializer(many=True, read_only=True)
     comments = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
+    reaction_counts = serializers.SerializerMethodField()
+    user_reaction = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = [
             "id",
             "user",
+            "shared_post",
+            "group",
             "content",
             "post_type",
             "media",
@@ -132,59 +158,77 @@ class PostSerializer(serializers.ModelSerializer):
             "comment_count",
             "like_count",
             "liked",
+            "reaction_counts",
+            "user_reaction",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
-        
-    def get_media(self, obj) -> Optional[List[Dict[str, Any]]]:
-        return PostMediaSerializer(obj.media, many=True).data
     
-    def get_comments(self, obj: Post) -> List[Dict[str, Any]]:
-        """Get top-level comments for this post"""
-        comments = CommentService.get_post_comments(
-            post=obj, include_replies=False, limit=10
+    def get_shared_post(self, obj) -> PostMinimalSerializer:
+        if obj.shared_post:
+            return PostMinimalSerializer(obj.shared_post, context=self.context).data
+        return None
+
+    def get_comments(self, obj) -> CommentDisplaySerializer(many=True):  # type: ignore
+        comments = CommentService.get_comments_for_object(
+            content_object=obj, include_replies=False, limit=10
         )
-        return CommentSerializer(comments, many=True, context=self.context).data
+        return CommentDisplaySerializer(comments, many=True, context=self.context).data
 
-    def get_comment_count(self, obj: Post) -> int:
-        return CommentService.get_post_comment_count(obj)
+    def get_comment_count(self, obj) -> int:
+        return CommentService.get_comment_count(obj)
 
-    def get_like_count(self, obj: Post) -> int:
-        return LikeService.get_like_count("post", obj.id)
+    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
+        return ReactionService.get_reaction_counts("post", obj.id)
 
-    def get_liked(self, obj: Post) -> bool:
+    def get_user_reaction(self, obj) -> Optional[ReactionType]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return LikeService.has_liked(
+            return ReactionService.get_user_reaction(request.user, "post", obj.id)
+        return None
+
+    def get_like_count(self, obj) -> int:
+        return ReactionService.get_like_count("post", obj.id)
+
+    def get_liked(self, obj) -> bool:
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            return ReactionService.has_liked(
                 user=request.user, content_type="post", object_id=obj.id
             )
         return False
 
 
-class PostDetailSerializer(PostSerializer):
-    """Extended serializer for detailed post view with statistics"""
+class PostDetailSerializer(PostDisplaySerializer):
+    """Extended view with additional statistics."""
 
     statistics = serializers.SerializerMethodField()
 
-    class Meta(PostSerializer.Meta):
-        fields = PostSerializer.Meta.fields + ["statistics"]
+    class Meta(PostDisplaySerializer.Meta):
+        fields = PostDisplaySerializer.Meta.fields + ["statistics"]
 
-    def get_statistics(self, obj: Post) -> Dict[str, Any]:
+    def get_statistics(self, obj) -> PostStatisticsSerializer:
+        from feed.services.post import PostService
+
         return PostService.get_post_statistics(obj)
 
 
 class PostFeedSerializer(serializers.ModelSerializer):
-    """Serializer for post feed (optimized for listing)"""
+    """Optimized for feed listings."""
 
-    user = UserProfileSerializer(read_only=True)
+    user = UserMinimalSerializer(read_only=True)
+    group = GroupMinimalSerializer(read_only=True, allow_null=True)
+    shared_post = serializers.SerializerMethodField()
     preview = serializers.SerializerMethodField()
     statistics = serializers.SerializerMethodField()
-    media = PostMediaSerializer(many=True, read_only=True)
+    media = PostMediaDisplaySerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
         fields = [
             "id",
             "user",
+            "shared_post",
+            "group",
             "content",
             "post_type",
             "media",
@@ -193,58 +237,35 @@ class PostFeedSerializer(serializers.ModelSerializer):
             "statistics",
         ]
 
-    def get_preview(self, obj: Post) -> str:
+    def get_preview(self, obj) -> str:
         if obj.content:
             return obj.content[:150] + ("..." if len(obj.content) > 150 else "")
         return ""
+    
+    def get_shared_post(self, obj) -> PostMinimalSerializer:
+        if obj.shared_post:
+            return PostMinimalSerializer(obj.shared_post, context=self.context).data
+        return None
 
-    def get_statistics(self, obj: Post) -> Dict[str, Any]:
-        """Get basic statistics for feed"""
+    def get_statistics(self, obj) -> PostStatsSerializers:
         request = self.context.get("request")
         return {
-            "comment_count": CommentService.get_post_comment_count(obj),
-            "like_count": LikeService.get_like_count("post", obj.id),
+            "comment_count": CommentService.get_comment_count(obj),
+            "like_count": ReactionService.get_like_count("post", obj.id),
             "privacy": obj.privacy,
-            "comments": CommentSerializer(
-                CommentService.get_post_comments(obj, limit=10), many=True
+            "reaction_count": ReactionService.get_reaction_counts("post", obj.id),
+            "comments": CommentDisplaySerializer(
+                CommentService.get_comments_for_object(obj, limit=10),
+                many=True,
+                context=self.context,
             ).data,
             "liked": (
-                LikeService.has_liked(
+                ReactionService.has_liked(
                     user=request.user, content_type="post", object_id=obj.id
                 )
                 if request and request.user.is_authenticated
                 else False
             ),
         }
-
-
-# The following serializers remain unchanged as they don't directly involve media fields.
-class PostStatisticsSerializer(serializers.Serializer):
-    post_id = serializers.IntegerField()
-    comment_count = serializers.IntegerField()
-    like_count = serializers.IntegerField()
-    created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-    privacy = serializers.BooleanField()
-    post_type = serializers.CharField()
-
-
-class UserPostStatisticsSerializer(serializers.Serializer):
-    total_posts = serializers.IntegerField()
-    public_posts = serializers.IntegerField()
-    private_posts = serializers.IntegerField()
-    type_breakdown = serializers.ListField()
-    first_post_date = serializers.DateTimeField(allow_null=True)
-
-
-class SearchSerializer(serializers.Serializer):
-    query = serializers.CharField(required=True, max_length=255)
-    post_type = serializers.CharField(required=False, allow_null=True)
-    limit = serializers.IntegerField(default=20, min_value=1, max_value=100)
-    offset = serializers.IntegerField(default=0, min_value=0)
-
-
-class TrendingPostsSerializer(serializers.Serializer):
-    post = PostSerializer()
-    like_count = serializers.IntegerField()
-    comment_count = serializers.IntegerField()
+    
+    

@@ -1,6 +1,6 @@
 # feed/state_transition_service/post.py (updated)
 
-from feed.services import CommentService, LikeService
+from feed.services import CommentService
 from feed.services.feed import FeedService
 from feed.services.logging import log_post_deleted, log_post_restored
 from notifications.services.notification import NotificationService

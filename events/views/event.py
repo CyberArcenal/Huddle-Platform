@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
+from events.serializers.event import EventUpdateSerializer
 from global_utils.pagination import EventsPagination
 
 from ..models import Event
@@ -226,8 +227,8 @@ class EventDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        request=EventSerializer,
-        responses={200: EventSerializer},
+        request=EventUpdateSerializer,
+        responses={200: EventDetailSerializer},
         examples=[
             OpenApiExample(
                 "Full update",
@@ -256,13 +257,14 @@ class EventDetailView(APIView):
                 detail="Only the event organizer can update the event"
             )
 
-        serializer = EventSerializer(
+        serializer = EventUpdateSerializer(
             event, data=request.data, partial=False, context={"request": request}
         )
 
         if serializer.is_valid():
             try:
-                serializer.save()
+                event = serializer.save()
+                serializer = EventDetailSerializer(event, context={"request": request})
                 return Response(serializer.data)
             except DjangoValidationError as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -270,8 +272,8 @@ class EventDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
-        request=EventSerializer,
-        responses={200: EventSerializer},
+        request=EventUpdateSerializer,
+        responses={200: EventDetailSerializer},
         examples=[
             OpenApiExample(
                 "Partial update", value={"title": "New Title Only"}, request_only=True
@@ -289,13 +291,14 @@ class EventDetailView(APIView):
                 detail="Only the event organizer can update the event"
             )
 
-        serializer = EventSerializer(
+        serializer = EventUpdateSerializer(
             event, data=request.data, partial=True, context={"request": request}
         )
 
         if serializer.is_valid():
             try:
-                serializer.save()
+                event = serializer.save()
+                serializer = EventDetailSerializer(event, context={"request": request})
                 return Response(serializer.data)
             except DjangoValidationError as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
