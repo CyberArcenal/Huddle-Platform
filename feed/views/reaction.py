@@ -24,6 +24,7 @@ from feed.serializers.reaction import (
 from feed.services.reaction import ReactionService
 from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
+from users.serializers.user import UserMinimalSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -38,20 +39,24 @@ class PaginatedLikeSerializer(serializers.Serializer):
     previous = serializers.URLField(allow_null=True)
     results = LikeDisplaySerializer(many=True)
 
+
 class LikeCheckResponseSerializer(serializers.Serializer):
     has_liked = serializers.BooleanField()
-    reaction = serializers.CharField(allow_null=True)
+    user_reaction = serializers.ChoiceField(choices=REACTION_TYPES)
     like_count = serializers.IntegerField()
     counts = ReactionCountSerializer()
     content_type = serializers.CharField()
     object_id = serializers.IntegerField()
-    
-    
+
+
 class ReactionResponseSerializer(serializers.Serializer):
     """Response serializer for ReactionView."""
+
     reacted = serializers.BooleanField()
     reaction_type = serializers.ChoiceField(choices=REACTION_TYPES, allow_null=True)
     counts = ReactionCountSerializer()
+
+
 # --------------------------------------------------------------
 
 
@@ -76,7 +81,8 @@ class LikeListView(APIView):
     )
     def get(self, request):
         content_type = request.query_params.get("content_type")
-        # Only return reactions with reaction_type='like'
+        # Get all reactions of type 'like' for the user
+        # The service method `get_user_reactions` now supports optional content_type and reaction_type filters
         likes = ReactionService.get_user_reactions(
             user=request.user, content_type=content_type, reaction_type="like"
         )
@@ -137,6 +143,12 @@ class ReactionView(APIView):
         return Response(serializer.errors, status=400)
 
 
+class LikeToggleResponseSerializer(serializers.Serializer):
+    """Schema for the response of like toggle."""
+    liked = serializers.BooleanField(read_only=True)
+    like_count = serializers.IntegerField(read_only=True)
+    message = serializers.CharField(read_only=True)
+
 class LikeToggleView(APIView):
     """Toggle like on an object (add or remove)."""
 
@@ -144,16 +156,7 @@ class LikeToggleView(APIView):
 
     @extend_schema(
         request=LikeToggleSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "liked": {"type": "boolean"},
-                    "like_count": {"type": "integer"},
-                    "message": {"type": "string"},
-                },
-            }
-        },
+        responses=LikeToggleResponseSerializer,
         examples=[
             OpenApiExample(
                 "Toggle like request",
@@ -174,14 +177,13 @@ class LikeToggleView(APIView):
             data=request.data, context={"request": request}
         )
         if serializer.is_valid():
-            result = serializer.save()  # returns dict with liked, like, count
-            return Response(
-                {
-                    "liked": result["liked"],
-                    "like_count": result["count"],
-                    "message": "Liked" if result["liked"] else "Unliked",
-                }
-            )
+            result = serializer.save()  # returns dict with liked, count
+            response_data = {
+                "liked": result["liked"],
+                "like_count": result["count"],
+                "message": "Liked" if result["liked"] else "Unliked",
+            }
+            return Response(LikeToggleResponseSerializer(response_data).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -222,8 +224,10 @@ class LikeDetailView(APIView):
                 {"error": "You do not have permission to delete this like"},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # Get the model name from the ContentType instance
+        content_type = like.content_type.model
         success = ReactionService.remove_like(
-            user=request.user, content_type=like.content_type, object_id=like.object_id
+            user=request.user, content_type=content_type, object_id=like.object_id
         )
         if success:
             return Response({"message": "Like removed successfully"})
@@ -247,13 +251,7 @@ class ObjectLikesView(APIView):
         description="Get all likes for a specific object.",
     )
     def get(self, request, content_type, object_id):
-        if content_type not in ReactionService.CONTENT_TYPES:
-            return Response(
-                {
-                    "error": f"Invalid content type. Must be one of {ReactionService.CONTENT_TYPES}"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Optional: validate content type via service (will raise ValidationError if invalid)
         # Check privacy if needed (same as before)
         if content_type == "post":
             post = get_object_or_404(Post, id=object_id)
@@ -264,6 +262,7 @@ class ObjectLikesView(APIView):
                 )
         elif content_type == "comment":
             comment = get_object_or_404(Comment, id=object_id)
+            # Assuming Comment has a 'post' relation
             if (
                 not comment.post.privacy == "public"
                 and request.user != comment.post.user
@@ -288,41 +287,41 @@ class ObjectLikesView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
 
-
-
-
 class LikeCheckView(APIView):
     """Check if the authenticated user has liked an object, and get total like count."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={200: {LikeCheckResponseSerializer}},
+        responses={200: LikeCheckResponseSerializer},
         description="Check if the authenticated user has liked a specific object, and get total like count.",
     )
     def get(self, request, content_type, object_id):
-        if content_type not in ReactionService.CONTENT_TYPES:
-            return Response(
-                {
-                    "error": f"Invalid content type. Must be one of {ReactionService.CONTENT_TYPES}"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Service will validate content_type
         has_liked = ReactionService.has_liked(
             user=request.user, content_type=content_type, object_id=object_id
         )
         like_count = ReactionService.get_like_count(content_type, object_id)
         reaction_counts = ReactionService.get_reaction_counts(content_type, object_id)
+        user_reaction = ReactionService.get_user_reaction(request.user, "post", object_id)
         return Response(
             {
                 "has_liked": has_liked,
                 "like_count": like_count,
+                "user_reaction": user_reaction,
                 "counts": reaction_counts,
                 "content_type": content_type,
                 "object_id": object_id,
             }
         )
 
+
+
+class RecentLikersResponseSerializer(serializers.Serializer):
+    """Schema for recent likers of a content object."""
+    content_type = serializers.CharField(read_only=True)
+    object_id = serializers.IntegerField(read_only=True)
+    recent_likers = UserMinimalSerializer(many=True, read_only=True)
 
 class RecentLikersView(APIView):
     """Get a list of users who recently liked an object."""
@@ -333,36 +332,19 @@ class RecentLikersView(APIView):
         parameters=[
             OpenApiParameter(name="limit", type=int, required=False),
         ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "content_type": {"type": "string"},
-                    "object_id": {"type": "integer"},
-                    "recent_likers": {"type": "array", "items": {"type": "object"}},
-                },
-            }
-        },
+        responses=RecentLikersResponseSerializer,
         description="Get a list of users who recently liked an object (limited).",
     )
     def get(self, request, content_type, object_id):
-        if content_type not in ReactionService.CONTENT_TYPES:
-            return Response(
-                {
-                    "error": f"Invalid content type. Must be one of {ReactionService.CONTENT_TYPES}"
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         # Check privacy
         if content_type == "post":
             post = get_object_or_404(Post, id=object_id)
             if not post.privacy == "public" and request.user != post.user:
                 return Response(
-                    {
-                        "error": "You do not have permission to view likers for this post"
-                    },
+                    {"error": "You do not have permission to view likers for this post"},
                     status=status.HTTP_403_FORBIDDEN,
                 )
+
         limit = int(request.query_params.get("limit", 10))
         recent_likers = ReactionService.get_recent_reactors(
             content_type=content_type,
@@ -370,19 +352,34 @@ class RecentLikersView(APIView):
             reaction_type="like",
             limit=limit,
         )
-        from users.serializers import UserSerializer
 
-        serializer = UserSerializer(
-            recent_likers, many=True, context={"request": request}
-        )
-        return Response(
-            {
-                "content_type": content_type,
-                "object_id": object_id,
-                "recent_likers": serializer.data,
-            }
-        )
+        serializer = UserMinimalSerializer(recent_likers, many=True, context={"request": request})
+        response_data = {
+            "content_type": content_type,
+            "object_id": object_id,
+            "recent_likers": serializer.data,
+        }
+        return Response(RecentLikersResponseSerializer(response_data).data)
 
+
+
+class MostLikedContentItemSerializer(serializers.Serializer):
+    """Schema for a single most liked content item."""
+    type = serializers.CharField(read_only=True)          # "post" or "comment"
+    object_id = serializers.IntegerField(read_only=True)
+    like_count = serializers.IntegerField(read_only=True)
+
+    # Optional nested serializers depending on content_type
+    post = serializers.DictField(read_only=True, required=False)
+    comment = serializers.DictField(read_only=True, required=False)
+
+
+class MostLikedContentResponseSerializer(serializers.Serializer):
+    """Schema for the response of most liked content."""
+    content_type = serializers.CharField(read_only=True)   # "post" or "comment"
+    timeframe_days = serializers.IntegerField(read_only=True)
+    results = MostLikedContentItemSerializer(many=True, read_only=True)
+    
 
 class MostLikedContentView(APIView):
     """Get the most liked content (posts or comments) within a time period."""
@@ -394,16 +391,7 @@ class MostLikedContentView(APIView):
             OpenApiParameter(name="days", type=int, required=False),
             OpenApiParameter(name="limit", type=int, required=False),
         ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "content_type": {"type": "string"},
-                    "timeframe_days": {"type": "integer"},
-                    "results": {"type": "array"},
-                },
-            }
-        },
+        responses=MostLikedContentResponseSerializer,
         description="Get the most liked content (posts or comments) within a time period.",
     )
     def get(self, request, content_type):
@@ -412,6 +400,7 @@ class MostLikedContentView(APIView):
                 {"error": 'Content type must be either "post" or "comment"'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         days = int(request.query_params.get("days", 7))
         limit = int(request.query_params.get("limit", 10))
 
@@ -428,23 +417,33 @@ class MostLikedContentView(APIView):
             }
             if content_type == "post":
                 from feed.serializers.post import PostFeedSerializer
-
                 result["post"] = PostFeedSerializer(item["object"]).data
             elif content_type == "comment":
                 from feed.serializers.comment import CommentMinimalSerializer
-
                 result["comment"] = CommentMinimalSerializer(item["object"]).data
             results.append(result)
 
-        return Response(
-            {
-                "content_type": content_type,
-                "timeframe_days": days,
-                "results": results,
-            }
-        )
+        response_data = {
+            "content_type": content_type,
+            "timeframe_days": days,
+            "results": results,
+        }
+        return Response(MostLikedContentResponseSerializer(response_data).data)
 
 
+
+class UserLikeStatisticsSerializer(serializers.Serializer):
+    """Schema for like statistics of a user."""
+
+    user_id = serializers.IntegerField(read_only=True)
+    total_likes_given = serializers.IntegerField(read_only=True)
+    total_likes_received = serializers.IntegerField(read_only=True)
+
+    # breakdown per content type (post, comment, story, reel, etc.)
+    type_breakdown = serializers.DictField(
+        child=serializers.IntegerField(), read_only=True
+    )
+    
 class UserLikeStatisticsView(APIView):
     """Get like statistics for a user."""
 
@@ -454,7 +453,7 @@ class UserLikeStatisticsView(APIView):
         parameters=[
             OpenApiParameter(name="user_id", type=int, required=False),
         ],
-        responses={200: {"type": "object"}},
+        responses=UserLikeStatisticsSerializer,
         description="Get like statistics for a user (total likes given, breakdown by type, etc.).",
     )
     def get(self, request, user_id=None):
@@ -468,37 +467,48 @@ class UserLikeStatisticsView(APIView):
         else:
             target_user = request.user
 
-        statistics = ReactionService.get_user_like_statistics(target_user)
-        return Response(statistics)
+        stats = ReactionService.get_user_reaction_statistics(target_user)
+        # enrich with user_id for schema consistency
+        response_data = {
+            "user_id": target_user.id,
+            **stats
+        }
+        return Response(UserLikeStatisticsSerializer(response_data).data)
 
 
+class MutualLikesStatsSerializer(serializers.Serializer):
+    """Counts of mutual likes per content type."""
+    post = serializers.IntegerField(read_only=True, required=False)
+    comment = serializers.IntegerField(read_only=True, required=False)
+    story = serializers.IntegerField(read_only=True, required=False)
+    reel = serializers.IntegerField(read_only=True, required=False)
+    total_mutual_likes = serializers.IntegerField(read_only=True)
+
+
+class MutualLikeResponse(serializers.Serializer):
+    """Response schema for mutual likes between two users."""
+    user1_id = serializers.IntegerField()
+    user2_id = serializers.IntegerField()
+    mutual_likes = MutualLikesStatsSerializer()
+    
+    
 class MutualLikesView(APIView):
     """Get mutual likes (posts/comments both users have liked) between the current user and another user."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "user1_id": {"type": "integer"},
-                    "user2_id": {"type": "integer"},
-                    "mutual_likes": {"type": "object"},
-                },
-            }
-        },
+        responses=MutualLikeResponse,
         description="Get mutual likes between the current user and another user.",
     )
     def get(self, request, user_id):
         other_user = get_object_or_404(User, id=user_id)
-        mutual_likes = ReactionService.get_mutual_likes(
+        mutual = ReactionService.get_mutual_reactions(
             user1=request.user, user2=other_user
         )
-        return Response(
-            {
-                "user1_id": request.user.id,
-                "user2_id": user_id,
-                "mutual_likes": mutual_likes,
-            }
-        )
+        response_data = {
+            "user1_id": request.user.id,
+            "user2_id": user_id,
+            "mutual_likes": mutual,
+        }
+        return Response(MutualLikeResponse(response_data).data)

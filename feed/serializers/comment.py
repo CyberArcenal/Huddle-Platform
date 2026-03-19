@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from feed.models.base import Comment, Post, User
 from feed.models.reaction import ReactionType
-from feed.serializers.base import ReactionCountSerializer
+
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
 from users.serializers.user import UserMinimalSerializer
@@ -18,6 +18,15 @@ from feed.models.base import Comment
 from feed.services.comment import CommentService
 from users.serializers.user import UserMinimalSerializer
 
+class ReactionCountSerializer(serializers.Serializer):
+    # dynamic fields per reaction type
+    like = serializers.IntegerField(default=0)
+    love = serializers.IntegerField(default=0)
+    care = serializers.IntegerField(default=0)
+    haha = serializers.IntegerField(default=0)
+    wow = serializers.IntegerField(default=0)
+    sad = serializers.IntegerField(default=0)
+    angry = serializers.IntegerField(default=0)
 
 class CommentMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for comments."""
@@ -39,10 +48,10 @@ class CommentMinimalSerializer(serializers.ModelSerializer):
             else ""
         )
 
-    def get_target_type(self, obj):
+    def get_target_type(self, obj) -> str:
         return obj.content_type.model
 
-    def get_target_id(self, obj):
+    def get_target_id(self, obj) -> int:
         return obj.object_id
 
 
@@ -121,29 +130,29 @@ class CommentDisplaySerializerNoReplies(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "is_deleted"]
 
-    def get_target_type(self, obj):
+    def get_target_type(self, obj) -> str:
         return obj.content_type.model
 
-    def get_target_id(self, obj):
+    def get_target_id(self, obj) -> int:
         return obj.object_id
 
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts("comment", obj.id)
+        return ReactionService.get_reaction_counts(obj, obj.id)
 
     def get_user_reaction(self, obj) -> Optional[ReactionType]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, "comment", obj.id)
+            return ReactionService.get_user_reaction(request.user, obj, obj.id)
         return None
 
     def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count("comment", obj.id)
+        return ReactionService.get_like_count(obj, obj.id)
 
     def get_liked(self, obj) -> bool:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             return ReactionService.has_liked(
-                user=request.user, content_type="comment", object_id=obj.id
+                user=request.user, content_type=obj, object_id=obj.id
             )
         return False
 
@@ -179,32 +188,32 @@ class CommentDisplaySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "is_deleted"]
 
-    def get_target_type(self, obj):
+    def get_target_type(self, obj) -> str:
         return obj.content_type.model
 
-    def get_target_id(self, obj):
+    def get_target_id(self, obj) -> int:
         return obj.object_id
 
-    def get_replies(self, obj) -> CommentDisplaySerializerNoReplies:
+    def get_replies(self, obj) -> CommentDisplaySerializerNoReplies(many=True): # type: ignore
         replies = CommentService.get_comment_replies(obj, limit=10)
         return CommentDisplaySerializerNoReplies(replies, many=True, context=self.context).data
 
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts("comment", obj.id)
+        return ReactionService.get_reaction_counts(obj, obj.id)
 
     def get_user_reaction(self, obj) -> Optional[ReactionType]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, "comment", obj.id)
+            return ReactionService.get_user_reaction(request.user, obj, obj.id)
         return None
 
     def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count("comment", obj.id)
+        return ReactionService.get_like_count(obj, obj.id)
 
     def get_liked(self, obj) -> bool:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             return ReactionService.has_liked(
-                user=request.user, content_type="comment", object_id=obj.id
+                user=request.user, content_type=obj, object_id=obj.id
             )
         return False

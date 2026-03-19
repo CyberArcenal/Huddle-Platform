@@ -40,6 +40,8 @@ class PaginatedShareFeedSerializer(serializers.Serializer):
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = ShareFeedSerializer(many=True)
+
+
 # --------------------------------------------------------------
 
 
@@ -75,7 +77,10 @@ class ShareListView(APIView):
                 name="page", type=int, description="Page number", required=False
             ),
             OpenApiParameter(
-                name="page_size", type=int, description="Results per page", required=False
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
             ),
         ],
         responses={200: PaginatedShareFeedSerializer},
@@ -86,14 +91,14 @@ class ShareListView(APIView):
         content_type_str = request.query_params.get("content_type")
         object_id = request.query_params.get("object_id")
 
-        shares = Share.objects.filter(is_deleted=False).select_related('user')
+        shares = Share.objects.filter(is_deleted=False).select_related("user")
 
         if user_id:
             shares = shares.filter(user_id=user_id)
 
         if content_type_str and object_id:
             try:
-                app_label, model = content_type_str.split('.')
+                app_label, model = content_type_str.split(".")
                 content_type = ContentType.objects.get(app_label=app_label, model=model)
                 shares = shares.filter(content_type=content_type, object_id=object_id)
             except (ValueError, ContentType.DoesNotExist):
@@ -102,7 +107,7 @@ class ShareListView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        shares = shares.order_by('-created_at')
+        shares = shares.order_by("-created_at")
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(shares, request)
@@ -128,7 +133,9 @@ class ShareListView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        serializer = ShareCreateSerializer(data=request.data, context={"request": request})
+        serializer = ShareCreateSerializer(
+            data=request.data, context={"request": request}
+        )
         if serializer.is_valid(raise_exception=True):
             share = serializer.save()
             return Response(
@@ -204,7 +211,9 @@ class ShareDetailView(APIView):
                 caption=caption,
                 privacy=privacy,
             )
-            serializer = ShareDisplaySerializer(updated_share, context={"request": request})
+            serializer = ShareDisplaySerializer(
+                updated_share, context={"request": request}
+            )
             return Response(serializer.data)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -275,7 +284,10 @@ class ShareObjectSharesView(APIView):
                 name="page", type=int, description="Page number", required=False
             ),
             OpenApiParameter(
-                name="page_size", type=int, description="Results per page", required=False
+                name="page_size",
+                type=int,
+                description="Results per page",
+                required=False,
             ),
         ],
         responses={200: PaginatedShareFeedSerializer},
@@ -292,7 +304,7 @@ class ShareObjectSharesView(APIView):
             )
 
         try:
-            app_label, model = content_type_str.split('.')
+            app_label, model = content_type_str.split(".")
             content_type = ContentType.objects.get(app_label=app_label, model=model)
         except (ValueError, ContentType.DoesNotExist):
             return Response(
@@ -300,16 +312,26 @@ class ShareObjectSharesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        shares = Share.objects.filter(
-            content_type=content_type,
-            object_id=object_id,
-            is_deleted=False
-        ).select_related('user').order_by('-created_at')
+        shares = (
+            Share.objects.filter(
+                content_type=content_type, object_id=object_id, is_deleted=False
+            )
+            .select_related("user")
+            .order_by("-created_at")
+        )
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(shares, request)
         serializer = ShareFeedSerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
+
+
+class UserShareStatisticsSerializer(serializers.Serializer):
+    total_shares = serializers.IntegerField(read_only=True)
+    type_breakdown = serializers.ListField(
+        child=serializers.DictField(), read_only=True
+    )
+    first_share_date = serializers.DateTimeField(read_only=True, allow_null=True)
 
 
 class ShareUserStatisticsView(APIView):
@@ -326,18 +348,7 @@ class ShareUserStatisticsView(APIView):
                 required=False,
             ),
         ],
-        responses={
-            200: inline_serializer(
-                name="UserShareStatistics",
-                fields={
-                    "total_shares": serializers.IntegerField(),
-                    "type_breakdown": serializers.ListField(
-                        child=serializers.DictField()
-                    ),
-                    "first_share_date": serializers.DateTimeField(allow_null=True),
-                },
-            )
-        },
+        responses={200: UserShareStatisticsSerializer},
         description="Get share statistics for a user.",
     )
     def get(self, request, user_id=None):
@@ -350,21 +361,18 @@ class ShareUserStatisticsView(APIView):
         return Response(stats)
 
 
+class ShareRestoreResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    share = ShareDisplaySerializer()
+
+
 class ShareRestoreView(APIView):
     """Restore a soft-deleted share."""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={
-            200: inline_serializer(
-                name="ShareRestoreResponse",
-                fields={
-                    "message": serializers.CharField(),
-                    "share": ShareDisplaySerializer(),
-                },
-            )
-        },
+        responses={200: ShareRestoreResponseSerializer},
         description="Restore a soft-deleted share (only owner).",
     )
     @transaction.atomic
@@ -382,7 +390,9 @@ class ShareRestoreView(APIView):
             return Response(
                 {
                     "message": "Share restored successfully.",
-                    "share": ShareDisplaySerializer(share, context={"request": request}).data,
+                    "share": ShareDisplaySerializer(
+                        share, context={"request": request}
+                    ).data,
                 }
             )
         return Response(

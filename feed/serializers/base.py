@@ -1,7 +1,6 @@
 from rest_framework import serializers
-
-from feed.models.reaction import LIKE_CONTENT_TYPES
 from feed.models.post import POST_TYPES
+from feed.models.reaction import REACTION_TYPES
 from feed.serializers.comment import CommentDisplaySerializer
 
 class ReactionCountSerializer(serializers.Serializer):
@@ -13,10 +12,6 @@ class ReactionCountSerializer(serializers.Serializer):
     wow = serializers.IntegerField(default=0)
     sad = serializers.IntegerField(default=0)
     angry = serializers.IntegerField(default=0)
-    
-
-    
-    
     
 class ReactionTypeBreakdownSerializer(serializers.Serializer):
     content_type = serializers.CharField()
@@ -34,7 +29,7 @@ class UserReactionStatisticsSerializer(serializers.Serializer):
     first_reaction_date = serializers.DateTimeField(allow_null=True)
 
 class MostReactedContentSerializer(serializers.Serializer):
-    type = serializers.ChoiceField(choices=[c[0] for c in LIKE_CONTENT_TYPES])
+    type = serializers.ChoiceField(choices=[c[0] for c in REACTION_TYPES])
     id = serializers.IntegerField()
     reaction_count = serializers.IntegerField()
     representation = serializers.StringRelatedField()
@@ -52,7 +47,7 @@ class ShareContentObjectData(serializers.Serializer):
     representation = serializers.StringRelatedField()
     
 class ContentObject(serializers.Serializer):
-    type = serializers.ChoiceField(choices=[c[0] for c in LIKE_CONTENT_TYPES])
+    type = serializers.ChoiceField(choices=[c[0] for c in REACTION_TYPES])
     id = serializers.IntegerField()
     content_preview = serializers.StringRelatedField()
     

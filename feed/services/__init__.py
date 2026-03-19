@@ -4,7 +4,6 @@ from .comment import CommentService
 from .reaction import ReactionService
 from .feed import FeedService
 from .reel import ReelService           # new
-from .reel_comment import ReelCommentService  # new
 from .share import ShareService
 
 __all__ = [
@@ -12,7 +11,5 @@ __all__ = [
     'CommentService',
     'ReactionService',
     'FeedService',
-    'ReelService',
-    'ReelCommentService',
     'ShareService'
 ]

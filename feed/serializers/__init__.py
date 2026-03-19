@@ -3,6 +3,7 @@ from .base import (
     TrendingPostsSerializer,
     PostStatisticsSerializer,
     UserPostStatisticsSerializer,
+    ReactionCountSerializer
 )
 from .comment import (
     CommentMinimalSerializer,

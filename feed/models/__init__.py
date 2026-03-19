@@ -4,7 +4,6 @@ from .comment import Comment
 from .reaction import Reaction
 from .post_media import PostMedia
 from .reel import Reel          # new
-from .reel_comment import ReelComment  # new
 from .share import Share
 
 __all__ = [

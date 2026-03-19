@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 
 from feed.models.reaction import ReactionType
 from feed.serializers.base import ReactionCountSerializer
+from feed.serializers.comment import CommentDisplaySerializer
+from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
 from stories.models.base import Story, StoryView
 from stories.services.story import StoryService
@@ -27,6 +29,9 @@ class StorySerializer(serializers.ModelSerializer):
     is_expired = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
     
+    comments = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
+    
     like_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
     reaction_counts = serializers.SerializerMethodField()
@@ -47,6 +52,9 @@ class StorySerializer(serializers.ModelSerializer):
             "has_viewed",
             "remaining_time",
             "is_expired",
+            
+            "comments",
+            "comment_count",
             
             "like_count",
             "liked",
@@ -87,24 +95,33 @@ class StorySerializer(serializers.ModelSerializer):
         return not obj.is_active or obj.expires_at <= timezone.now()
     
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts("story", obj.id)
+        return ReactionService.get_reaction_counts(obj, obj.id)
 
     def get_user_reaction(self, obj) -> Optional[ReactionType]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, "story", obj.id)
+            return ReactionService.get_user_reaction(request.user, obj, obj.id)
         return None
 
     def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count("story", obj.id)
+        return ReactionService.get_like_count(obj, obj.id)
 
     def get_liked(self, obj) -> bool:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             return ReactionService.has_liked(
-                user=request.user, content_type="story", object_id=obj.id
+                user=request.user, content_type=obj, object_id=obj.id
             )
         return False
+    
+    def get_comments(self, obj) -> CommentDisplaySerializer(many=True):  # type: ignore
+        comments = CommentService.get_comments_for_object(
+            content_object=obj, include_replies=False, limit=10
+        )
+        return CommentDisplaySerializer(comments, many=True, context=self.context).data
+
+    def get_comment_count(self, obj) -> int:
+        return CommentService.get_comment_count(obj)
 
 
 class StoryCreateSerializer(serializers.Serializer):

@@ -1,17 +1,36 @@
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
-from django.db.models import Q, Count
+from django.db.models import Count
+from django.contrib.contenttypes.models import ContentType
 from typing import Optional, List, Dict, Any, Tuple
 
-from feed.models.reaction import LIKE_CONTENT_TYPES, REACTION_TYPES
 from users.models import User
 from ..models import Reaction, Post, Comment
+from feed.models.reaction import REACTION_TYPES  # keeps the list of valid reaction types
 
 
 class ReactionService:
-    SERVICE_REACTION_TYPES = [c[0] for c in REACTION_TYPES]
-    SERVICE_CONTENT_TYPES = [c[0] for c in LIKE_CONTENT_TYPES]
+    # Optional: keep a list of allowed model names if you want to restrict
+    # ALLOWED_CONTENT_TYPES = ['post', 'comment', 'story', 'reel', 'reel_comment']
+    SERVICE_REACTION_TYPES = [rt[0] for rt in REACTION_TYPES]
+
+    @staticmethod
+    def _get_content_type(model_name: str) -> ContentType:
+        """
+        Helper to fetch a ContentType by its model name.
+        Raises ValidationError if the model does not exist.
+        """
+        try:
+            return ContentType.objects.get(model=model_name)
+        except ContentType.DoesNotExist:
+            raise ValidationError(f"Invalid content type: '{model_name}'")
+
+    @staticmethod
+    def _validate_reaction_type(reaction_type: Optional[str]) -> None:
+        """Raise ValidationError if reaction_type is not in the allowed list."""
+        if reaction_type and reaction_type not in ReactionService.SERVICE_REACTION_TYPES:
+            raise ValidationError(f"Invalid reaction type: '{reaction_type}'")
 
     @staticmethod
     def set_reaction(
@@ -21,24 +40,21 @@ class ReactionService:
         reaction_type: Optional[str]
     ) -> Tuple[bool, Optional[Reaction]]:
         """
-        Set a reaction.
+        Set a reaction on any object.
         - If reaction_type is None → remove any existing reaction.
         - If same reaction exists → remove (toggle off).
         - If different reaction exists → update.
         - If no reaction → create new.
-        Returns (changed, reaction_object).
+        Returns (changed, reaction_object). 'changed' is True if a reaction was added/updated.
         """
-        if content_type not in ReactionService.SERVICE_CONTENT_TYPES:
-            raise ValidationError(f"Invalid content type: {content_type}")
-
-        if reaction_type and reaction_type not in ReactionService.SERVICE_REACTION_TYPES:
-            raise ValidationError(f"Invalid reaction type: {reaction_type}")
+        ct = ReactionService._get_content_type(content_type)
+        ReactionService._validate_reaction_type(reaction_type)
 
         try:
             with transaction.atomic():
                 reaction = Reaction.objects.filter(
                     user=user,
-                    content_type=content_type,
+                    content_type=ct,
                     object_id=object_id
                 ).first()
 
@@ -61,7 +77,7 @@ class ReactionService:
                         # Create new
                         reaction = Reaction.objects.create(
                             user=user,
-                            content_type=content_type,
+                            content_type=ct,
                             object_id=object_id,
                             reaction_type=reaction_type
                         )
@@ -75,17 +91,19 @@ class ReactionService:
     @staticmethod
     def get_user_reaction(user: User, content_type: str, object_id: int) -> Optional[str]:
         """Return the reaction type of a user on an object, or None."""
+        ct = ReactionService._get_content_type(content_type)
         reaction = Reaction.objects.filter(
             user=user,
-            content_type=content_type,
+            content_type=ct,
             object_id=object_id
         ).first()
         return reaction.reaction_type if reaction else None
 
     @staticmethod
-    def get_reaction_counts(content_type: str, object_id: int) -> Dict[str, Any]:
+    def get_reaction_counts(content_type: str, object_id: int) -> Dict[str, int]:
         """Return counts per reaction type for an object."""
-        qs = Reaction.objects.filter(content_type=content_type, object_id=object_id)
+        ct = ReactionService._get_content_type(content_type)
+        qs = Reaction.objects.filter(content_type=ct, object_id=object_id)
         counts = qs.values('reaction_type').annotate(count=Count('id'))
         result = {rt: 0 for rt in ReactionService.SERVICE_REACTION_TYPES}
         for item in counts:
@@ -94,37 +112,47 @@ class ReactionService:
 
     @staticmethod
     def get_total_reactions(content_type: str, object_id: int) -> int:
-        return Reaction.objects.filter(content_type=content_type, object_id=object_id).count()
+        """Return total number of reactions (any type) on an object."""
+        ct = ReactionService._get_content_type(content_type)
+        return Reaction.objects.filter(content_type=ct, object_id=object_id).count()
 
     # ----- Legacy methods for 'like' only (backward compatibility) -----
     @staticmethod
     def toggle_like(user: User, content_type: str, object_id: int) -> Tuple[bool, Optional[Reaction]]:
+        """Convenience: toggle a like (same as set_reaction with reaction_type='like')."""
         return ReactionService.set_reaction(user, content_type, object_id, 'like')
 
     @staticmethod
     def add_like(user: User, content_type: str, object_id: int) -> Tuple[bool, Optional[Reaction]]:
+        """Convenience: add a like (same as set_reaction with reaction_type='like')."""
         return ReactionService.set_reaction(user, content_type, object_id, 'like')
 
     @staticmethod
     def remove_like(user: User, content_type: str, object_id: int) -> bool:
+        """Remove a like (if any). Returns True if a like was removed."""
+        ct = ReactionService._get_content_type(content_type)
         deleted, _ = Reaction.objects.filter(
-            user=user, content_type=content_type, object_id=object_id
+            user=user, content_type=ct, object_id=object_id, reaction_type='like'
         ).delete()
         return deleted > 0
 
     @staticmethod
     def has_liked(user: User, content_type: str, object_id: int) -> bool:
+        """Check if a user has liked the object."""
+        ct = ReactionService._get_content_type(content_type)
         return Reaction.objects.filter(
-            user=user, content_type=content_type, object_id=object_id, reaction_type='like'
+            user=user, content_type=ct, object_id=object_id, reaction_type='like'
         ).exists()
 
     @staticmethod
     def get_like_count(content_type: str, object_id: int) -> int:
+        """Return the number of likes on an object."""
+        ct = ReactionService._get_content_type(content_type)
         return Reaction.objects.filter(
-            content_type=content_type, object_id=object_id, reaction_type='like'
+            content_type=ct, object_id=object_id, reaction_type='like'
         ).count()
 
-    # ----- Existing utility methods adapted to work with reactions -----
+    # ----- Utility methods for retrieving reactions and reactors -----
     @staticmethod
     def get_reactions_for_object(
         content_type: str,
@@ -133,9 +161,14 @@ class ReactionService:
         limit: int = 50,
         offset: int = 0
     ) -> List[Reaction]:
-        """Get reactions for an object, optionally filtered by type."""
-        queryset = Reaction.objects.filter(content_type=content_type, object_id=object_id)
+        """
+        Get reactions for a specific object, optionally filtered by reaction type.
+        Returns a list of Reaction objects with user prefetched.
+        """
+        ct = ReactionService._get_content_type(content_type)
+        queryset = Reaction.objects.filter(content_type=ct, object_id=object_id)
         if reaction_type:
+            ReactionService._validate_reaction_type(reaction_type)
             queryset = queryset.filter(reaction_type=reaction_type)
         return list(queryset.select_related('user').order_by('-created_at')[offset:offset + limit])
 
@@ -146,10 +179,13 @@ class ReactionService:
         limit: int = 50,
         offset: int = 0
     ) -> List[Reaction]:
-        """Get all reactions by a user."""
+        """
+        Get all reactions made by a user, optionally filtered by content type.
+        """
         queryset = Reaction.objects.filter(user=user)
         if content_type:
-            queryset = queryset.filter(content_type=content_type)
+            ct = ReactionService._get_content_type(content_type)
+            queryset = queryset.filter(content_type=ct)
         return list(queryset.order_by('-created_at')[offset:offset + limit])
 
     @staticmethod
@@ -159,9 +195,13 @@ class ReactionService:
         reaction_type: Optional[str] = None,
         limit: int = 10
     ) -> List[User]:
-        """Get recent users who reacted to an object."""
-        queryset = Reaction.objects.filter(content_type=content_type, object_id=object_id)
+        """
+        Get the most recent users who reacted to an object.
+        """
+        ct = ReactionService._get_content_type(content_type)
+        queryset = Reaction.objects.filter(content_type=ct, object_id=object_id)
         if reaction_type:
+            ReactionService._validate_reaction_type(reaction_type)
             queryset = queryset.filter(reaction_type=reaction_type)
         reactors = queryset.select_related('user').order_by('-created_at')[:limit]
         return [r.user for r in reactors]
@@ -172,28 +212,38 @@ class ReactionService:
         user2: User,
         content_type: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Get mutual reactions between two users."""
-        # For backward compatibility, we focus on likes only, but can be extended.
-        user1_liked_posts = Reaction.objects.filter(
-            user=user1, content_type='post', reaction_type='like'
-        ).values_list('object_id', flat=True)
-        user2_liked_posts = Reaction.objects.filter(
-            user=user2, content_type='post', reaction_type='like'
-        ).values_list('object_id', flat=True)
-        mutual_post_ids = set(user1_liked_posts) & set(user2_liked_posts)
+        """
+        Get mutual reactions (currently only likes) between two users.
+        If content_type is given, only consider that type; otherwise consider all.
+        Returns counts of mutual likes per content type and total.
+        """
+        # Base queryset for each user
+        qs1 = Reaction.objects.filter(user=user1, reaction_type='like')
+        qs2 = Reaction.objects.filter(user=user2, reaction_type='like')
 
-        user1_liked_comments = Reaction.objects.filter(
-            user=user1, content_type='comment', reaction_type='like'
-        ).values_list('object_id', flat=True)
-        user2_liked_comments = Reaction.objects.filter(
-            user=user2, content_type='comment', reaction_type='like'
-        ).values_list('object_id', flat=True)
-        mutual_comment_ids = set(user1_liked_comments) & set(user2_liked_comments)
+        if content_type:
+            ct = ReactionService._get_content_type(content_type)
+            qs1 = qs1.filter(content_type=ct)
+            qs2 = qs2.filter(content_type=ct)
 
+        # For simplicity, we group by content type. This could be extended to any reaction type.
+        # We'll fetch the object ids and compute intersection.
+        # To avoid too many queries, we could do it per content type, but for now we'll assume limited data.
+        mutual_counts = {}
+
+        # Get distinct content types involved
+        content_types = set(qs1.values_list('content_type', flat=True)) | set(qs2.values_list('content_type', flat=True))
+        for ct_id in content_types:
+            ct = ContentType.objects.get_for_id(ct_id)
+            model_name = ct.model
+            ids1 = set(qs1.filter(content_type=ct).values_list('object_id', flat=True))
+            ids2 = set(qs2.filter(content_type=ct).values_list('object_id', flat=True))
+            mutual_counts[model_name] = len(ids1 & ids2)
+
+        total = sum(mutual_counts.values())
         return {
-            'mutual_posts': len(mutual_post_ids),
-            'mutual_comments': len(mutual_comment_ids),
-            'total_mutual_likes': len(mutual_post_ids) + len(mutual_comment_ids)
+            **mutual_counts,
+            'total_mutual_likes': total
         }
 
     @staticmethod
@@ -203,60 +253,69 @@ class ReactionService:
         limit: int = 10,
         reaction_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get most reacted content of a specific type, optionally filtered by reaction type."""
-        from django.db.models import Count
-
+        """
+        Get the most reacted objects of a given content type within the last `days`.
+        Each result contains the actual object (Post, Comment, etc.) and the reaction count.
+        """
+        ct = ReactionService._get_content_type(content_type)
         time_threshold = timezone.now() - timezone.timedelta(days=days)
+
         queryset = Reaction.objects.filter(
-            content_type=content_type,
+            content_type=ct,
             created_at__gte=time_threshold
         )
         if reaction_type:
+            ReactionService._validate_reaction_type(reaction_type)
             queryset = queryset.filter(reaction_type=reaction_type)
 
         reacted_objects = queryset.values('object_id').annotate(
             reaction_count=Count('id')
         ).order_by('-reaction_count')[:limit]
 
+        # Now fetch the actual objects (model class is known via ContentType)
+        model_class = ct.model_class()
         results = []
         for item in reacted_objects:
-            if content_type == 'post':
-                try:
-                    obj = Post.objects.get(id=item['object_id'], is_deleted=False)
-                    results.append({
-                        'object': obj,
-                        'reaction_count': item['reaction_count'],
-                        'type': 'post'
-                    })
-                except Post.DoesNotExist:
-                    continue
-            elif content_type == 'comment':
-                try:
-                    obj = Comment.objects.get(id=item['object_id'])
-                    results.append({
-                        'object': obj,
-                        'reaction_count': item['reaction_count'],
-                        'type': 'comment'
-                    })
-                except Comment.DoesNotExist:
-                    continue
+            try:
+                obj = model_class.objects.get(id=item['object_id'])
+                # Optionally respect a soft-delete flag if the model has one
+                # if hasattr(obj, 'is_deleted') and obj.is_deleted:
+                #     continue
+                results.append({
+                    'object': obj,
+                    'reaction_count': item['reaction_count'],
+                    'type': content_type
+                })
+            except model_class.DoesNotExist:
+                continue
         return results
 
     @staticmethod
     def get_user_reaction_statistics(user: User) -> Dict[str, Any]:
-        """Get reaction statistics for a user."""
-        total_reactions = Reaction.objects.filter(user=user).count()
-        type_breakdown = Reaction.objects.filter(user=user).values('content_type', 'reaction_type').annotate(
-            count=Count('id')
+        """
+        Get statistics about a user's reactions.
+        """
+        reactions = Reaction.objects.filter(user=user)
+        total = reactions.count()
+
+        # Breakdown by reaction type
+        type_breakdown = list(reactions.values('reaction_type').annotate(count=Count('id')))
+
+        # Breakdown by content type (using model name for readability)
+        # We need to join with ContentType to get the model name
+        content_type_breakdown = list(
+            reactions.values('content_type__model').annotate(count=Count('id'))
         )
-        # Breakdown by content type (for backward compatibility)
-        content_type_breakdown = Reaction.objects.filter(user=user).values('content_type').annotate(
-            count=Count('id')
-        )
+        # Rename key for clarity
+        for item in content_type_breakdown:
+            item['content_type'] = item.pop('content_type__model')
+
+        first_reaction = reactions.order_by('created_at').first()
+        first_reaction_date = first_reaction.created_at if first_reaction else None
 
         return {
-            'total_reactions': total_reactions,
-            'type_breakdown': list(type_breakdown),
-            'content_type_breakdown': list(content_type_breakdown),
-            'first_reaction_date': Reaction.objects.filter(user=user).order_by('created_at').first().created_at if total_reactions > 0 else None
+            'total_reactions': total,
+            'type_breakdown': type_breakdown,
+            'content_type_breakdown': content_type_breakdown,
+            'first_reaction_date': first_reaction_date
         }

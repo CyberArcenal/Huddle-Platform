@@ -214,16 +214,16 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         return ""
     
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts("reel", obj.id)
+        return ReactionService.get_reaction_counts(obj, obj.id)
     
     def get_user_reaction(self, obj) -> ReactionType:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, "reel", obj.id)
+            return ReactionService.get_user_reaction(request.user, obj, obj.id)
         return None
 
     def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count("reel", obj.id)
+        return ReactionService.get_like_count(obj, obj.id)
 
     def get_comment_count(self, obj) -> int:
         return CommentService.get_comment_count(obj)
@@ -232,11 +232,11 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             return ReactionService.has_liked(
-                user=request.user, content_type="reel", object_id=obj.id
+                user=request.user, content_type=obj, object_id=obj.id
             )
         return False
 
-    def get_comments(self, obj) -> ReelCommentDisplaySerializer(many=True):  # type: ignore
+    def get_comments(self, obj) -> CommentDisplaySerializer(many=True):  # type: ignore
 
         comments = CommentService.get_comments_for_object(
             obj, include_replies=False, limit=3

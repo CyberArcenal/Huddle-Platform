@@ -1,5 +1,5 @@
 from django.db import models
-from feed.models.comment import Post
+from feed.models.post import Post
 from users.models import User
 
 

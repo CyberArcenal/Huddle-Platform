@@ -142,8 +142,8 @@ class ShareDisplaySerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return {
             "comment_count": CommentService.get_comment_count(obj),
-            "like_count": ReactionService.get_like_count("share", obj.id),
-            "reaction_count": ReactionService.get_reaction_counts("share", obj.id),
+            "like_count": ReactionService.get_like_count(obj, obj.id),
+            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
             "comments": CommentDisplaySerializer(
                 CommentService.get_comments_for_object(obj, limit=5),
                 many=True,
@@ -151,7 +151,7 @@ class ShareDisplaySerializer(serializers.ModelSerializer):
             ).data,
             "liked": (
                 ReactionService.has_liked(
-                    user=request.user, content_type="share", object_id=obj.id
+                    user=request.user, content_type=obj, object_id=obj.id
                 )
                 if request and request.user.is_authenticated
                 else False
@@ -200,8 +200,8 @@ class ShareFeedSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return {
             "comment_count": CommentService.get_comment_count(obj),
-            "like_count": ReactionService.get_like_count("share", obj.id),
-            "reaction_count": ReactionService.get_reaction_counts("share", obj.id),
+            "like_count": ReactionService.get_like_count(obj, obj.id),
+            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
             "comments": CommentDisplaySerializer(
                 CommentService.get_comments_for_object(obj, limit=3),
                 many=True,
@@ -209,7 +209,7 @@ class ShareFeedSerializer(serializers.ModelSerializer):
             ).data,
             "liked": (
                 ReactionService.has_liked(
-                    user=request.user, content_type="share", object_id=obj.id
+                    user=request.user, content_type=obj, object_id=obj.id
                 )
                 if request and request.user.is_authenticated
                 else False

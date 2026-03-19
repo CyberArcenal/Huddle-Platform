@@ -178,22 +178,22 @@ class PostDisplaySerializer(serializers.ModelSerializer):
         return CommentService.get_comment_count(obj)
 
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts("post", obj.id)
+        return ReactionService.get_reaction_counts(obj, obj.id)
 
     def get_user_reaction(self, obj) -> Optional[ReactionType]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, "post", obj.id)
+            return ReactionService.get_user_reaction(request.user, obj, obj.id)
         return None
 
     def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count("post", obj.id)
+        return ReactionService.get_like_count(obj, obj.id)
 
     def get_liked(self, obj) -> bool:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             return ReactionService.has_liked(
-                user=request.user, content_type="post", object_id=obj.id
+                user=request.user, content_type=obj, object_id=obj.id
             )
         return False
 
@@ -251,9 +251,9 @@ class PostFeedSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         return {
             "comment_count": CommentService.get_comment_count(obj),
-            "like_count": ReactionService.get_like_count("post", obj.id),
+            "like_count": ReactionService.get_like_count(obj, obj.id),
             "privacy": obj.privacy,
-            "reaction_count": ReactionService.get_reaction_counts("post", obj.id),
+            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
             "comments": CommentDisplaySerializer(
                 CommentService.get_comments_for_object(obj, limit=10),
                 many=True,
@@ -261,7 +261,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
             ).data,
             "liked": (
                 ReactionService.has_liked(
-                    user=request.user, content_type="post", object_id=obj.id
+                    user=request.user, content_type=obj, object_id=obj.id
                 )
                 if request and request.user.is_authenticated
                 else False

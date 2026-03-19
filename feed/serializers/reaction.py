@@ -1,12 +1,17 @@
 from typing import Dict, Any, Optional
 
 from django.core.exceptions import ValidationError
+from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from feed.models import Reaction, Post, Comment
 from feed.services.reaction import ReactionService
 from users.serializers.user import UserMinimalSerializer
-# Add to feed/serializers/reaction.py
+
+class ReactionDisplayContentData(serializers.Serializer):
+    type = serializers.CharField()
+    id = serializers.IntegerField()
+    content_preview = serializers.StringRelatedField()
 
 class LikeDisplaySerializer(serializers.ModelSerializer):
     """Serializer for like objects (based on Reaction model, filtered to 'like')."""
@@ -18,43 +23,52 @@ class LikeDisplaySerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'content_type', 'object_id', 'content_object', 'created_at']
         read_only_fields = fields
 
-    def get_content_object(self, obj) -> Optional[Dict[str, Any]]:
-        # Same implementation as in ReactionDisplaySerializer
-        if obj.content_type == 'post':
-            try:
-                post = Post.objects.get(id=obj.object_id)
-                return {
-                    'type': 'post',
-                    'id': post.id,
-                    'content_preview': post.content[:100] if post.content else None,
-                }
-            except Post.DoesNotExist:
-                return None
-        elif obj.content_type == 'comment':
-            try:
-                comment = Comment.objects.get(id=obj.object_id)
-                return {
-                    'type': 'comment',
-                    'id': comment.id,
-                    'content_preview': comment.content[:100] if comment.content else None,
-                }
-            except Comment.DoesNotExist:
-                return None
-        return None
+    def get_content_object(self, obj) -> ReactionDisplayContentData:
+        """
+        Returns a simplified representation of the liked object.
+        Uses the generic foreign key to fetch the related object.
+        """
+        if obj.content_object is None:
+            return None
+
+        # You can customize the output based on the actual model type
+        # Here we provide a basic structure with id and a preview if available.
+        model_name = obj.content_type.model
+        result = {
+            'type': model_name,
+            'id': obj.object_id,
+        }
+
+        # Add a content preview for post and comment (optional)
+        if model_name == 'post' and hasattr(obj.content_object, 'content'):
+            result['content_preview'] = obj.content_object.content[:100]
+        elif model_name == 'comment' and hasattr(obj.content_object, 'content'):
+            result['content_preview'] = obj.content_object.content[:100]
+
+        return result
 
 
 class LikeCreateSerializer(serializers.Serializer):
     """Serializer for creating a like (reaction_type forced to 'like')."""
-    content_type = serializers.ChoiceField(choices=ReactionService.SERVICE_CONTENT_TYPES)
+    content_type = serializers.CharField()
     object_id = serializers.IntegerField()
+
+    def validate_content_type(self, value):
+        """Ensure the content type (model name) exists."""
+        try:
+            ContentType.objects.get(model=value)
+        except ContentType.DoesNotExist:
+            raise serializers.ValidationError(f"Invalid content type '{value}'.")
+        return value
 
     def validate(self, data):
         content_type = data['content_type']
         object_id = data['object_id']
-        # Validate target object exists (same as in ReactionCreateSerializer)
+        # Optional: verify the target object exists (if you have models with is_deleted)
         model_map = {
             'post': Post,
             'comment': Comment,
+            # add other models as needed
         }
         if content_type in model_map:
             model = model_map[content_type]
@@ -80,7 +94,6 @@ class LikeCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(e))
 
 
-
 class ReactionMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for reactions."""
     user = UserMinimalSerializer(read_only=True)
@@ -91,15 +104,12 @@ class ReactionMinimalSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-from django.contrib.contenttypes.models import ContentType
-from rest_framework import serializers
-from feed.models import Reaction, Post, Comment   # still needed for existence checks
-
 class ReactionCreateSerializer(serializers.Serializer):
-    content_type = serializers.CharField()   # was ChoiceField
+    """Serializer for creating/updating a reaction."""
+    content_type = serializers.CharField()
     object_id = serializers.IntegerField()
     reaction_type = serializers.ChoiceField(
-        choices=ReactionService.SERVICE_REACTION_TYPES,  # keep if you have it
+        choices=ReactionService.SERVICE_REACTION_TYPES,
         required=False,
         allow_blank=True,
         help_text="Send empty string or null to remove reaction"
@@ -115,11 +125,11 @@ class ReactionCreateSerializer(serializers.Serializer):
     def validate(self, data):
         content_type = data['content_type']
         object_id = data['object_id']
-        # Optional: verify the target object exists (if you have a base model with is_deleted)
+        # Optional: verify the target object exists (if you have models with is_deleted)
         model_map = {
             'post': Post,
             'comment': Comment,
-            # add others as needed
+            # add other models as needed
         }
         if content_type in model_map:
             model = model_map[content_type]
@@ -132,7 +142,6 @@ class ReactionCreateSerializer(serializers.Serializer):
         if not request or not request.user.is_authenticated:
             raise serializers.ValidationError("Authentication required.")
 
-        # ReactionService.set_reaction now expects content_type as string (model name)
         reacted, reaction = ReactionService.set_reaction(
             user=request.user,
             content_type=validated_data['content_type'],
@@ -149,6 +158,8 @@ class ReactionCreateSerializer(serializers.Serializer):
         }
 
 
+
+
 class ReactionDisplaySerializer(serializers.ModelSerializer):
     """Detailed view for a reaction, including user and content preview."""
     user = UserMinimalSerializer(read_only=True)
@@ -159,35 +170,40 @@ class ReactionDisplaySerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'content_type', 'object_id', 'reaction_type', 'content_object', 'created_at']
         read_only_fields = ['id', 'created_at']
 
-    def get_content_object(self, obj) -> Optional[Dict[str, Any]]:
-        if obj.content_type == 'post':
-            try:
-                post = Post.objects.get(id=obj.object_id)
-                return {
-                    'type': 'post',
-                    'id': post.id,
-                    'content_preview': post.content[:100] if post.content else None,
-                }
-            except Post.DoesNotExist:
-                return None
-        elif obj.content_type == 'comment':
-            try:
-                comment = Comment.objects.get(id=obj.object_id)
-                return {
-                    'type': 'comment',
-                    'id': comment.id,
-                    'content_preview': comment.content[:100] if comment.content else None,
-                }
-            except Comment.DoesNotExist:
-                return None
-        return None
+    def get_content_object(self, obj) -> ReactionDisplayContentData:
+        """
+        Returns a simplified representation of the reacted object.
+        Uses the generic foreign key to fetch the related object.
+        """
+        if obj.content_object is None:
+            return None
+
+        model_name = obj.content_type.model
+        result = {
+            'type': model_name,
+            'id': obj.object_id,
+        }
+
+        # Add a content preview for known types (optional)
+        if model_name == 'post' and hasattr(obj.content_object, 'content'):
+            result['content_preview'] = obj.content_object.content[:100]
+        elif model_name == 'comment' and hasattr(obj.content_object, 'content'):
+            result['content_preview'] = obj.content_object.content[:100]
+
+        return result
 
 
-# Keep backward-compatible like toggle serializer if needed
 class LikeToggleSerializer(serializers.Serializer):
     """Legacy serializer for toggling a like (uses reaction service)."""
-    content_type = serializers.ChoiceField(choices=ReactionService.SERVICE_CONTENT_TYPES)
+    content_type = serializers.CharField()
     object_id = serializers.IntegerField()
+
+    def validate_content_type(self, value):
+        try:
+            ContentType.objects.get(model=value)
+        except ContentType.DoesNotExist:
+            raise serializers.ValidationError(f"Invalid content type '{value}'.")
+        return value
 
     def create(self, validated_data):
         request = self.context.get('request')
