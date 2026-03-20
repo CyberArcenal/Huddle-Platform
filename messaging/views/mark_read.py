@@ -13,6 +13,7 @@ class MarkMessagesReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Conversation"],
         responses={
             200: {"type": "object", "properties": {"marked_read": {"type": "integer"}}}
         },

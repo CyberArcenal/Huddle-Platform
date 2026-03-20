@@ -6,16 +6,121 @@ from django.db import transaction
 from django.utils import timezone
 from typing import Dict, Any, Optional, List
 
-
 from users.services.user import UserService
 from users.services.user_follow import UserFollowService
 
-from ..models import User, UserStatus, UserFollow, UserSecuritySettings, UserActivity
+from ..models import (
+    User, UserStatus, UserFollow, UserSecuritySettings, UserActivity,
+    Hobby, Interest, Favorite, Music, Work, School, Achievement,
+    SocialCause, LifestyleTag, MBTIType, LoveLanguage,
+)
 from ..enums import UserStatus as UserStatusEnum
 
 
+# ---------- Nested serializers for many-to-many fields (read-only) ----------
+class HobbySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Hobby
+        fields = ['id', 'name']
+
+
+class InterestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Interest
+        fields = ['id', 'name']
+
+
+class FavoriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Favorite
+        fields = ['id', 'name']
+
+
+class MusicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Music
+        fields = ['id', 'name']
+
+
+class WorkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Work
+        fields = ['id', 'name']
+
+
+class SchoolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = School
+        fields = ['id', 'name']
+
+
+class AchievementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Achievement
+        fields = ['id', 'name']
+
+
+class SocialCauseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SocialCause
+        fields = ['id', 'name']
+
+
+class LifestyleTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LifestyleTag
+        fields = ['id', 'name']
+
+
+# ---------- User Serializers ----------
 class UserBaseSerializer(serializers.ModelSerializer):
     """Base serializer for common user fields and validation"""
+    username = serializers.CharField(
+        max_length=30,
+        min_length=3,
+        help_text="Username (3-30 characters, letters, numbers, underscores, dots)"
+    )
+    email = serializers.EmailField(
+        help_text="Valid email address"
+    )
+    first_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=30
+    )
+    last_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=30
+    )
+    # Write-only fields for many-to-many relationships (accept list of IDs)
+    hobbies = serializers.PrimaryKeyRelatedField(
+        queryset=Hobby.objects.all(), many=True, required=False, write_only=True
+    )
+    interests = serializers.PrimaryKeyRelatedField(
+        queryset=Interest.objects.all(), many=True, required=False, write_only=True
+    )
+    favorites = serializers.PrimaryKeyRelatedField(
+        queryset=Favorite.objects.all(), many=True, required=False, write_only=True
+    )
+    favorite_music = serializers.PrimaryKeyRelatedField(
+        queryset=Music.objects.all(), many=True, required=False, write_only=True
+    )
+    works = serializers.PrimaryKeyRelatedField(
+        queryset=Work.objects.all(), many=True, required=False, write_only=True
+    )
+    schools = serializers.PrimaryKeyRelatedField(
+        queryset=School.objects.all(), many=True, required=False, write_only=True
+    )
+    achievements = serializers.PrimaryKeyRelatedField(
+        queryset=Achievement.objects.all(), many=True, required=False, write_only=True
+    )
+    causes = serializers.PrimaryKeyRelatedField(
+        queryset=SocialCause.objects.all(), many=True, required=False, write_only=True
+    )
+    lifestyle_tags = serializers.PrimaryKeyRelatedField(
+        queryset=LifestyleTag.objects.all(), many=True, required=False, write_only=True
+    )
 
     class Meta:
         model = User
@@ -32,6 +137,21 @@ class UserBaseSerializer(serializers.ModelSerializer):
             "is_verified",
             "created_at",
             "updated_at",
+            # New fields
+            "personality_type",
+            "love_language",
+            "relationship_goal",
+            "latitude",
+            "longitude",
+            "hobbies",
+            "interests",
+            "favorites",
+            "favorite_music",
+            "works",
+            "schools",
+            "achievements",
+            "causes",
+            "lifestyle_tags",
         ]
         read_only_fields = ["id", "is_verified", "created_at", "updated_at"]
 
@@ -52,9 +172,7 @@ class UserBaseSerializer(serializers.ModelSerializer):
 
         # Add additional username validation rules
         if len(value) < 3:
-            raise serializers.ValidationError(
-                "Username must be at least 3 characters long"
-            )
+            raise serializers.ValidationError("Username must be at least 3 characters long")
         if len(value) > 30:
             raise serializers.ValidationError("Username cannot exceed 30 characters")
         if not value.replace("_", "").replace(".", "").isalnum():
@@ -93,10 +211,21 @@ class UserBaseSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("You must be at least 13 years old")
         return value
 
+    def validate_personality_type(self, value):
+        """Validate personality type (MBTI)"""
+        if value and value not in dict(MBTIType.choices):
+            raise serializers.ValidationError("Invalid personality type")
+        return value
+
+    def validate_love_language(self, value):
+        """Validate love language"""
+        if value and value not in dict(LoveLanguage.choices):
+            raise serializers.ValidationError("Invalid love language")
+        return value
+
 
 class UserCreateSerializer(UserBaseSerializer):
     """Serializer for user registration/creation"""
-
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -136,6 +265,16 @@ class UserCreateSerializer(UserBaseSerializer):
     def create(self, validated_data: Dict[str, Any]) -> User:
         """Create a new user using UserService"""
         try:
+            # Extract many-to-many fields (they will be set after user creation)
+            many_to_many_fields = [
+                "hobbies", "interests", "favorites", "favorite_music",
+                "works", "schools", "achievements", "causes", "lifestyle_tags"
+            ]
+            many_to_many_data = {}
+            for field in many_to_many_fields:
+                if field in validated_data:
+                    many_to_many_data[field] = validated_data.pop(field)
+
             password = validated_data.pop("password")
 
             # Create user through service layer
@@ -146,19 +285,12 @@ class UserCreateSerializer(UserBaseSerializer):
                 first_name=validated_data.get("first_name", ""),
                 last_name=validated_data.get("last_name", ""),
                 phone_number=validated_data.get("phone_number", ""),
-                **{
-                    k: v
-                    for k, v in validated_data.items()
-                    if k
-                    not in [
-                        "username",
-                        "email",
-                        "first_name",
-                        "last_name",
-                        "phone_number",
-                    ]
-                },
+                **validated_data,  # includes all other fields
             )
+
+            # Set many-to-many relationships
+            for field, value in many_to_many_data.items():
+                getattr(user, field).set(value)
 
             # Log user creation activity
             UserActivity.objects.create(
@@ -180,13 +312,11 @@ class UserCreateSerializer(UserBaseSerializer):
             return user
 
         except Exception as e:
-            # Log error and re-raise
             raise serializers.ValidationError(str(e))
 
 
 class UserUpdateSerializer(UserBaseSerializer):
     """Serializer for updating user profile"""
-
     current_password = serializers.CharField(
         write_only=True,
         required=False,
@@ -213,9 +343,7 @@ class UserUpdateSerializer(UserBaseSerializer):
         if "new_password" in attrs:
             if "current_password" not in attrs:
                 raise serializers.ValidationError(
-                    {
-                        "current_password": "Current password is required to set new password"
-                    }
+                    {"current_password": "Current password is required to set new password"}
                 )
 
             # Verify current password
@@ -234,19 +362,28 @@ class UserUpdateSerializer(UserBaseSerializer):
             attrs["password"] = attrs.pop("new_password")
             attrs.pop("current_password")
 
-        # Check if trying to change email (additional verification might be needed)
-        if "email" in attrs and attrs["email"] != user.email:
-            # In production, you might want to send verification email
-            pass
-
         return attrs
 
     @transaction.atomic
     def update(self, instance: User, validated_data: Dict[str, Any]) -> User:
         """Update user information"""
         try:
+            # Extract many-to-many fields
+            many_to_many_fields = [
+                "hobbies", "interests", "favorites", "favorite_music",
+                "works", "schools", "achievements", "causes", "lifestyle_tags"
+            ]
+            many_to_many_data = {}
+            for field in many_to_many_fields:
+                if field in validated_data:
+                    many_to_many_data[field] = validated_data.pop(field)
+
             # Update user through service layer
             updated_user = UserService.update_user(instance, validated_data)
+
+            # Update many-to-many relationships
+            for field, value in many_to_many_data.items():
+                getattr(updated_user, field).set(value)
 
             # Log profile update activity
             UserActivity.objects.create(
@@ -263,7 +400,7 @@ class UserUpdateSerializer(UserBaseSerializer):
                     if self.context.get("request")
                     else None
                 ),
-                metadata={"updated_fields": list(validated_data.keys())},
+                metadata={"updated_fields": list(validated_data.keys()) + list(many_to_many_data.keys())},
             )
 
             return updated_user
@@ -272,8 +409,36 @@ class UserUpdateSerializer(UserBaseSerializer):
             raise serializers.ValidationError(str(e))
 
 
-class UserProfileSerializer(UserBaseSerializer):
+class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for detailed user profile view"""
+    username = serializers.CharField(
+        max_length=30,
+        min_length=3,
+        help_text="Username (3-30 characters, letters, numbers, underscores, dots)"
+    )
+    email = serializers.EmailField(
+        help_text="Valid email address"
+    )
+    first_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=30
+    )
+    last_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=30
+    )
+    # Override many-to-many fields to use nested serializers (read-only)
+    hobbies = HobbySerializer(many=True, read_only=True)
+    interests = InterestSerializer(many=True, read_only=True)
+    favorites = FavoriteSerializer(many=True, read_only=True)
+    favorite_music = MusicSerializer(many=True, read_only=True)
+    works = WorkSerializer(many=True, read_only=True)
+    schools = SchoolSerializer(many=True, read_only=True)
+    achievements = AchievementSerializer(many=True, read_only=True)
+    causes = SocialCauseSerializer(many=True, read_only=True)
+    lifestyle_tags = LifestyleTagSerializer(many=True, read_only=True)
 
     profile_picture_url = serializers.SerializerMethodField()
     cover_photo_url = serializers.SerializerMethodField()
@@ -282,8 +447,37 @@ class UserProfileSerializer(UserBaseSerializer):
     is_following = serializers.SerializerMethodField()
     posts_count = serializers.SerializerMethodField()
 
-    class Meta(UserBaseSerializer.Meta):
-        fields = UserBaseSerializer.Meta.fields + [
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "date_of_birth",
+            "phone_number",
+            "location",
+            "bio",
+            "is_verified",
+            "created_at",
+            "updated_at",
+            # New fields
+            "personality_type",
+            "love_language",
+            "relationship_goal",
+            "latitude",
+            "longitude",
+            "hobbies",
+            "interests",
+            "favorites",
+            "favorite_music",
+            "works",
+            "schools",
+            "achievements",
+            "causes",
+            "lifestyle_tags",
+            # Computed fields
             "profile_picture_url",
             "cover_photo_url",
             "followers_count",
@@ -292,28 +486,20 @@ class UserProfileSerializer(UserBaseSerializer):
             "posts_count",
             "status",
         ]
-        read_only_fields = UserBaseSerializer.Meta.read_only_fields + ["status"]
-        extra_kwargs = {
-            "id": {"required": True, "allow_null": False},
-            "username": {"required": True, "allow_null": False},
-        }
-
+        read_only_fields = [
+            "id", "is_verified", "created_at", "updated_at", "status",
+            "email", "phone_number"  # Sensitive fields are read-only for others
+        ]
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
-        """Get full URL for profile picture"""
         if obj.profile_picture:
             request = self.context.get("request")
             if request:
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
-    
-    def get_posts_count(self, obj) -> int:
-        from feed.models.base import Post
-        return Post.objects.filter(user_id=obj.id).count()
 
     def get_cover_photo_url(self, obj: User) -> Optional[str]:
-        """Get full URL for cover photo"""
         if obj.cover_photo:
             request = self.context.get("request")
             if request:
@@ -322,26 +508,36 @@ class UserProfileSerializer(UserBaseSerializer):
         return None
 
     def get_followers_count(self, obj: User) -> int:
-        """Get number of followers"""
         return obj.followers.count()
 
     def get_following_count(self, obj: User) -> int:
-        """Get number of users being followed"""
         return obj.following.count()
 
     def get_is_following(self, obj: User) -> bool:
-        """Check if requesting user is following this user"""
         request = self.context.get("request")
-        if request and request.user.is_authenticated:
+        if request and request.user.is_authenticated and request.user != obj:
             return UserFollowService.is_following(request.user, obj)
         return False
+
+    def get_posts_count(self, obj) -> int:
+        from feed.models.base import Post
+        return Post.objects.filter(user_id=obj.id).count()
+
+    def to_representation(self, instance):
+        """Remove is_following when viewing own profile."""
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        if request and request.user == instance:
+            data.pop("is_following", None)
+        return data
 
 
 class UserListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for user listings/search results"""
-
     profile_picture_url = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
+    hobbies = HobbySerializer(many=True, read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -352,34 +548,29 @@ class UserListSerializer(serializers.ModelSerializer):
             "profile_picture_url",
             "is_following",
             "is_verified",
+            
+            "personality_type",
+            "hobbies",
         ]
         read_only_fields = fields
-        extra_kwargs = {
-            "id": {"required": True, "allow_null": False},
-            "username": {"required": True, "allow_null": False},
-        }
-
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
-        """Get profile picture URL"""
         if obj.profile_picture:
             request = self.context.get("request")
             if request:
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url
         return None
-    
+
     def get_is_following(self, obj: User) -> bool:
-        """Check if requesting user is following this user"""
         request = self.context.get("request")
-        if request:
+        if request and request.user.is_authenticated and request.user != obj:
             return UserFollowService.is_following(request.user, obj)
         return False
 
 
 class UserStatusSerializer(serializers.Serializer):
     """Serializer for updating user status"""
-
     status = serializers.ChoiceField(
         choices=[(status.value, status.name) for status in UserStatusEnum],
         required=True,
@@ -439,7 +630,6 @@ class UserStatusSerializer(serializers.Serializer):
 
 class UserFollowSerializer(serializers.ModelSerializer):
     """Serializer for user follow relationships"""
-
     follower = UserListSerializer(read_only=True)
     following = UserListSerializer(read_only=True)
 
@@ -485,7 +675,6 @@ class UserFollowSerializer(serializers.ModelSerializer):
 
 class UserSecuritySettingsSerializer(serializers.ModelSerializer):
     """Serializer for user security settings"""
-
     class Meta:
         model = UserSecuritySettings
         fields = [
@@ -521,7 +710,6 @@ class UserSecuritySettingsSerializer(serializers.ModelSerializer):
 
 class UserActivitySerializer(serializers.ModelSerializer):
     """Serializer for user activity logs"""
-
     user = UserListSerializer(read_only=True)
 
     class Meta:
@@ -542,19 +730,19 @@ class UserActivitySerializer(serializers.ModelSerializer):
 
 class UserMinimalSerializer(serializers.ModelSerializer):
     """Minimal serializer for user references (e.g. in followers list)"""
-    
     profile_picture_url = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
+    hobbies = HobbySerializer(many=True, read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "username", "profile_picture_url", "full_name", "location",]
+        fields = ["id", "username", "profile_picture_url", "personality_type",
+            "hobbies", "full_name", "location"]
         read_only_fields = fields
         extra_kwargs = {
             "id": {"required": True, "allow_null": False},
             "username": {"required": True, "allow_null": False},
         }
-
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
         """Get profile picture URL"""
@@ -570,14 +758,22 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         return f"{obj.first_name} {obj.last_name}".strip()
 
 
-
 class UserProfileSchemaUpdateSerializer(serializers.Serializer):
     """Serializer for updating non-sensitive user profile fields"""
-
     bio = serializers.CharField(required=False, allow_blank=True, max_length=500)
     phone_number = serializers.CharField(required=False, allow_blank=True, max_length=20)
     profile_picture = serializers.ImageField(required=False, allow_null=True)
     location = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    # New fields that can be updated directly
+    personality_type = serializers.ChoiceField(choices=MBTIType.choices, required=False)
+    love_language = serializers.ChoiceField(choices=LoveLanguage.choices, required=False)
+    relationship_goal = serializers.CharField(required=False, max_length=50, allow_blank=True)
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
 
     class Meta:
-        fields = ["bio", "phone_number", "profile_picture", "location"]
+        fields = [
+            "bio", "phone_number", "profile_picture", "location",
+            "personality_type", "love_language", "relationship_goal",
+            "latitude", "longitude"
+        ]

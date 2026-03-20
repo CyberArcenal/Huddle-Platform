@@ -61,6 +61,7 @@ class UserAnalyticsDailyView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -113,6 +114,7 @@ class UserAnalyticsRangeView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="start_date",
@@ -191,6 +193,7 @@ class UserAnalyticsSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -224,6 +227,7 @@ class UserAnalyticsTrendsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="metric",
@@ -286,6 +290,7 @@ class UserAnalyticsEngagementView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -319,6 +324,7 @@ class UserAnalyticsTopDaysView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="metric",
@@ -366,6 +372,7 @@ class UserAnalyticsCompareView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["User Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="user1_id", type=int, description="First user ID", required=True
@@ -408,6 +415,7 @@ class UserAnalyticsCleanupView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["User Analytic's"],
         request=CleanupUserAnalyticsInputSerializer,
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}

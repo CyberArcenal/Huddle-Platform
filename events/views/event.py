@@ -48,6 +48,7 @@ class EventListView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="type",
@@ -145,6 +146,7 @@ class EventListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Event"],
         request=EventCreateSerializer,
         responses={201: EventDetailSerializer},
         examples=[
@@ -211,6 +213,7 @@ class EventDetailView(APIView):
             raise NotFound(detail="Event not found")
 
     @extend_schema(
+        tags=["Event"],
         responses={200: EventDetailSerializer},
         description="Retrieve detailed information about an event.",
     )
@@ -227,6 +230,7 @@ class EventDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Event"],
         request=EventUpdateSerializer,
         responses={200: EventDetailSerializer},
         examples=[
@@ -272,6 +276,7 @@ class EventDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Event"],
         request=EventUpdateSerializer,
         responses={200: EventDetailSerializer},
         examples=[
@@ -305,7 +310,8 @@ class EventDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(responses={204: None}, description="Delete an event.")
+    @extend_schema(
+        tags=["Event"],responses={204: None}, description="Delete an event.")
     @transaction.atomic
     def delete(self, request, pk):
         """Delete event"""
@@ -330,6 +336,7 @@ class EventCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event"],
         request=EventCreateSerializer,
         responses={201: EventDetailSerializer},
         examples=[
@@ -375,6 +382,7 @@ class EventUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event"],
         request=EventSerializer,
         responses={200: EventSerializer},
         examples=[
@@ -417,7 +425,8 @@ class EventDeleteView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(responses={204: None}, description="Delete an event.")
+    @extend_schema(
+        tags=["Event"],responses={204: None}, description="Delete an event.")
     @transaction.atomic
     def delete(self, request, pk):
         """Delete event"""
@@ -445,6 +454,7 @@ class UpcomingEventsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -519,6 +529,7 @@ class PastEventsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -584,6 +595,7 @@ class EventSearchView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="q", type=str, description="Search query", required=False
@@ -669,6 +681,7 @@ class FeaturedEventsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="min_attendees",
@@ -706,6 +719,7 @@ class RecommendedEventsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="limit", type=int, description="Number of results", required=False
@@ -729,6 +743,7 @@ class EventStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event"],
         responses={200: EventStatisticsSerializer},
         description="Get detailed statistics for an event (attendee counts, remaining spots, etc.).",
     )
@@ -755,6 +770,7 @@ class EventTimelineView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="start_date",
@@ -834,6 +850,7 @@ class UserOrganizedEventsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -895,6 +912,7 @@ class GroupEventsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="upcoming_only",
@@ -942,6 +960,7 @@ class EventTypeEventsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
+        tags=["Event"],
         parameters=[
             OpenApiParameter(
                 name="upcoming_only",

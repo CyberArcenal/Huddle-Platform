@@ -103,32 +103,3 @@ class UserFollowService:
         user2_following = set(UserFollowService.get_following(user2))
         # Both sets already contain only active users
         return list(user1_following.intersection(user2_following))
-
-    @staticmethod
-    def get_suggested_users(user: User, limit: int = 10) -> List[User]:
-        """Get suggested active users to follow based on mutual follows"""
-        # Get IDs of users followed by the current user
-        following_ids = UserFollow.objects.filter(
-            follower=user
-        ).values_list('following_id', flat=True)
-
-        if not following_ids:
-            # If not following anyone, suggest random active users (excluding self)
-            return User.objects.filter(
-                status=UserStatus.ACTIVE
-            ).exclude(
-                id=user.id
-            ).order_by('?')[:limit]
-
-        # Get users followed by people the current user follows
-        suggested_ids = UserFollow.objects.filter(
-            follower_id__in=following_ids
-        ).exclude(
-            following_id=user.id
-        ).values_list('following_id', flat=True).distinct()[:limit]
-
-        # Return only active users
-        return User.objects.filter(
-            id__in=suggested_ids,
-            status=UserStatus.ACTIVE
-        )

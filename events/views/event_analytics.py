@@ -37,6 +37,7 @@ class EventAnalyticsListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Analytic's"],
         parameters=[
             OpenApiParameter(name='start_date', type=str, description='Start date (YYYY-MM-DD)', required=False),
             OpenApiParameter(name='end_date', type=str, description='End date (YYYY-MM-DD)', required=False),
@@ -97,6 +98,7 @@ class EventAnalyticsDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Analytic's"],
         responses={200: EventAnalyticsSerializer},
         description="Retrieve a single analytics record for a specific date."
     )
@@ -128,6 +130,7 @@ class EventAnalyticsSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Analytic's"],
         parameters=[
             OpenApiParameter(name='days', type=int, description='Number of days to summarize', required=False),
         ],

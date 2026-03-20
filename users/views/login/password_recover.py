@@ -33,6 +33,7 @@ class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Password Recovery"],
         request=PasswordResetRequestSerializer,
         responses={
             200: PasswordResetRequestResponseSerializer,
@@ -119,6 +120,8 @@ class PasswordResetVerifyView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Password Recovery"],
+        
         request=PasswordResetVerifyRequestSerializer,
         responses={
             200: PasswordResetVerifyResponseSerializer,
@@ -228,6 +231,8 @@ class PasswordResetCompleteView(APIView):
     """
 
     @extend_schema(
+        tags=["Password Recovery"],
+        
         request=PasswordResetCompleteRequestSerializer,
         responses={
             200: PasswordResetCompleteResponseSerializer,

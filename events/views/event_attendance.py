@@ -74,6 +74,7 @@ class EventAttendanceListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         parameters=[
             OpenApiParameter(
                 name="status",
@@ -116,6 +117,7 @@ class EventAttendanceListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Event Attendance"],
         request=EventAttendanceCreateSerializer,
         responses={201: EventAttendanceSerializer},
         examples=[
@@ -195,6 +197,7 @@ class EventAttendanceDetailView(APIView):
         return attendance
 
     @extend_schema(
+        tags=["Event Attendance"],
         responses={200: EventAttendanceSerializer},
         description="Retrieve a specific attendance record.",
     )
@@ -215,6 +218,7 @@ class EventAttendanceDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Event Attendance"],
         request=EventAttendanceUpdateSerializer,
         responses={200: EventAttendanceSerializer},
         examples=[
@@ -247,6 +251,7 @@ class EventAttendanceDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Event Attendance"],
         request=EventAttendanceUpdateSerializer,
         responses={200: EventAttendanceSerializer},
         examples=[
@@ -277,7 +282,8 @@ class EventAttendanceDetailView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(responses={204: None}, description="Remove attendance (un‑RSVP).")
+    @extend_schema(
+        tags=["Event Attendance"],responses={204: None}, description="Remove attendance (un‑RSVP).")
     @transaction.atomic
     def delete(self, request, event_id, user_id=None):
         """Remove attendance/RSVP"""
@@ -300,6 +306,7 @@ class EventRSVPView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         request=RSVPInputSerializer,
         responses={201: EventAttendanceSerializer},
         examples=[
@@ -350,6 +357,7 @@ class UpdateAttendanceStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         request=UpdateStatusInputSerializer,
         responses={200: EventAttendanceSerializer},
         examples=[
@@ -390,6 +398,7 @@ class UserEventsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -506,6 +515,7 @@ class UserAttendanceStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -583,6 +593,7 @@ class MutualAttendeesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         responses={200: MutualAttendeeSerializer(many=True)},
         examples=[
             OpenApiExample(
@@ -650,6 +661,7 @@ class AttendanceTrendView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         parameters=[
             OpenApiParameter(
                 name="hours_before",
@@ -716,6 +728,7 @@ class SendRemindersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Event Attendance"],
         request=SendRemindersInputSerializer,
         responses={200: SendRemindersResponseSerializer},
         examples=[

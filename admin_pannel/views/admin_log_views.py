@@ -46,6 +46,7 @@ class AdminLogListView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         parameters=[
             OpenApiParameter(
                 name="admin_user_id",
@@ -121,6 +122,7 @@ class AdminLogDetailView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         responses={200: AdminLogDisplaySerializer},
         description="Retrieve a single admin log by its ID.",
     )
@@ -138,6 +140,7 @@ class AdminLogRecentView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -171,6 +174,7 @@ class AdminLogUserView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         parameters=[
             OpenApiParameter(
                 name="as_admin",
@@ -214,6 +218,7 @@ class AdminLogStatisticsView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         parameters=[
             OpenApiParameter(
                 name="admin_user_id",
@@ -246,6 +251,7 @@ class AdminLogSearchView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         parameters=[
             OpenApiParameter(
                 name="query", type=str, description="Search query", required=True
@@ -325,6 +331,7 @@ class AdminLogExportView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         parameters=[
             OpenApiParameter(
                 name="start_date",
@@ -422,6 +429,7 @@ class AdminLogCleanupView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         request=CleanupLogsInputSerializer,  # <-- using dedicated serializer
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}
@@ -459,6 +467,7 @@ class AdminBanUserView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         request=BanUserInputSerializer,
         responses={200: BanUserResponseSerializer},
         examples=[
@@ -527,6 +536,7 @@ class AdminWarnUserView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         request=WarnUserInputSerializer,
         responses={200: WarnUserResponseSerializer},
         examples=[
@@ -588,6 +598,7 @@ class AdminRemoveContentView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Log"],
         request=RemoveContentInputSerializer,
         responses={200: RemoveContentResponseSerializer},
         examples=[

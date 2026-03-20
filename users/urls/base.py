@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from users.views.activity import ActivitySummaryView, FollowingActivityView, LogActivityView, RecentActivitiesView, UserActivityListView
 from users.views.admin import AdminBulkUserActionView, AdminCleanupView, AdminCreateUserView, AdminDashboardView, AdminUserDetailView, AdminUserListView, UserExportView
 from users.views.follow import FollowStatsView, FollowStatusView, FollowUserView, FollowersListView, FollowingListView, MutualFollowsView, MutualFriendsView, PopularUsersView, SuggestedUsersView, UnfollowUserView
+from users.views.matching import UserFriendSuggestionsView, UserMatchScoresView
 from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfilePictureView, ProfilePictureUploadView, RemoveCoverPhotoView, RemoveProfilePictureView
 from users.views.search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
 from users.views.security import ActiveSessionsView, BulkTerminateSessionsView, ChangePasswordView, Check2FAStatusView, Disable2FAView, Enable2FAView, FailedLoginAttemptsView, SecurityLogsView, SecuritySettingsView, SuspiciousActivitiesView, TerminateAllSessionsView, TerminateSessionView
@@ -40,10 +41,11 @@ urlpatterns = [
     path('following/<int:user_id>/', FollowingListView.as_view(), name='following-list-user'),
     path('mutual-follows/<int:user_id>/', MutualFollowsView.as_view(), name='mutual-follows'),
     path('suggested-users/', SuggestedUsersView.as_view(), name='suggested-users'),
-    # NEW: Mutual friends for current user
+
     path('mutual-friends/', MutualFriendsView.as_view(), name='mutual-friends'),
-    # NEW: Popular users (most followed)
     path('popular-users/', PopularUsersView.as_view(), name='popular-users'),
+    path('matches/', UserMatchScoresView.as_view(), name='user-matches'),
+    path('friend-suggestions/', UserFriendSuggestionsView.as_view(), name='friend-suggestions'),
 
     
     # Security endpoints

@@ -72,6 +72,7 @@ class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         request=ChangePasswordSerializer,
         responses={200: ChangePasswordResponseSerializer},
         examples=[
@@ -117,6 +118,7 @@ class Enable2FAView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         request=EnableTwoFactorSerializer,
         responses={200: Enable2FAResponseSerializer},
         examples=[
@@ -166,6 +168,7 @@ class Disable2FAView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         request=DisableTwoFactorSerializer,
         responses={200: Disable2FAResponseSerializer},
         examples=[
@@ -215,6 +218,7 @@ class SecuritySettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         responses={200: SecuritySettingsGetResponseSerializer},
         description="Get the current user's security settings.",
     )
@@ -227,6 +231,7 @@ class SecuritySettingsView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["User Security"],
         request=UpdateSecuritySettingsSerializer,
         responses={200: SecuritySettingsUpdateResponseSerializer},
         examples=[
@@ -277,6 +282,7 @@ class SecurityLogsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         parameters=[
             OpenApiParameter(
                 name="event_type",
@@ -318,7 +324,7 @@ class FailedLoginAttemptsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        parameters=[...],
+        tags=["User Security"],
         responses={200: FailedLoginAttemptsResponseSerializer},
         examples=[
             OpenApiExample(
@@ -372,6 +378,7 @@ class SuspiciousActivitiesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         parameters=[
             OpenApiParameter(
                 name="limit",
@@ -405,6 +412,8 @@ class ActiveSessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
+        
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -439,6 +448,7 @@ class TerminateSessionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         request=TerminateSessionSerializer,
         responses={200: TerminateSessionResponseSerializer},
         examples=[
@@ -479,6 +489,7 @@ class BulkTerminateSessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         request=BulkTerminateSessionsSerializer,
         responses={200: BulkTerminateSessionsResponseSerializer},
         examples=[
@@ -518,6 +529,7 @@ class TerminateAllSessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         responses={200: TerminateAllSessionsResponseSerializer},
         description="Terminate all sessions except the current one.",
     )
@@ -548,6 +560,7 @@ class Check2FAStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Security"],
         responses={200: Check2FAStatusResponseSerializer},
         description="Check whether two-factor authentication is enabled for the current user.",
     )

@@ -28,6 +28,7 @@ class RefreshTokenView(APIView):
     """
 
     @extend_schema(
+        tags=["Token Refresh"],
         request=TokenRefreshRequestSerializer,
         responses={
             200: TokenRefreshResponseSerializer,

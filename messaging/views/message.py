@@ -32,6 +32,7 @@ class MessageListView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     @extend_schema(
+        tags=["Chat"],
         parameters=[
             OpenApiParameter(name='page', type=int, description='Page number', required=False),
             OpenApiParameter(name='page_size', type=int, description='Results per page', required=False),
@@ -53,6 +54,7 @@ class MessageListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Chat"],
         request=MessageCreateSerializer,
         responses={201: MessageSerializer},
         description="Create a new message (text or media) in a conversation.",

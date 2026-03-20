@@ -54,6 +54,8 @@ class UserActivityListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Activity"],
+        
         parameters=[
             OpenApiParameter(
                 name="action",
@@ -96,6 +98,8 @@ class FollowingActivityView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Activity"],
+        
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -129,6 +133,8 @@ class ActivitySummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Activity"],
+        
         responses={200: ActivitySummaryResponseSerializer},
         description="Get a summary of the current user's activity (total counts, last activity, breakdown by type).",
     )
@@ -189,6 +195,8 @@ class RecentActivitiesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Activity"],
+        
         parameters=[
             OpenApiParameter(
                 name="action",
@@ -242,6 +250,8 @@ class LogActivityView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Activity"],
+        
         request=LogActivityInputSerializer,
         responses={201: LogActivityResponseSerializer},
         examples=[

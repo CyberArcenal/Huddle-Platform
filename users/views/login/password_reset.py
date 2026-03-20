@@ -30,6 +30,8 @@ class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticatedAndNotBlacklisted]
 
     @extend_schema(
+        tags=["Password Reset"],
+        
         request=PasswordChangeRequestSerializer,
         responses={
             200: PasswordChangeResponseSerializer,
@@ -213,6 +215,8 @@ class PasswordStrengthCheckView(APIView):
     permission_classes = [IsAuthenticatedAndNotBlacklisted]
 
     @extend_schema(
+        tags=["Password Reset"],
+        
         request=PasswordStrengthCheckRequestSerializer,
         responses={200: PasswordStrengthCheckResponseSerializer},
         examples=[
@@ -349,6 +353,8 @@ class PasswordHistoryView(APIView):
     pagination_class = CustomPagination
 
     @extend_schema(
+        tags=["Password Reset"],
+        
         responses={200: PasswordHistoryResponseSerializer},
         examples=[
             OpenApiExample(

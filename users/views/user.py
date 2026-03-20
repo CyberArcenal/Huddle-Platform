@@ -57,6 +57,7 @@ class UserRegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
+        tags=["User's"],
         request=UserCreateSerializer,
         responses={201: UserRegisterResponse},
         examples=[
@@ -143,6 +144,7 @@ class UserProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User's"],
         responses={200: UserProfileSerializer},
         description="Get the profile of the currently authenticated user.",
     )
@@ -151,6 +153,7 @@ class UserProfileView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["User's"],
         request=UserProfileSchemaUpdateSerializer,
         responses={200: UserProfileResponse},
         examples=[
@@ -205,6 +208,7 @@ class UserDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User's"],
         responses={200: UserProfileSerializer},
         description="Retrieve a user's public profile by ID.",
     )
@@ -230,6 +234,7 @@ class UserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User's"],
         parameters=[
             OpenApiParameter(
                 name="q",
@@ -281,6 +286,7 @@ class UserStatusUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User's"],
         request=UserStatusSerializer,
         responses={200: UserStatusUpdateResponse},
         examples=[
@@ -342,6 +348,7 @@ class UserDeactivateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User's"],
         request=UserDeactivateInputSerializer,
         responses={200: UserStatusUpdateResponse},
         examples=[
@@ -405,6 +412,7 @@ class VerifyUserView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User's"],
         responses={200: VerifyUserResponse},
         description="Mark the current user's account as verified. (Typically called after email confirmation.)",
     )
@@ -445,6 +453,7 @@ class CheckUsernameView(APIView):
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
+        tags=["User's"],
         parameters=[
             OpenApiParameter(
                 name="username",
@@ -531,6 +540,7 @@ class CheckEmailView(APIView):
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
+        tags=["User's"],
         parameters=[
             OpenApiParameter(
                 name="email", type=str, description="Email to check", required=True

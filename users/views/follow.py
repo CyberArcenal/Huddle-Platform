@@ -8,6 +8,7 @@ from django.db.models import Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from global_utils.pagination import UsersPagination
 from users.serializers.user import UserListSerializer
+from users.services.matching import MatchingService
 from users.views.user import PaginatedUserListSerializer
 
 from ..services.user_follow import UserFollowService
@@ -34,6 +35,8 @@ class FollowUserView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         request=FollowUserSerializer,
         responses={201: FollowUserResponseSerializer},
         examples=[
@@ -89,6 +92,8 @@ class UnfollowUserView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         request=UnfollowUserSerializer,
         responses={200: UnfollowUserResponseSerializer},
         examples=[
@@ -131,6 +136,8 @@ class FollowStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         responses={200: FollowStatusResponseSerializer},
         description="Check if the current user is following another user.",
     )
@@ -159,6 +166,8 @@ class FollowStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -209,6 +218,8 @@ class FollowersListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -260,6 +271,8 @@ class FollowingListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -310,6 +323,8 @@ class MutualFollowsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -350,45 +365,48 @@ class MutualFollowsView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SuggestedUsersView(APIView):
-    """View for getting suggested users to follow"""
+# users/views/follow.py (updated part)
 
+from users.services.matching import MatchingService
+from users.serializers.matching import UserMutualCountSerializer
+
+
+class SuggestedUsersView(APIView):
+    """View for getting suggested users to follow based on mutual connections."""
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         parameters=[
             OpenApiParameter(
-                name="page", type=int, description="Page number", required=False
+                name="limit", type=int, description="Number of suggestions", required=False
             ),
             OpenApiParameter(
-                name="page_size",
-                type=int,
-                description="Results per page",
-                required=False,
+                name="offset", type=int, description="Offset for pagination", required=False
             ),
             OpenApiParameter(
-                name="limit", type=int, description="Suggested Limit Number", required=False
+                name="min_mutual", type=int, description="Minimum number of mutual friends", required=False
             ),
         ],
-        responses={200: PaginatedUserListSerializer},
-        description="Get suggested users to follow based on mutual connections.",
+        responses={200: UserMutualCountSerializer(many=True)},
+        description="Get suggested users based on friends of friends (mutual connections).",
     )
     def get(self, request):
-        try:
-            limit = int(request.query_params.get("limit", 10))
-            suggested_users = UserFollowService.get_suggested_users(
-                user=request.user, limit=limit
-            )
-            paginator = UsersPagination()
-            page = paginator.paginate_queryset(suggested_users, request)
-            serializer = UserListSerializer(
-                page, many=True, context={"request": request}
-            )
+        limit = int(request.query_params.get('limit', 10))
+        offset = int(request.query_params.get('offset', 0))
+        min_mutual = int(request.query_params.get('min_mutual', 1))
 
-            return paginator.get_paginated_response(serializer.data)
+        suggestions = MatchingService.get_suggested_users(
+            user=request.user,
+            limit=limit,
+            offset=offset,
+            min_mutual=min_mutual
+        )
 
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # suggestions is already a list of dicts with 'user' and 'mutual_count'
+        serializer = UserMutualCountSerializer(suggestions, many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 class MutualFriendsView(APIView):
@@ -397,6 +415,8 @@ class MutualFriendsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -436,6 +456,8 @@ class PopularUsersView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["Follow Views"],
+        
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False

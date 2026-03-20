@@ -45,6 +45,7 @@ class CommentListView(APIView):
         return [IsAuthenticated()]
 
     @extend_schema(
+        tags=["Comment's"],
         parameters=[
             # post_id is a path parameter, not query
             OpenApiParameter(
@@ -138,6 +139,7 @@ class CommentListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Comment's"],
         request=CommentCreateSerializer,
         responses={201: CommentDisplaySerializer},
         examples=[
@@ -244,6 +246,7 @@ class CommentDetailView(APIView):
         return get_object_or_404(Comment, id=comment_id)
 
     @extend_schema(
+        tags=["Comment's"],
         responses={200: CommentDisplaySerializer},
         description="Retrieve a single comment by ID.",
     )
@@ -262,6 +265,7 @@ class CommentDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Comment's"],
         request=CommentCreateSerializer,
         responses={200: CommentDisplaySerializer},
         examples=[
@@ -320,6 +324,7 @@ class CommentDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Comment's"],
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}
         },
@@ -359,6 +364,7 @@ class CommentRepliesView(APIView):
         return [IsAuthenticated()]
 
     @extend_schema(
+        tags=["Comment's"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -391,6 +397,7 @@ class CommentRepliesView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Comment's"],
         request=CommentCreateSerializer,
         responses={201: CommentDisplaySerializer},
         examples=[
@@ -446,6 +453,7 @@ class CommentThreadView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Comment's"],
         responses={
             200: {
                 "type": "object",
@@ -489,6 +497,7 @@ class CommentSearchView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Comment's"],
         parameters=[
             OpenApiParameter(
                 name="query", type=str, description="Search term", required=True

@@ -32,9 +32,31 @@ from users.serializers.auth import (
     Verify2FAResponseSerializer,
     Resend2FAResponseSerializer,
 )
-
+from rest_framework import serializers
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+class LoginSuccessResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    user = UserProfileSerializer()
+    refreshToken = serializers.CharField()
+    accessToken = serializers.CharField()
+    expiresIn = serializers.IntegerField()
+    message = serializers.CharField()
+
+
+class Login2FAResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    requires_2fa = serializers.BooleanField()
+    checkpoint_token = serializers.CharField()
+    message = serializers.CharField()
+    expires_in = serializers.IntegerField()
+
+
+class LoginErrorResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    detail = serializers.CharField()
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -43,13 +65,15 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Login"],
         request=LoginRequestSerializer,
         responses={
-            200: OpenApiTypes.OBJECT,  # We'll handle two possible shapes via examples
-            400: OpenApiTypes.OBJECT,
-            401: OpenApiTypes.OBJECT,
-            404: OpenApiTypes.OBJECT,
-            500: OpenApiTypes.OBJECT,
+            200: LoginSuccessResponseSerializer,
+            202: Login2FAResponseSerializer,  # optional, kung gusto mong ihiwalay
+            400: LoginErrorResponseSerializer,
+            401: LoginErrorResponseSerializer,
+            404: LoginErrorResponseSerializer,
+            500: LoginErrorResponseSerializer,
         },
         examples=[
             OpenApiExample(
@@ -261,6 +285,7 @@ class Verify2FALoginView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Login"],
         request=Verify2FARequestSerializer,
         responses={
             200: Verify2FAResponseSerializer,
@@ -413,6 +438,7 @@ class Resend2FAOTPView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Login"],
         request=Resend2FARequestSerializer,
         responses={
             200: Resend2FAResponseSerializer,

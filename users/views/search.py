@@ -29,6 +29,8 @@ class UserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Search's"],
+        
         parameters=[
             OpenApiParameter(name="query", type=str, required=True),
             OpenApiParameter(name="page", type=int, required=False),
@@ -56,6 +58,8 @@ class AdvancedUserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Search's"],
+        
         parameters=[
             OpenApiParameter(name="username", type=str, required=False),
             OpenApiParameter(name="email", type=str, required=False),
@@ -98,6 +102,8 @@ class SearchAutocompleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Search's"],
+        
         parameters=[
             OpenApiParameter(name="query", type=str, required=True),
         ],
@@ -166,6 +172,8 @@ class SearchByUsernameView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Search's"],
+        
         parameters=[
             OpenApiParameter(name="username", type=str, required=True),
         ],
@@ -218,6 +226,8 @@ class SearchByEmailView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["User Search's"],
+        
         parameters=[
             OpenApiParameter(name="email", type=str, required=True),
         ],
@@ -251,6 +261,8 @@ class GlobalSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Search's"],
+        
         parameters=[
             OpenApiParameter(name="q", type=str, required=True),
         ],

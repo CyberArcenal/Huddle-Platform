@@ -23,6 +23,8 @@ class TokenVerifyView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Token Verify"],
+        
         request=TokenVerifyRequestSerializer,
         responses={
             200: TokenVerifyResponseSerializer,

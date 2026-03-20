@@ -46,6 +46,7 @@ class ReportCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Report's"],
         request=ReportContentInputSerializer,
         responses={201: ReportedContentDisplaySerializer},
         examples=[
@@ -99,6 +100,7 @@ class ReportListView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="status", type=str, description="Filter by status", required=False
@@ -175,6 +177,7 @@ class ReportPendingView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="content_type",
@@ -208,6 +211,7 @@ class ReportDetailView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         responses={200: ReportedContentDisplaySerializer},
         description="Retrieve a single report by ID.",
     )
@@ -225,6 +229,7 @@ class ReportUpdateStatusView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         request=ReportStatusUpdateSerializer,
         responses={200: ReportedContentDisplaySerializer},
         examples=[
@@ -297,6 +302,7 @@ class ReportResolveView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         request=ResolveReportInputSerializer,
         responses={200: ReportResolveResponseSerializer},
         examples=[
@@ -369,6 +375,7 @@ class ReportDismissView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         request=DismissReportInputSerializer,  # <-- using dedicated serializer
         responses={200: ReportedContentDisplaySerializer},
         examples=[
@@ -421,6 +428,7 @@ class ReportStatisticsView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -464,6 +472,7 @@ class ReportUrgentView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="threshold",
@@ -509,6 +518,7 @@ class ReportUserHistoryView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="as_reporter",
@@ -543,6 +553,7 @@ class ReportSearchView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="query", type=str, description="Search query", required=True
@@ -586,6 +597,7 @@ class ReportCleanupView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         request=CleanupReportsInputSerializer,  # <-- using dedicated serializer
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}
@@ -655,6 +667,7 @@ class ReportModerationReportView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Report's"],
         parameters=[
             OpenApiParameter(
                 name="start_date",

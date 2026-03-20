@@ -81,6 +81,8 @@ class ProfilePictureUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     @extend_schema(
+        tags=["User Media"],
+        
         request=ProfilePictureUploadSerializer,
         responses={
             200: OpenApiResponse(
@@ -170,6 +172,8 @@ class CoverPhotoUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     @extend_schema(
+        tags=["User Media"],
+        
         request=CoverPhotoUploadSerializer,
         responses={
             200: OpenApiResponse(
@@ -258,6 +262,8 @@ class RemoveProfilePictureView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Media"],
+        
         request=RemoveProfilePictureSerializer,
         responses={
             200: OpenApiResponse(
@@ -322,6 +328,8 @@ class RemoveCoverPhotoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Media"],
+        
         request=RemoveCoverPhotoSerializer,
         responses={
             200: OpenApiResponse(
@@ -382,6 +390,8 @@ class GetProfilePictureView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Media"],
+        
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -451,6 +461,8 @@ class GetCoverPhotoView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
+        tags=["User Media"],
+        
         parameters=[
             OpenApiParameter(
                 name="user_id",

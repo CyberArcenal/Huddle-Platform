@@ -79,6 +79,7 @@ class PlatformAnalyticsDailyView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -111,6 +112,7 @@ class PlatformAnalyticsDailyView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         request=UpdatePlatformAnalyticsInputSerializer,
         responses={200: PlatformAnalyticsDisplaySerializer},
         examples=[
@@ -162,6 +164,7 @@ class PlatformAnalyticsRangeView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="start_date",
@@ -231,6 +234,7 @@ class PlatformAnalyticsSummaryView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -255,6 +259,7 @@ class PlatformAnalyticsTrendsView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="metric",
@@ -317,6 +322,7 @@ class PlatformAnalyticsHealthView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -341,6 +347,7 @@ class PlatformAnalyticsTopDaysView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="metric",
@@ -377,6 +384,7 @@ class PlatformAnalyticsCorrelationView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="metric1", type=str, description="First metric", required=True
@@ -422,6 +430,7 @@ class PlatformAnalyticsReportView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         parameters=[
             OpenApiParameter(
                 name="date",
@@ -457,6 +466,7 @@ class PlatformAnalyticsCleanupView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        tags=["Platform Analytic's"],
         request=CleanupAnalyticsInputSerializer,
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}

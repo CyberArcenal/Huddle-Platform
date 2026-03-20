@@ -39,6 +39,7 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Notification's"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -71,6 +72,7 @@ class NotificationUnreadCountView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Notification's"],
         responses={
             200: {"type": "object", "properties": {"unread_count": {"type": "integer"}}}
         },
@@ -95,6 +97,7 @@ class NotificationDetailView(APIView):
         return get_object_or_404(Notification, pk=pk, user=user)
 
     @extend_schema(
+        tags=["Notification's"],
         responses={200: NotificationSerializer},
         description="Retrieve a single notification by ID.",
     )
@@ -104,6 +107,7 @@ class NotificationDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Notification's"],
         request=NotificationSerializer,
         responses={200: NotificationSerializer},
         examples=[
@@ -121,7 +125,8 @@ class NotificationDetailView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(responses={204: None}, description="Delete a notification.")
+    @extend_schema(
+        tags=["Notification's"],responses={204: None}, description="Delete a notification.")
     @transaction.atomic
     def delete(self, request, pk):
         notification = self.get_object(pk, request.user)
@@ -135,6 +140,7 @@ class NotificationMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Notification's"],
         request=NotificationMarkReadSerializer,
         responses={200: NotificationSerializer, 200: {"type": "object"}},
         examples=[
@@ -206,6 +212,7 @@ class NotificationMarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Notification's"],
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}
         },

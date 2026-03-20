@@ -90,6 +90,7 @@ class StoryListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -113,6 +114,7 @@ class StoryListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Storie's"],
         request=StoryCreateSerializer,
         responses={201: StorySerializer},
         examples=[
@@ -163,6 +165,7 @@ class StoryDetailView(APIView):
         return story
 
     @extend_schema(
+        tags=["Storie's"],
         responses={200: StorySerializer}, description="Retrieve a single story by ID."
     )
     def get(self, request, story_id):
@@ -175,6 +178,7 @@ class StoryDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Storie's"],
         request=StoryUpdateSerializer,
         responses={200: StorySerializer},
         examples=[
@@ -205,6 +209,7 @@ class StoryDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Storie's"],
         responses={
             200: {"type": "object", "properties": {"status": {"type": "string"}}}
         },
@@ -236,6 +241,7 @@ class StoryFeedView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="include_own",
@@ -281,6 +287,7 @@ class StoryStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         responses={200: StoryStatsSerializer},
         description="Get statistics about the current user's stories (total, views, etc.).",
     )
@@ -296,6 +303,7 @@ class StoryViewCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         request=StoryViewCreateSerializer,
         responses={201: StoryViewSerializer},
         examples=[
@@ -322,6 +330,7 @@ class StoryViewsListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -361,6 +370,7 @@ class StoryViewCountView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         responses={200: StoryViewCountSerializer},
         description="Get total view count and unique viewers for a story. Accessible if the story is visible to the user.",
     )
@@ -385,6 +395,7 @@ class StoryRecentViewersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="hours",
@@ -427,6 +438,7 @@ class StoryDeactivateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         responses={
             200: {"type": "object", "properties": {"status": {"type": "string"}}}
         },
@@ -454,6 +466,7 @@ class StoryExtendView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         request=ExtendStoryInputSerializer,  # ✅ Now using proper serializer
         responses={
             200: {"type": "object", "properties": {"status": {"type": "string"}}}
@@ -493,6 +506,7 @@ class UserStoriesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="include_expired",
@@ -539,6 +553,7 @@ class FollowingStoriesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="limit",
@@ -564,6 +579,7 @@ class StoryHighlightsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -598,6 +614,7 @@ class StoryRecommendationsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="limit",
@@ -625,6 +642,7 @@ class StoryCleanupView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         request=CleanupStoriesInputSerializer,  # ✅ Now using proper serializer
         responses={200: StoryCleanupResponseSerializer},
         examples=[
@@ -660,6 +678,7 @@ class StoriesByTypeView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="active_only",
@@ -708,6 +727,7 @@ class StoryViewStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         responses={200: StoryViewStatsResponseSerializer},
         description="Get statistics about the current user's story viewing habits (stories viewed, unique creators, etc.).",
     )
@@ -734,6 +754,7 @@ class MutualStoryViewsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         responses={200: MutualStoryViewsResponseSerializer},
         description="Get mutual story viewing data between the current user and another user.",
     )
@@ -765,6 +786,7 @@ class PopularStoriesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Storie's"],
         parameters=[
             OpenApiParameter(
                 name="hours",

@@ -105,6 +105,7 @@ class BaseSearchView(APIView):
             )
 
 @extend_schema(
+        tags=["Global Dedicated Search's"],
     parameters=[
         OpenApiParameter(name='q', type=str, location=OpenApiParameter.QUERY, required=True, description='Search query'),
         OpenApiParameter(name='page', type=int, location=OpenApiParameter.QUERY, required=False, description='Page number'),
@@ -120,6 +121,7 @@ class UserSearchView(BaseSearchView):
 
 
 @extend_schema(
+        tags=["Global Dedicated Search's"],
     parameters=[
         OpenApiParameter(name='q', type=str, location=OpenApiParameter.QUERY, required=True, description='Search query'),
         OpenApiParameter(name='page', type=int, location=OpenApiParameter.QUERY, required=False, description='Page number'),
@@ -135,6 +137,7 @@ class GroupSearchView(BaseSearchView):
 
 
 @extend_schema(
+        tags=["Global Dedicated Search's"],
     parameters=[
         OpenApiParameter(name='q', type=str, location=OpenApiParameter.QUERY, required=True, description='Search query'),
         OpenApiParameter(name='page', type=int, location=OpenApiParameter.QUERY, required=False, description='Page number'),
@@ -150,6 +153,7 @@ class EventSearchView(BaseSearchView):
 
 
 @extend_schema(
+        tags=["Global Dedicated Search's"],
     parameters=[
         OpenApiParameter(name='q', type=str, location=OpenApiParameter.QUERY, required=True, description='Search query'),
         OpenApiParameter(name='page', type=int, location=OpenApiParameter.QUERY, required=False, description='Page number'),

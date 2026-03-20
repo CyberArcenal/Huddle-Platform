@@ -1,11 +1,15 @@
+import logging
+
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any, Tuple
 
+from groups.models.member import GROUP_ROLE_CHOICES
 from users.models.user import User
 from ..models import Group, GroupMember
 
+logger = logging.getLogger(__name__)
 
 class GroupMemberService:
     """Service for GroupMember model operations"""
@@ -19,7 +23,7 @@ class GroupMemberService:
     ) -> Tuple[bool, Optional[GroupMember]]:
         """Add a user to a group"""
         # Validate role
-        valid_roles = [choice[0] for choice in GroupMember.ROLE_CHOICES]
+        valid_roles = [choice[0] for choice in GROUP_ROLE_CHOICES]
         if role not in valid_roles:
             raise ValidationError(f"Role must be one of {valid_roles}")
 
@@ -75,7 +79,7 @@ class GroupMemberService:
     ) -> Optional[GroupMember]:
         """Update a member's role"""
         # Validate role
-        valid_roles = [choice[0] for choice in GroupMember.ROLE_CHOICES]
+        valid_roles = [choice[0] for choice in GROUP_ROLE_CHOICES]
         if new_role not in valid_roles:
             raise ValidationError(f"Role must be one of {valid_roles}")
 
@@ -224,7 +228,7 @@ class GroupMemberService:
         """Get group member hierarchy by role"""
         members_by_role = {}
 
-        for role_choice in GroupMember.ROLE_CHOICES:
+        for role_choice in GROUP_ROLE_CHOICES:
             role = role_choice[0]
             members = (
                 GroupMember.objects.filter(group=group, role=role)

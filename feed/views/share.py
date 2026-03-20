@@ -54,6 +54,7 @@ class ShareListView(APIView):
         return [IsAuthenticated()]
 
     @extend_schema(
+        tags=["Share Post's"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -115,6 +116,7 @@ class ShareListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Share Post's"],
         request=ShareCreateSerializer,
         responses={201: ShareDisplaySerializer},
         examples=[
@@ -160,6 +162,7 @@ class ShareDetailView(APIView):
             return None
 
     @extend_schema(
+        tags=["Share Post's"],
         responses={200: ShareDisplaySerializer},
         description="Retrieve a single share by ID.",
     )
@@ -174,6 +177,7 @@ class ShareDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Share Post's"],
         request=ShareCreateSerializer,  # reuse create serializer for updates
         responses={200: ShareDisplaySerializer},
         examples=[
@@ -219,6 +223,7 @@ class ShareDetailView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Share Post's"],
         parameters=[
             OpenApiParameter(
                 name="hard",
@@ -267,6 +272,7 @@ class ShareObjectSharesView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Share Post's"],
         parameters=[
             OpenApiParameter(
                 name="content_type",
@@ -340,6 +346,7 @@ class ShareUserStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Share Post's"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -372,6 +379,7 @@ class ShareRestoreView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Share Post's"],
         responses={200: ShareRestoreResponseSerializer},
         description="Restore a soft-deleted share (only owner).",
     )

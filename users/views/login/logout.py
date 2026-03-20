@@ -25,6 +25,7 @@ class LogoutView(APIView):
     """
 
     @extend_schema(
+        tags=["Log Out"],
         request=LogoutRequestSerializer,
         responses={
             200: LogoutResponseSerializer,
@@ -147,6 +148,7 @@ class LogoutAllView(APIView):
     """
 
     @extend_schema(
+        tags=["Log Out"],
         responses={
             200: LogoutResponseSerializer,
             401: OpenApiTypes.OBJECT,

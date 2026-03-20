@@ -9,11 +9,11 @@ from groups.views.base import (
     GroupMembersView,
     GroupPopularView,
     GroupPrivacyView,
-    GroupRecommendationsView,
     GroupSearchMembersView,
     GroupStatisticsView,
     GroupTransferOwnershipView,
 )
+from groups.views.group_suggestion import GroupSuggestionView
 
 app_name = "groups"
 
@@ -50,8 +50,7 @@ urlpatterns = [
     ),
     path("<int:group_id>/privacy/", GroupPrivacyView.as_view(), name="change-privacy"),
     # Discovery and recommendations
-    path(
-        "recommendations/", GroupRecommendationsView.as_view(), name="recommendations"
-    ),
     path("popular/", GroupPopularView.as_view(), name="popular-groups"),
+    
+    path("suggestions/", GroupSuggestionView.as_view(), name="group-suggestions"),
 ]

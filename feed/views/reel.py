@@ -42,6 +42,7 @@ class ReelListView(APIView):
         return [IsAuthenticated()]
 
     @extend_schema(
+        tags=["Reel's"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -83,6 +84,7 @@ class ReelListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Reel's"],
         request=ReelCreateSerializer,
         responses={201: ReelDisplaySerializer},
         examples=[
@@ -139,6 +141,7 @@ class ReelDetailView(APIView):
         return False
 
     @extend_schema(
+        tags=["Reel's"],
         responses={200: ReelDisplaySerializer},
         description="Retrieve a single reel by ID.",
     )
@@ -153,6 +156,7 @@ class ReelDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Reel's"],
         request=ReelUpdateSerializer,
         responses={200: ReelDisplaySerializer},
         examples=[
@@ -183,6 +187,7 @@ class ReelDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Reel's"],
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}
         },
@@ -211,6 +216,7 @@ class ReelSearchView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Reel's"],
         parameters=[
             OpenApiParameter(name='q', type=str, description='Search query', required=True),
             OpenApiParameter(name='user_id', type=int, description='Filter by user ID', required=False),
@@ -247,6 +253,7 @@ class TrendingReelsView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Reel's"],
         parameters=[
             OpenApiParameter(name='hours', type=int, description='Time window in hours', required=False),
             OpenApiParameter(name='min_likes', type=int, description='Minimum likes', required=False),
@@ -275,6 +282,7 @@ class ReelStatisticsView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Reel's"],
         responses={
             200: {
                 'type': 'object',
@@ -313,6 +321,7 @@ class ReelRestoreView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Reel's"],
         responses={200: ReelRestoreResponseSerializer},
         description="Restore a soft‑deleted reel. Only owner can restore."
     )
@@ -343,6 +352,7 @@ class UserReelStatisticsView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
+        tags=["Reel's"],
         responses={
             200: {
                 'type': 'object',

@@ -36,6 +36,7 @@ class ConversationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Conversation"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -62,6 +63,7 @@ class ConversationListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Conversation"],
         request=ConversationCreateSerializer,
         responses={201: ConversationSerializer},
         examples=[
@@ -125,6 +127,7 @@ class ConversationDetailView(APIView):
         return conv
 
     @extend_schema(
+        tags=["Conversation"],
         responses={200: ConversationSerializer},
         description="Retrieve details of a specific conversation.",
     )
@@ -134,6 +137,7 @@ class ConversationDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Conversation"],
         responses={204: None},
         description="Delete a conversation. Only participants can delete (or you may choose to just leave).",
     )

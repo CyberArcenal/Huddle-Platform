@@ -15,10 +15,11 @@ from groups.serializers.base import (
     GroupStatisticsSerializer,
     TransferOwnershipSerializer,
 )
-from groups.serializers.group import GroupCreateSerializer, GroupDisplaySerializer
+from groups.serializers.group import GroupCreateSerializer, GroupDisplaySerializer, GroupMinimalSerializer
 from groups.serializers.member import (
     GroupMemberCreateSerializer,
     GroupMemberDisplaySerializer,
+    GroupMemberMinimalSerializer,
     GroupMemberUpdateSerializer,
 )
 from groups.services.group import GroupService
@@ -53,7 +54,7 @@ class PaginatedGroupSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = GroupDisplaySerializer(many=True)
+    results = GroupMinimalSerializer(many=True)
 
 
 class PaginatedGroupMemberSerializer(serializers.Serializer):
@@ -65,7 +66,7 @@ class PaginatedGroupMemberSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = GroupMemberDisplaySerializer(many=True)
+    results = GroupMemberMinimalSerializer(many=True)
 
 
 # --------------------------------------------------------------
@@ -77,6 +78,7 @@ class GroupListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         parameters=[
             OpenApiParameter(
                 name="query",
@@ -124,12 +126,13 @@ class GroupListView(APIView):
         # Apply pagination
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(groups, request)
-        group_serializer = GroupDisplaySerializer(
+        group_serializer = GroupMinimalSerializer(
             page, many=True, context={"request": request}
         )
         return paginator.get_paginated_response(group_serializer.data)
 
     @extend_schema(
+        tags=["Group View's"],
         request=GroupCreateSerializer,
         responses={201: GroupDisplaySerializer},
         examples=[
@@ -186,6 +189,7 @@ class GroupDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         responses={200: GroupDisplaySerializer},
         description="Retrieve details of a specific group.",
     )
@@ -200,6 +204,7 @@ class GroupDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=["Group View's"],
         request=GroupCreateSerializer,
         responses={200: GroupDisplaySerializer},
         examples=[
@@ -216,6 +221,7 @@ class GroupDetailView(APIView):
         return self._update_group(request, group_id, partial=False)
 
     @extend_schema(
+        tags=["Group View's"],
         request=GroupCreateSerializer,
         responses={200: GroupDisplaySerializer},
         examples=[
@@ -254,6 +260,7 @@ class GroupDetailView(APIView):
         )
 
     @extend_schema(
+        tags=["Group View's"],
         responses={204: None},
         description="Delete a group. Only the creator can delete.",
     )
@@ -280,6 +287,7 @@ class GroupMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -304,10 +312,11 @@ class GroupMembersView(APIView):
         members = GroupMemberService.get_group_members(group)
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(members, request)
-        serializer = GroupMemberDisplaySerializer(page, many=True)
+        serializer = GroupMemberMinimalSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
+        tags=["Group View's"],
         request=GroupMemberCreateSerializer,
         responses={201: GroupMemberDisplaySerializer},
         examples=[
@@ -350,6 +359,7 @@ class GroupMembersView(APIView):
         )
 
     @extend_schema(
+        tags=["Group View's"],
         request=RemoveMemberInputSerializer,  # ✅ Now using proper serializer
         responses={204: None},
         examples=[
@@ -399,6 +409,7 @@ class GroupMemberRoleView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         request=GroupMemberUpdateSerializer,
         responses={200: GroupMemberDisplaySerializer},
         examples=[
@@ -432,6 +443,7 @@ class GroupJoinView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         responses={201: GroupMemberDisplaySerializer},
         description="Join a public group. For private groups, the user must be invited.",
     )
@@ -459,6 +471,7 @@ class GroupLeaveView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         responses={204: None},
         description="Leave a group. Creator cannot leave without transferring ownership first.",
     )
@@ -488,6 +501,7 @@ class GroupStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         responses={200: GroupStatisticsSerializer},
         description="Get statistics for a group (member count, posts count, etc.).",
     )
@@ -507,6 +521,7 @@ class GroupTransferOwnershipView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         request=TransferOwnershipSerializer,
         responses={
             200: {"type": "object", "properties": {"detail": {"type": "string"}}}
@@ -549,6 +564,7 @@ class GroupPrivacyView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         request=ChangePrivacyInputSerializer,  # ✅ Now using proper serializer
         responses={200: GroupDisplaySerializer},
         examples=[
@@ -580,38 +596,11 @@ class GroupPrivacyView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class GroupRecommendationsView(APIView):
-    """View for group recommendations (already limited, not paginated)"""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(
-                name="limit",
-                type=int,
-                description="Number of recommendations",
-                required=False,
-            ),
-        ],
-        responses={200: PaginatedGroupSerializer},
-        description="Get group recommendations for the current user based on their interests/follows.",
-    )
-    def get(self, request):
-        limit = int(request.query_params.get("limit", 10))
-        recommendations = GroupService.get_recommended_groups(
-            user=request.user, limit=limit
-        )
-        serializer = GroupDisplaySerializer(
-            recommendations, many=True, context={"request": request}
-        )
-        return Response(serializer.data)
-
-
 class GroupPopularView(APIView):
     """View for popular groups (already limited, not paginated)"""
 
     @extend_schema(
+        tags=["Group View's"],
         parameters=[
             OpenApiParameter(
                 name="limit", type=int, description="Number of results", required=False
@@ -639,7 +628,7 @@ class GroupPopularView(APIView):
         popular_groups = GroupService.get_popular_groups(
             min_members=min_members, days=days, limit=limit
         )
-        serializer = GroupDisplaySerializer(
+        serializer = GroupMinimalSerializer(
             popular_groups, many=True, context={"request": request}
         )
         return Response(serializer.data)
@@ -651,6 +640,7 @@ class GroupSearchMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=["Group View's"],
         parameters=[
             OpenApiParameter(
                 name="query",
@@ -687,5 +677,5 @@ class GroupSearchMembersView(APIView):
         members = GroupMemberService.search_members(group=group, query=query)
         paginator = GroupsPagination()
         page = paginator.paginate_queryset(members, request)
-        serializer = GroupMemberDisplaySerializer(page, many=True)
+        serializer = GroupMemberMinimalSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)

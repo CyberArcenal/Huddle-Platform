@@ -181,32 +181,6 @@ class GroupService:
         return list(popular_groups)
     
     @staticmethod
-    def get_recommended_groups(
-        user: User,
-        limit: int = 10
-    ) -> List[Group]:
-        """Get group recommendations for a user"""
-        from .group_member import GroupMemberService
-        from users.services import UserFollowService
-        
-        # Get groups of people user follows
-        following_users = UserFollowService.get_following(user)
-        
-        if following_users:
-            # Get groups where followed users are members
-            recommended_groups = Group.objects.filter(
-                memberships__user__in=following_users,
-                privacy='public'
-            ).exclude(
-                creator=user  # Exclude user's own groups
-            ).distinct().order_by('-member_count')[:limit]
-            
-            return list(recommended_groups)
-        
-        # Fallback: popular public groups
-        return GroupService.get_popular_groups(min_members=5, limit=limit)
-    
-    @staticmethod
     def update_member_count(group: Group) -> Group:
         """Update member count for a group"""
         from .group_member import GroupMemberService

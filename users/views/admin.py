@@ -68,6 +68,8 @@ class AdminUserListView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         parameters=[
             OpenApiParameter(
                 name="status",
@@ -148,6 +150,8 @@ class AdminUserDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         responses={200: AdminUserDetailResponseSerializer},
         description="Retrieve detailed user information including recent activities and security logs.",
     )
@@ -180,6 +184,8 @@ class AdminUserDetailView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         request=AdminUserUpdateSerializer,
         responses={200: AdminCreateUserResponseSerializer},
         examples=[
@@ -226,6 +232,8 @@ class AdminCreateUserView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         request=AdminUserCreateSerializer,
         responses={201: AdminCreateUserResponseSerializer},
         examples=[
@@ -277,6 +285,8 @@ class AdminBulkUserActionView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         request=BulkUserActionSerializer,
         responses={200: AdminBulkUserActionResponseSerializer},
         examples=[
@@ -317,6 +327,8 @@ class AdminDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         responses={200: AdminDashboardResponseSerializer},
         description="Get admin dashboard statistics: user counts, activity, security events.",
     )
@@ -385,6 +397,8 @@ class UserExportView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         responses={200: UserExportResponseSerializer},
         description="Export all data for a user (GDPR compliance).",
     )
@@ -412,6 +426,8 @@ class AdminCleanupView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
+        tags=["Admin Views"],
+        
         request=CleanupActionInputSerializer,
         responses={200: CleanupActionResponseSerializer},
         examples=[
