@@ -5,7 +5,7 @@ from django.db.models import Q
 from typing import Optional, List, Dict, Any, Tuple
 import uuid
 from groups.models.group import Group
-from users.models.base import User
+from users.models import User
 from events.models import Event
 
 class EventService:

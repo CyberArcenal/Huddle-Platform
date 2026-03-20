@@ -200,3 +200,65 @@ class AdvancedSearchSerializer(serializers.Serializer):
             "has_next": page_obj.has_next(),
             "has_previous": page_obj.has_previous(),
         }
+        
+        
+        
+
+
+# ===== Response serializers for drf-spectacular =====
+
+class AutocompleteSuggestionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    full_name = serializers.CharField()
+    type = serializers.CharField(default="user")
+    profile_picture_url = serializers.URLField(required=False)
+
+
+class AutocompleteResponseSerializer(serializers.Serializer):
+    query = serializers.CharField()
+    suggestions = AutocompleteSuggestionSerializer(many=True)
+
+
+class SearchByUsernameResponseSerializer(serializers.Serializer):
+    match_type = serializers.CharField()
+    count = serializers.IntegerField()
+    results = UserListSerializer(many=True)
+
+
+class SearchByEmailResponseSerializer(serializers.Serializer):
+    query = serializers.CharField()
+    count = serializers.IntegerField()
+    results = UserListSerializer(many=True)
+
+
+class GlobalSearchResultsSerializer(serializers.Serializer):
+    users = UserListSerializer(many=True)
+    users_count = serializers.IntegerField()
+    total = serializers.IntegerField()
+
+
+class GlobalSearchResponseSerializer(serializers.Serializer):
+    query = serializers.CharField()
+    results = GlobalSearchResultsSerializer()
+
+
+class AdvancedSearchPaginatedResponseSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    total_count = serializers.IntegerField()
+    total_pages = serializers.IntegerField()
+    results = SearchResultSerializer(many=True)
+    
+class PaginatedSearchResultSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = SearchResultSerializer(many=True)

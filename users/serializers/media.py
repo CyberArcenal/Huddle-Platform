@@ -351,6 +351,7 @@ class RemoveCoverPhotoSerializer(serializers.Serializer):
         return user
     
     
+    
 
 
 

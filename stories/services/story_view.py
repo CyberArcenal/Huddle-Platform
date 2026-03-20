@@ -2,7 +2,9 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
-from ..models import Story, StoryView, User
+
+from users.models.user import User
+from ..models import Story, StoryView
 
 
 class StoryViewService:

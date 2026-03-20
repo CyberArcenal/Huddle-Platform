@@ -1,9 +1,8 @@
-from typing import Dict, Any, Optional
+from typing import Optional
 
-from django.core.exceptions import ValidationError
 from rest_framework import serializers
 
-from feed.models.base import Comment, Post, User
+from feed.models.base import Comment
 from feed.models.reaction import ReactionType
 
 from feed.services.comment import CommentService

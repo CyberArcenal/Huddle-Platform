@@ -15,7 +15,7 @@ from users.serializers.auth import (
     TokenRefreshRequestSerializer,
     TokenRefreshResponseSerializer,
 )
-from users.models.base import LoginSession, User
+from users.models import LoginSession, User
 
 logger = logging.getLogger(__name__)
 

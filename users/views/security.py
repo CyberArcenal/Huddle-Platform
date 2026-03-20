@@ -14,9 +14,20 @@ from ..services.user_security_settings import UserSecuritySettingsService
 from ..services.login_session import LoginSessionService
 from ..services.blacklisted_access_token import BlacklistedAccessTokenService
 from ..serializers.security import (
+    BulkTerminateSessionsResponseSerializer,
+    ChangePasswordResponseSerializer,
     ChangePasswordSerializer,
+    Check2FAStatusResponseSerializer,
+    Disable2FAResponseSerializer,
+    Enable2FAResponseSerializer,
     EnableTwoFactorSerializer,
     DisableTwoFactorSerializer,
+    FailedLoginAttemptsResponseSerializer,
+    SecuritySettingsGetResponseSerializer,
+    SecuritySettingsUpdateResponseSerializer,
+    SuspiciousActivitiesResponseSerializer,
+    TerminateAllSessionsResponseSerializer,
+    TerminateSessionResponseSerializer,
     UpdateSecuritySettingsSerializer,
     SecurityLogSerializer,
 )
@@ -33,6 +44,7 @@ from ..serializers.activity import LoginSessionSerializer
 
 
 logger = logging.getLogger(__name__)
+
 
 class PaginatedSecurityLogSerializer(serializers.Serializer):
     count = serializers.IntegerField()
@@ -61,15 +73,7 @@ class ChangePasswordView(APIView):
 
     @extend_schema(
         request=ChangePasswordSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "user_id": {"type": "integer"},
-                },
-            }
-        },
+        responses={200: ChangePasswordResponseSerializer},
         examples=[
             OpenApiExample(
                 "Change password request",
@@ -114,16 +118,7 @@ class Enable2FAView(APIView):
 
     @extend_schema(
         request=EnableTwoFactorSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "two_factor_enabled": {"type": "boolean"},
-                    "user_id": {"type": "integer"},
-                },
-            }
-        },
+        responses={200: Enable2FAResponseSerializer},
         examples=[
             OpenApiExample(
                 "Enable 2FA request",
@@ -172,16 +167,7 @@ class Disable2FAView(APIView):
 
     @extend_schema(
         request=DisableTwoFactorSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "two_factor_enabled": {"type": "boolean"},
-                    "user_id": {"type": "integer"},
-                },
-            }
-        },
+        responses={200: Disable2FAResponseSerializer},
         examples=[
             OpenApiExample(
                 "Disable 2FA request",
@@ -229,7 +215,7 @@ class SecuritySettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={200: UpdateSecuritySettingsSerializer().data},
+        responses={200: SecuritySettingsGetResponseSerializer},
         description="Get the current user's security settings.",
     )
     def get(self, request):
@@ -242,15 +228,7 @@ class SecuritySettingsView(APIView):
 
     @extend_schema(
         request=UpdateSecuritySettingsSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "settings": UpdateSecuritySettingsSerializer().data,
-                },
-            }
-        },
+        responses={200: SecuritySettingsUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update settings",
@@ -341,16 +319,7 @@ class FailedLoginAttemptsView(APIView):
 
     @extend_schema(
         parameters=[...],
-        responses={
-            200: inline_serializer(
-                name="FailedLoginAttemptsResponse",
-                fields={
-                    "count": serializers.IntegerField(),
-                    "hours": serializers.IntegerField(),
-                    "attempts": SecurityLogSerializer(many=True).data,
-                },
-            )
-        },
+        responses={200: FailedLoginAttemptsResponseSerializer},
         examples=[
             OpenApiExample(
                 "Response",
@@ -411,15 +380,7 @@ class SuspiciousActivitiesView(APIView):
                 required=False,
             ),
         ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "count": {"type": "integer"},
-                    "activities": SecurityLogSerializer(many=True).data,
-                },
-            }
-        },
+        responses={200: SuspiciousActivitiesResponseSerializer},
         description="Get suspicious activities flagged for the current user.",
     )
     def get(self, request):
@@ -479,9 +440,7 @@ class TerminateSessionView(APIView):
 
     @extend_schema(
         request=TerminateSessionSerializer,
-        responses={
-            200: {"type": "object", "properties": {"message": {"type": "string"}}}
-        },
+        responses={200: TerminateSessionResponseSerializer},
         examples=[
             OpenApiExample(
                 "Terminate request",
@@ -521,15 +480,7 @@ class BulkTerminateSessionsView(APIView):
 
     @extend_schema(
         request=BulkTerminateSessionsSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "result": {"type": "object"},
-                },
-            }
-        },
+        responses={200: BulkTerminateSessionsResponseSerializer},
         examples=[
             OpenApiExample(
                 "Bulk terminate request",
@@ -567,9 +518,7 @@ class TerminateAllSessionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={
-            200: {"type": "object", "properties": {"message": {"type": "string"}}}
-        },
+        responses={200: TerminateAllSessionsResponseSerializer},
         description="Terminate all sessions except the current one.",
     )
     @transaction.atomic
@@ -599,15 +548,7 @@ class Check2FAStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "user_id": {"type": "integer"},
-                    "two_factor_enabled": {"type": "boolean"},
-                },
-            }
-        },
+        responses={200: Check2FAStatusResponseSerializer},
         description="Check whether two-factor authentication is enabled for the current user.",
     )
     def get(self, request):

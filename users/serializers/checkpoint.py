@@ -1,140 +1,113 @@
-import uuid
+import logging
 from rest_framework import serializers
 from django.utils import timezone
-import logging
-from django.contrib.auth import get_user_model
 
-from users.models.base import LoginCheckpoint, OtpRequestStatus
+from users.models import LoginCheckpoint, User
 from users.serializers.user import UserMinimalSerializer
-
-User = get_user_model()
-
+from users.services.login_checkpoint import LoginCheckpointService
 
 logger = logging.getLogger(__name__)
 
-class LoginCheckpointSerializer(serializers.ModelSerializer):
-    # Nested serializers for read operations
+
+# ------------------ Minimal Serializer (for lists) ------------------
+class LoginCheckpointMinimalSerializer(serializers.ModelSerializer):
     user_data = UserMinimalSerializer(source='user', read_only=True)
-    
-    # Display fields for read operations
     status_display = serializers.SerializerMethodField(read_only=True)
-    
-    # Conditional fields for write operations
-    user = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), 
-        write_only=True
-    )
-    
+
     class Meta:
         model = LoginCheckpoint
         fields = [
-            "id",
-            "user",
-            "user_data",
-            "token",
-            "created_at",
-            "expires_at",
-            "is_used",
-            "status_display"
+            'id',
+            'user_data',
+            'token',
+            'created_at',
+            'expires_at',
+            'is_used',
+            'status_display',
         ]
-        read_only_fields = [
-            "id",
-            "token",
-            "created_at",
-            "expires_at",
-            "is_used"
-        ]
-        extra_kwargs = {
-            'token': {'read_only': True},
-        }
-    
+        read_only_fields = fields
+
     def get_status_display(self, obj) -> str:
         if obj.is_used:
             return "Used"
-        elif timezone.now() > obj.expires_at:
+        if timezone.now() > obj.expires_at:
             return "Expired"
-        else:
-            return "Active"
-    
+        return "Active"
+
+
+# ------------------ Create Serializer (uses service) ------------------
+
+
+class LoginCheckpointCreateSerializer(serializers.Serializer):
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=True
+    )
+
     def create(self, validated_data):
+        user: User = validated_data['user']
+
         try:
-            # Generate a unique token
-            validated_data['token'] = uuid.uuid4().hex
-            
-            # Set expiration time (assuming 15 minutes from creation)
-            validated_data['expires_at'] = timezone.now() + timezone.timedelta(minutes=15)
-            
-            checkpoint = LoginCheckpoint.objects.create(**validated_data)
-            logger.info(f"Login checkpoint created for user: {checkpoint.user.username}")
+            checkpoint = LoginCheckpointService.create_checkpoint(
+                user=user,
+                email=user.email
+                # expiration handled internally by service
+            )
             return checkpoint
         except Exception as e:
-            logger.error(f"Login checkpoint creation failed: {str(e)}")
-            raise serializers.ValidationError(
-                {"non_field_errors": [f"Creation failed: {str(e)}"]}
-            )
-    
-    def update(self, instance, validated_data):
-        # Only allow updating is_used field
-        if 'is_used' in validated_data:
-            instance.is_used = validated_data['is_used']
-        
-        try:
-            instance.save()
-            logger.info(f"Login checkpoint {instance.id} updated")
-            return instance
-        except Exception as e:
-            logger.error(f"Login checkpoint update failed! ID: {instance.id} | Error: {str(e)}")
-            raise serializers.ValidationError(
-                {"non_field_errors": [f"Update failed: {str(e)}"]}
-            )
-    
-    def to_representation(self, instance):
-        """Customize output for read operations"""
-        representation = super().to_representation(instance)
-        
-        # For read operations, remove write-only fields
-        request = self.context.get("request")
-        if request and request.method in ["GET", "HEAD", "OPTIONS"]:
-            representation.pop("user", None)
-        
-        return representation
-    
-""" 
-Example Usage:
-# /api/v1/accounts/login-checkpoints/
-# /api/v1/accounts/login-checkpoints/<int:id>/
-# /api/v1/accounts/login-checkpoints/<int:id>/<slug:option>/
+            logger.error(f"Login checkpoint creation failed via service: {e}")
+            raise serializers.ValidationError(str(e))
 
-Create Login Checkpoint (POST):
 
-json
-{
-  "user": 1
-}
-Get Login Checkpoint (GET) Response:
+# ------------------ Display Serializer (full detail) ------------------
+class LoginCheckpointDisplaySerializer(serializers.ModelSerializer):
+    user_data = UserMinimalSerializer(source='user', read_only=True)
+    status_display = serializers.SerializerMethodField(read_only=True)
 
-json
-{
-  "id": 1,
-  "user_data": {
-    "id": 1,
-    "full_name": "John Doe",
-    "username": "johndoe",
-    "email": "john@example.com",
-    "first_name": "John",
-    "last_name": "Doe"
-  },
-  "token": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
-  "created_at": "2023-01-01T12:00:00Z",
-  "expires_at": "2023-01-01T12:15:00Z",
-  "is_used": false,
-  "status_display": "Active"
-}
-Update Login Checkpoint (PATCH):
+    class Meta:
+        model = LoginCheckpoint
+        fields = [
+            'id',
+            'user',
+            'user_data',
+            'token',
+            'created_at',
+            'expires_at',
+            'is_used',
+            'status_display',
+        ]
+        read_only_fields = [
+            'id', 'token', 'created_at', 'expires_at', 'is_used'
+        ]
 
-json
-{
-  "is_used": true
-}
+    def get_status_display(self, obj) -> str:
+        if obj.is_used:
+            return "Used"
+        if timezone.now() > obj.expires_at:
+            return "Expired"
+        return "Active"
 
-"""
+
+# ------------------ Response serializers for drf-spectacular ------------------
+class LoginCheckpointListResponseSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = LoginCheckpointMinimalSerializer(many=True)
+
+
+class LoginCheckpointDetailResponseSerializer(serializers.Serializer):
+    data = LoginCheckpointDisplaySerializer()
+
+
+class LoginCheckpointCreateResponseSerializer(serializers.Serializer):
+    message = serializers.CharField(default="Login checkpoint created successfully")
+    data = LoginCheckpointDisplaySerializer()
+
+
+class LoginCheckpointUpdateResponseSerializer(serializers.Serializer):
+    message = serializers.CharField(default="Login checkpoint updated successfully")
+    data = LoginCheckpointDisplaySerializer()

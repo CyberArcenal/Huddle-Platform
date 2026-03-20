@@ -295,3 +295,64 @@ class SecurityLogSerializer(serializers.ModelSerializer):
     def get_formatted_time(self, obj) -> str:
         """Format timestamp for display"""
         return obj.created_at.strftime('%Y-%m-%d %H:%M:%S')
+    
+
+
+
+
+# ===== Response serializers for drf-spectacular =====
+
+class ChangePasswordResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.IntegerField()
+
+
+class Enable2FAResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    two_factor_enabled = serializers.BooleanField()
+    user_id = serializers.IntegerField()
+
+
+class Disable2FAResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    two_factor_enabled = serializers.BooleanField()
+    user_id = serializers.IntegerField()
+
+
+class SecuritySettingsGetResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    settings = UpdateSecuritySettingsSerializer()
+
+
+class SecuritySettingsUpdateResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    settings = UpdateSecuritySettingsSerializer()
+
+
+class FailedLoginAttemptsResponseSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    hours = serializers.IntegerField()
+    attempts = SecurityLogSerializer(many=True)
+
+
+class SuspiciousActivitiesResponseSerializer(serializers.Serializer):
+    count = serializers.IntegerField()
+    activities = SecurityLogSerializer(many=True)
+
+
+class TerminateSessionResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class BulkTerminateSessionsResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    result = serializers.DictField()  # flexible dict for termination results
+
+
+class TerminateAllSessionsResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class Check2FAStatusResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    two_factor_enabled = serializers.BooleanField()

@@ -16,10 +16,14 @@ from groups.serializers.base import (
     TransferOwnershipSerializer,
 )
 from groups.serializers.group import GroupCreateSerializer, GroupDisplaySerializer
-from groups.serializers.member import GroupMemberCreateSerializer, GroupMemberDisplaySerializer, GroupMemberUpdateSerializer
+from groups.serializers.member import (
+    GroupMemberCreateSerializer,
+    GroupMemberDisplaySerializer,
+    GroupMemberUpdateSerializer,
+)
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
-from users.models.base import User
+from users.models import User
 from rest_framework import serializers
 
 
@@ -338,7 +342,8 @@ class GroupMembersView(APIView):
         )
         if success:
             return Response(
-                GroupMemberDisplaySerializer(membership).data, status=status.HTTP_201_CREATED
+                GroupMemberDisplaySerializer(membership).data,
+                status=status.HTTP_201_CREATED,
             )
         return Response(
             {"detail": "User is already a member"}, status=status.HTTP_400_BAD_REQUEST
@@ -441,7 +446,8 @@ class GroupJoinView(APIView):
         )
         if success:
             return Response(
-                GroupMemberDisplaySerializer(membership).data, status=status.HTTP_201_CREATED
+                GroupMemberDisplaySerializer(membership).data,
+                status=status.HTTP_201_CREATED,
             )
         return Response(
             {"detail": "Already a member" if membership else "Failed to join"},

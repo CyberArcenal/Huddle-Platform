@@ -8,7 +8,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db import transaction
 from global_utils.response import CustomPagination
 from global_utils.security import get_client_ip
-from users.models.base import SecurityLog, UserSecuritySettings
+from users.models import SecurityLog, UserSecuritySettings
 from users.utils.authentications import IsAuthenticatedAndNotBlacklisted
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
 from users.serializers.auth import (

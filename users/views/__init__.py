@@ -50,8 +50,7 @@ from .media import (
     RemoveProfilePictureView,
     RemoveCoverPhotoView,
     GetProfilePictureView,
-    GetCoverPhotoView,
-    ValidateImageUploadView
+    GetCoverPhotoView
 )
 
 from .search import (
@@ -123,7 +122,6 @@ __all__ = [
     'RemoveCoverPhotoView',
     'GetProfilePictureView',
     'GetCoverPhotoView',
-    'ValidateImageUploadView',
     
     # Search views
     'SearchUserView',

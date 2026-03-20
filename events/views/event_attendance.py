@@ -559,13 +559,31 @@ class UserAttendanceStatisticsView(APIView):
         return Response(serializer.data)
 
 
+
+
+
+# ------------------ Response Serializers ------------------
+class MutualAttendeeUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    name = serializers.CharField()
+
+
+class MutualAttendeeSerializer(serializers.Serializer):
+    user = MutualAttendeeUserSerializer()
+    is_following = serializers.BooleanField()
+    is_followed_by = serializers.BooleanField()
+    is_mutual = serializers.BooleanField()
+
+
+# ------------------ API View ------------------
 class MutualAttendeesView(APIView):
     """Get mutual connections attending an event"""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={200: {"type": "array", "items": {"type": "object"}}},
+        responses={200: MutualAttendeeSerializer(many=True)},
         examples=[
             OpenApiExample(
                 "Mutual attendees response",
@@ -598,25 +616,34 @@ class MutualAttendeesView(APIView):
             event, request.user
         )
 
-        # Format response
-        formatted_attendees = []
-        for attendee in mutual_attendees:
-            formatted_attendees.append(
-                {
-                    "user": {
-                        "id": attendee["user"].id,
-                        "username": attendee["user"].username,
-                        "name": attendee["user"].get_full_name(),
-                    },
-                    "is_following": attendee["is_following"],
-                    "is_followed_by": attendee["is_followed_by"],
-                    "is_mutual": attendee["is_mutual"],
-                }
-            )
+        formatted_attendees = [
+            {
+                "user": {
+                    "id": attendee["user"].id,
+                    "username": attendee["user"].username,
+                    "name": attendee["user"].get_full_name(),
+                },
+                "is_following": attendee["is_following"],
+                "is_followed_by": attendee["is_followed_by"],
+                "is_mutual": attendee["is_mutual"],
+            }
+            for attendee in mutual_attendees
+        ]
 
-        return Response(formatted_attendees)
+        serializer = MutualAttendeeSerializer(formatted_attendees, many=True)
+        return Response(serializer.data)
 
 
+
+
+
+# ------------------ Response Serializer ------------------
+class AttendanceTrendSerializer(serializers.Serializer):
+    hour = serializers.DateTimeField()
+    count = serializers.IntegerField()
+
+
+# ------------------ API View ------------------
 class AttendanceTrendView(APIView):
     """Get attendance trend for an event"""
 
@@ -631,7 +658,18 @@ class AttendanceTrendView(APIView):
                 required=False,
             ),
         ],
-        responses={200: {"type": "array", "items": {"type": "object"}}},
+        responses={200: AttendanceTrendSerializer(many=True)},
+        examples=[
+            OpenApiExample(
+                "Attendance trend example",
+                value=[
+                    {"hour": "2026-03-19T10:00:00Z", "count": 5},
+                    {"hour": "2026-03-19T11:00:00Z", "count": 8},
+                    {"hour": "2026-03-19T12:00:00Z", "count": 12},
+                ],
+                response_only=True,
+            )
+        ],
         description="Get RSVP trend (counts per hour) for an event. Only event organizer can access.",
     )
     def get(self, request, event_id):
@@ -650,9 +688,28 @@ class AttendanceTrendView(APIView):
         hours_before = int(request.query_params.get("hours_before", 48))
 
         trend = EventAttendanceService.get_attendance_trend(event, hours_before)
-        return Response(trend)
+        serializer = AttendanceTrendSerializer(trend, many=True)
+        return Response(serializer.data)
 
 
+
+
+
+# ------------------ Response Serializers ------------------
+class AttendeeReminderSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    email = serializers.EmailField()
+
+
+class SendRemindersResponseSerializer(serializers.Serializer):
+    event_id = serializers.IntegerField()
+    hours_before = serializers.IntegerField()
+    reminders_sent = serializers.IntegerField()
+    attendees_to_remind = AttendeeReminderSerializer(many=True)
+
+
+# ------------------ API View ------------------
 class SendRemindersView(APIView):
     """Send reminders to event attendees"""
 
@@ -660,7 +717,7 @@ class SendRemindersView(APIView):
 
     @extend_schema(
         request=SendRemindersInputSerializer,
-        responses={200: {"type": "object"}},
+        responses={200: SendRemindersResponseSerializer},
         examples=[
             OpenApiExample(
                 "Reminder response",
@@ -697,21 +754,19 @@ class SendRemindersView(APIView):
 
         reminders = EventAttendanceService.send_reminders(event, hours_before)
 
-        # In a real implementation, you would send actual notifications here
-        # For now, just return the list of users to remind
+        response_data = {
+            "event_id": event_id,
+            "hours_before": hours_before,
+            "reminders_sent": len(reminders),
+            "attendees_to_remind": [
+                {
+                    "user_id": r["user"].id,
+                    "username": r["user"].username,
+                    "email": r["email"],
+                }
+                for r in reminders
+            ],
+        }
 
-        return Response(
-            {
-                "event_id": event_id,
-                "hours_before": hours_before,
-                "reminders_sent": len(reminders),
-                "attendees_to_remind": [
-                    {
-                        "user_id": r["user"].id,
-                        "username": r["user"].username,
-                        "email": r["email"],
-                    }
-                    for r in reminders
-                ],
-            }
-        )
+        response_serializer = SendRemindersResponseSerializer(response_data)
+        return Response(response_serializer.data)

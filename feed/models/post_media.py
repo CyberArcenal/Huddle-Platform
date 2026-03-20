@@ -1,6 +1,5 @@
 from django.db import models
 from feed.models.post import Post
-from users.models import User
 
 
 class PostMedia(models.Model):

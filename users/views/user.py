@@ -46,6 +46,9 @@ class UserDeactivateInputSerializer(serializers.Serializer):
 
 
 # -------------------------------------------------------
+class UserRegisterResponse(serializers.Serializer):
+    message = serializers.StringRelatedField()
+    user = UserProfileSerializer(read_only=True)
 
 
 class UserRegisterView(APIView):
@@ -55,7 +58,7 @@ class UserRegisterView(APIView):
 
     @extend_schema(
         request=UserCreateSerializer,
-        responses={201: UserProfileSerializer},
+        responses={201: UserRegisterResponse},
         examples=[
             OpenApiExample(
                 "Registration request",
@@ -129,6 +132,11 @@ class UserRegisterView(APIView):
         )
 
 
+class UserProfileResponse(serializers.Serializer):
+    message = serializers.StringRelatedField()
+    user = UserProfileSerializer(read_only=True)
+
+
 class UserProfileView(APIView):
     """View for user profile operations"""
 
@@ -144,15 +152,7 @@ class UserProfileView(APIView):
 
     @extend_schema(
         request=UserProfileSchemaUpdateSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "user": UserProfileSerializer().data,
-                },
-            }
-        },
+        responses={200: UserProfileResponse},
         examples=[
             OpenApiExample(
                 "Update profile",
@@ -182,12 +182,12 @@ class UserProfileView(APIView):
                     user_agent=request.META.get("HTTP_USER_AGENT"),
                 )
 
+                data = UserProfileSerializer(user, context={"request": request}).data
+
                 return Response(
                     {
                         "message": "Profile updated successfully",
-                        "user": UserProfileSerializer(
-                            user, context={"request": request}
-                        ).data,
+                        "user": data,
                     }
                 )
 
@@ -269,6 +269,12 @@ class UserSearchView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class UserStatusUpdateResponse(serializers.Serializer):
+    message = serializers.StringRelatedField()
+    user_id = serializers.IntegerField()
+    status = serializers.StringRelatedField()
+
+
 class UserStatusUpdateView(APIView):
     """View for updating user status (admin/self)"""
 
@@ -276,16 +282,7 @@ class UserStatusUpdateView(APIView):
 
     @extend_schema(
         request=UserStatusSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "user_id": {"type": "integer"},
-                    "status": {"type": "string"},
-                },
-            }
-        },
+        responses={200: UserStatusUpdateResponse},
         examples=[
             OpenApiExample(
                 "Update status",
@@ -345,17 +342,8 @@ class UserDeactivateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        request=UserDeactivateInputSerializer,  # ✅ Now using dedicated serializer
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "user_id": {"type": "integer"},
-                    "status": {"type": "string"},
-                },
-            }
-        },
+        request=UserDeactivateInputSerializer,
+        responses={200: UserStatusUpdateResponse},
         examples=[
             OpenApiExample(
                 "Deactivate request",
@@ -405,22 +393,19 @@ class UserDeactivateView(APIView):
         )
 
 
+class VerifyUserResponse(serializers.Serializer):
+    message = serializers.StringRelatedField()
+    user_id = serializers.IntegerField()
+    is_verified = serializers.BooleanField()
+
+
 class VerifyUserView(APIView):
     """View for verifying user account"""
 
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "user_id": {"type": "integer"},
-                    "is_verified": {"type": "boolean"},
-                },
-            }
-        },
+        responses={200: VerifyUserResponse},
         description="Mark the current user's account as verified. (Typically called after email confirmation.)",
     )
     @transaction.atomic
@@ -448,6 +433,12 @@ class VerifyUserView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class CheckUsernameResponse(serializers.Serializer):
+    available = serializers.BooleanField()
+    username = serializers.StringRelatedField()
+    message = serializers.StringRelatedField()
+
+
 class CheckUsernameView(APIView):
     """View for checking username availability"""
 
@@ -462,16 +453,7 @@ class CheckUsernameView(APIView):
                 required=True,
             ),
         ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "available": {"type": "boolean"},
-                    "username": {"type": "string"},
-                    "message": {"type": "string"},
-                },
-            }
-        },
+        responses={200: CheckUsernameResponse},
         examples=[
             OpenApiExample(
                 "Username available",
@@ -537,6 +519,12 @@ class CheckUsernameView(APIView):
         )
 
 
+class CheckEmailResponse(serializers.Serializer):
+    available = serializers.BooleanField()
+    email = serializers.StringRelatedField()
+    message = serializers.StringRelatedField()
+
+
 class CheckEmailView(APIView):
     """View for checking email availability"""
 
@@ -548,16 +536,7 @@ class CheckEmailView(APIView):
                 name="email", type=str, description="Email to check", required=True
             ),
         ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "available": {"type": "boolean"},
-                    "email": {"type": "string"},
-                    "message": {"type": "string"},
-                },
-            }
-        },
+        responses={200: CheckEmailResponse},
         examples=[
             OpenApiExample(
                 "Email available",

@@ -1,10 +1,10 @@
 # feed/models/reel.py
+from django.conf import settings
 from django.db import models
 from feed.models.post import POST_PRIVACY_TYPES
-from users.models import User
 
 class Reel(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reels')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reels')
     caption = models.TextField(blank=True)
     video = models.FileField(upload_to='reels/videos/')          # main video
     thumbnail = models.ImageField(upload_to='reels/thumbnails/', blank=True, null=True)

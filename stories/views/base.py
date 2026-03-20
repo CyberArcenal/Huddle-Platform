@@ -31,6 +31,7 @@ from stories.services.story_feed import StoryFeedService
 from stories.services.story_view import StoryViewService
 from rest_framework import serializers
 from stories.serializers.base import StorySerializer, StoryViewSerializer
+from users.models.user import User
 
 
 # ----- New input serializers for endpoints that previously used raw dicts -----
@@ -691,39 +692,73 @@ class StoriesByTypeView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
 
+# ------------------ Response Serializer ------------------
+class StoryViewStatsResponseSerializer(serializers.Serializer):
+    total_views = serializers.IntegerField()
+    unique_creators_viewed = serializers.IntegerField()
+    total_stories_viewed = serializers.IntegerField()
+    active_stories_viewed = serializers.IntegerField()
+    expired_stories_viewed = serializers.IntegerField()
+
+
+# ------------------ API View ------------------
 class StoryViewStatsView(APIView):
     """Get viewing statistics for the current user"""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={200: {"type": "object"}},
+        responses={200: StoryViewStatsResponseSerializer},
         description="Get statistics about the current user's story viewing habits (stories viewed, unique creators, etc.).",
     )
     def get(self, request):
         stats = StoryViewService.get_user_story_view_stats(request.user)
-        return Response(stats)
+        serializer = StoryViewStatsResponseSerializer(stats)
+        return Response(serializer.data)
 
 
+
+# ------------------ Response Serializer ------------------
+class MutualStoryViewsResponseSerializer(serializers.Serializer):
+    total_views_by_me = serializers.IntegerField()
+    total_views_by_other = serializers.IntegerField()
+    mutual_stories_viewed = serializers.IntegerField()
+    my_unique_stories_viewed = serializers.IntegerField()
+    other_unique_stories_viewed = serializers.IntegerField()
+
+
+# ------------------ API View ------------------
 class MutualStoryViewsView(APIView):
     """Get mutual story viewing statistics between two users"""
 
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        responses={200: {"type": "object"}},
+        responses={200: MutualStoryViewsResponseSerializer},
         description="Get mutual story viewing data between the current user and another user.",
     )
     def get(self, request, other_user_id):
-        from users.models import User
-        from django.shortcuts import get_object_or_404
-
         other_user = get_object_or_404(User, id=other_user_id)
-
         stats = StoryViewService.get_mutual_story_views(request.user, other_user)
-        return Response(stats)
+        serializer = MutualStoryViewsResponseSerializer(stats)
+        return Response(serializer.data)
 
 
+
+# ------------------ Response Serializer ------------------
+class PopularStorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    story_type = serializers.CharField()
+    content = serializers.CharField(allow_null=True, required=False)
+    media_url = serializers.CharField(allow_null=True, required=False)
+    created_at = serializers.DateTimeField()
+    expires_at = serializers.DateTimeField()
+    total_views = serializers.IntegerField()
+
+
+# ------------------ API View ------------------
 class PopularStoriesView(APIView):
     """Get popular stories (limited list, not paginated)"""
 
@@ -738,10 +773,13 @@ class PopularStoriesView(APIView):
                 required=False,
             ),
             OpenApiParameter(
-                name="limit", type=int, description="Number of stories", required=False
+                name="limit",
+                type=int,
+                description="Number of stories",
+                required=False,
             ),
         ],
-        responses={200: {"type": "array", "items": {"type": "object"}}},
+        responses={200: PopularStorySerializer(many=True)},
         description="Get the most viewed stories in the last N hours.",
     )
     def get(self, request):
@@ -749,4 +787,5 @@ class PopularStoriesView(APIView):
         limit = int(request.query_params.get("limit", 20))
 
         popular_stories = StoryViewService.get_popular_stories(hours=hours, limit=limit)
-        return Response(popular_stories)
+        serializer = PopularStorySerializer(popular_stories, many=True)
+        return Response(serializer.data)

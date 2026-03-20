@@ -6,7 +6,8 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from feed.models.post import Post
 from groups.models.group import GROUP_PRIVACY_CHOICES
-from ..models import Group, User
+from users.models.user import User
+from ..models import Group
 import uuid
 
 

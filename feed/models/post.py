@@ -1,6 +1,6 @@
+from django.conf import settings
 from django.db import models
 from groups.models.group import Group
-from users.models import User
 
 POST_TYPES = [
     ("text", "Text"),
@@ -14,7 +14,7 @@ POST_PRIVACY_TYPES = [("public", "Public"), ("followers", "Followers"), ("secret
 
 class Post(models.Model):
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="posts")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="posts")
     group = models.ForeignKey(
         Group,
         null=True,

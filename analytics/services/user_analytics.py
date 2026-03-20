@@ -3,7 +3,9 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Sum, Avg, Count, F, Q, Max, Min
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import UserAnalytics, User
+
+from users.models.user import User
+from ..models import UserAnalytics
 import datetime
 
 

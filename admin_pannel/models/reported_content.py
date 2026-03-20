@@ -1,5 +1,5 @@
+from django.conf import settings
 from django.db import models
-from users.models import User
 
 
 class ReportedContent(models.Model):
@@ -11,7 +11,7 @@ class ReportedContent(models.Model):
     ]
 
     reporter = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="reports_made"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reports_made"
     )
     content_type = models.CharField(max_length=10, choices=CONTENT_TYPES)
     object_id = models.PositiveIntegerField()

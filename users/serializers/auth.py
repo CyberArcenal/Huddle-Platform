@@ -24,16 +24,8 @@ class Verify2FARequestSerializer(serializers.Serializer):
     checkpoint_token = serializers.CharField()
     otp_code = serializers.CharField(max_length=6)
 
-class Verify2FAResponseSerializer(LoginResponseSerializer):
-    pass
-
 class Resend2FARequestSerializer(serializers.Serializer):
     checkpoint_token = serializers.CharField()
-
-class Resend2FAResponseSerializer(serializers.Serializer):
-    status = serializers.BooleanField()
-    message = serializers.CharField()
-    expires_in = serializers.IntegerField()
 
 class LogoutRequestSerializer(serializers.Serializer):
     refresh = serializers.CharField()
@@ -103,3 +95,37 @@ class PasswordStrengthCheckResponseSerializer(serializers.Serializer):
 class PasswordHistoryResponseSerializer(serializers.Serializer):
     total_events = serializers.IntegerField()
     events = serializers.ListField(child=serializers.DictField())
+    
+    
+
+
+class LoginSuccessResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    user = UserProfileSerializer()
+    refreshToken = serializers.CharField()
+    accessToken = serializers.CharField()
+    expiresIn = serializers.IntegerField()
+    message = serializers.CharField()
+
+
+class Login2FARequiredResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    requires_2fa = serializers.BooleanField()
+    checkpoint_token = serializers.CharField()
+    message = serializers.CharField()
+    expires_in = serializers.IntegerField()
+
+
+class Verify2FAResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    user = UserProfileSerializer()
+    refreshToken = serializers.CharField()
+    accessToken = serializers.CharField()
+    expiresIn = serializers.IntegerField()
+    message = serializers.CharField()
+
+
+class Resend2FAResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    expires_in = serializers.IntegerField()

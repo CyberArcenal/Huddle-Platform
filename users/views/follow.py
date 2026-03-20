@@ -13,7 +13,11 @@ from users.views.user import PaginatedUserListSerializer
 from ..services.user_follow import UserFollowService
 from ..services.user_activity import UserActivityService
 from ..serializers.follow import (
+    FollowStatsResponseSerializer,
+    FollowStatusResponseSerializer,
+    FollowUserResponseSerializer,
     FollowUserSerializer,
+    UnfollowUserResponseSerializer,
     UnfollowUserSerializer,
     FollowStatsSerializer,
     FollowerListSerializer,
@@ -27,18 +31,17 @@ logger = logging.getLogger(__name__)
 
 
 class FollowUserView(APIView):
-    """View for following a user"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         request=FollowUserSerializer,
-        responses={201: {"type": "object"}},
+        responses={201: FollowUserResponseSerializer},
         examples=[
-            OpenApiExample("Follow request", value={"user_id": 42}, request_only=True),
+            OpenApiExample("Follow request", value={"following_id": 42}, request_only=True),
             OpenApiExample(
                 "Follow response",
                 value={
+                    "status": True,
                     "message": "Now following johndoe",
                     "follow": {
                         "id": 1,
@@ -63,6 +66,7 @@ class FollowUserView(APIView):
                 follow = serializer.save()
                 return Response(
                     {
+                        "status": True,
                         "message": f"Now following {follow.following.username}",
                         "follow": {
                             "id": follow.id,
@@ -73,31 +77,25 @@ class FollowUserView(APIView):
                     },
                     status=status.HTTP_201_CREATED,
                 )
-
             except Exception as e:
                 logger.error(e)
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+                return Response({"status": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {"status": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
         )
 
 
 class UnfollowUserView(APIView):
-    """View for unfollowing a user"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         request=UnfollowUserSerializer,
-        responses={200: {"type": "object"}},
+        responses={200: UnfollowUserResponseSerializer},
         examples=[
-            OpenApiExample(
-                "Unfollow request", value={"user_id": 42}, request_only=True
-            ),
+            OpenApiExample("Unfollow request", value={"following_id": 42}, request_only=True),
             OpenApiExample(
                 "Unfollow response",
-                value={"message": "Unfollowed successfully"},
+                value={"status": True, "message": "Unfollowed successfully"},
                 response_only=True,
             ),
         ],
@@ -112,43 +110,36 @@ class UnfollowUserView(APIView):
         if serializer.is_valid(raise_exception=True):
             try:
                 success = serializer.unfollow()
-
                 if success:
                     return Response(
-                        {"message": "Unfollowed successfully"},
+                        {"status": True, "message": "Unfollowed successfully"},
                         status=status.HTTP_200_OK,
                     )
                 else:
                     return Response(
-                        {"error": "Failed to unfollow"},
+                        {"status": False, "error": "Failed to unfollow"},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+                return Response({"status": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
             {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
         )
 
 
 class FollowStatusView(APIView):
-    """View for checking follow status"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={200: {"type": "object"}},
+        responses={200: FollowStatusResponseSerializer},
         description="Check if the current user is following another user.",
     )
     def get(self, request, user_id):
         try:
             target_user = get_object_or_404(User, id=user_id)
-
             is_following = UserFollowService.is_following(
                 follower=request.user, following=target_user
             )
-
             return Response(
                 {
                     "is_following": is_following,
@@ -156,7 +147,6 @@ class FollowStatusView(APIView):
                     "username": target_user.username,
                 }
             )
-
         except User.DoesNotExist:
             return Response(
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
@@ -166,8 +156,6 @@ class FollowStatusView(APIView):
 
 
 class FollowStatsView(APIView):
-    """View for getting follow statistics"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -179,7 +167,7 @@ class FollowStatsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: FollowStatsSerializer},
+        responses={200: FollowStatsResponseSerializer},
         description="Get follower and following counts for a user.",
     )
     def get(self, request, user_id=None):
@@ -191,28 +179,22 @@ class FollowStatsView(APIView):
 
             followers_count = UserFollowService.get_follower_count(user)
             following_count = UserFollowService.get_following_count(user)
-
-            if user == request.user:
-                mutual_followers_count = 0  # placeholder
-            else:
-                mutual_followers_count = 0
+            mutual_followers_count = 0  # placeholder
 
             stats_data = {
                 "followers_count": followers_count,
                 "following_count": following_count,
                 "mutual_followers_count": mutual_followers_count,
             }
-
-            serializer = FollowStatsSerializer(stats_data)
+            stats_serializer = FollowStatsSerializer(stats_data)
 
             return Response(
                 {
                     "user_id": user.id,
                     "username": user.username,
-                    "stats": serializer.data,
+                    "stats": stats_serializer.data,
                 }
             )
-
         except User.DoesNotExist:
             return Response(
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND

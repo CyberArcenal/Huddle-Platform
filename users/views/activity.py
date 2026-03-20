@@ -9,14 +9,18 @@ from global_utils.pagination import UsersPagination
 from users.models.base import ACTION_TYPES
 
 from ..services.user_activity import UserActivityService
-from ..serializers.activity import UserActivitySerializer, ActivitySummarySerializer
+from ..serializers.activity import (
+    UserActivitySerializer,
+    ActivitySummarySerializer,
+    ActivitySummaryResponseSerializer,
+    LogActivityResponseSerializer,
+)
 from ..models import User, UserActivity
 from rest_framework import serializers
-from ..serializers.activity import UserActivitySerializer
 from django.db import transaction
 
 
-# ----- New input serializer for LogActivityView -----
+# ----- Input serializer for LogActivityView -----
 class LogActivityInputSerializer(serializers.Serializer):
     action = serializers.ChoiceField(
         choices=[choice[0] for choice in ACTION_TYPES],
@@ -33,12 +37,8 @@ class LogActivityInputSerializer(serializers.Serializer):
     )
 
 
-# ----------------------------------------------------
-
-
+# ----- Paginated response serializer -----
 class PaginatedUserActivitySerializer(serializers.Serializer):
-    """Matches the custom pagination response from UsersPagination"""
-
     count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -129,12 +129,12 @@ class ActivitySummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        responses={200: ActivitySummarySerializer},
+        responses={200: ActivitySummaryResponseSerializer},
         description="Get a summary of the current user's activity (total counts, last activity, breakdown by type).",
     )
     def get(self, request):
         try:
-            from django.db.models import Count, Q
+            from django.db.models import Count
             from django.utils import timezone
             from datetime import timedelta
 
@@ -155,15 +155,11 @@ class ActivitySummaryView(APIView):
                 .annotate(count=Count("id"))
                 .order_by("-count")
             )
-
-            activity_types = {
-                item["action"]: item["count"] for item in activities_by_type
-            }
+            activity_types = {item["action"]: item["count"] for item in activities_by_type}
 
             activities_today = UserActivity.objects.filter(
                 user=request.user, timestamp__gte=today_start
             ).count()
-
             activities_this_week = UserActivity.objects.filter(
                 user=request.user, timestamp__gte=week_start
             ).count()
@@ -178,7 +174,10 @@ class ActivitySummaryView(APIView):
 
             serializer = ActivitySummarySerializer(summary_data)
 
-            return Response({"user_id": request.user.id, "summary": serializer.data})
+            return Response({
+                "user_id": request.user.id,
+                "summary": serializer.data,
+            })
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -243,8 +242,8 @@ class LogActivityView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
-        request=LogActivityInputSerializer,  # ✅ Now using dedicated serializer
-        responses={201: UserActivitySerializer},
+        request=LogActivityInputSerializer,
+        responses={201: LogActivityResponseSerializer},
         examples=[
             OpenApiExample(
                 "Log activity request",
@@ -283,7 +282,6 @@ class LogActivityView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-
         activity = UserActivityService.log_activity(
             user=request.user,
             action=data["action"],

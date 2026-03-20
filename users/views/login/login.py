@@ -16,7 +16,7 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from users.enums import UserStatus
-from users.models.base import (
+from users.models import (
     LoginCheckpoint,
     LoginSession,
     OtpRequest,
@@ -28,13 +28,12 @@ from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
 from users.serializers.auth import (
     LoginRequestSerializer,
     Verify2FARequestSerializer,
-    Verify2FAResponseSerializer,
     Resend2FARequestSerializer,
+    Verify2FAResponseSerializer,
     Resend2FAResponseSerializer,
 )
 
 User = get_user_model()
-
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +45,7 @@ class LoginView(APIView):
     @extend_schema(
         request=LoginRequestSerializer,
         responses={
-            200: OpenApiTypes.OBJECT,
+            200: OpenApiTypes.OBJECT,  # We'll handle two possible shapes via examples
             400: OpenApiTypes.OBJECT,
             401: OpenApiTypes.OBJECT,
             404: OpenApiTypes.OBJECT,
@@ -103,12 +102,11 @@ class LoginView(APIView):
     def post(self, request):
         client_ip = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
-        device_name = user_agent[:100]  # Truncate to fit max_length=100
+        device_name = user_agent[:100]
         logger.debug(
             f"Login request from IP: {client_ip}, User-Agent: {user_agent} body: {request.data}"
         )
 
-        # Validate request data using serializer
         serializer = LoginRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -118,7 +116,6 @@ class LoginView(APIView):
 
         logger.info(f"Login attempt for email: {email} from IP: {client_ip}")
 
-        # Authenticate user
         try:
             user = User.objects.get(Q(username=email) | Q(email=email))
         except User.DoesNotExist:
@@ -132,7 +129,6 @@ class LoginView(APIView):
 
         logger.debug(f"User login request: {user}")
         if user.check_password(password):
-            # Check if user account is active and approved
             if user.status != UserStatus.ACTIVE:
                 return Response(
                     {
@@ -142,18 +138,15 @@ class LoginView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
-            # Check if 2FA is enabled for this user
             security_settings, created = UserSecuritySettings.objects.get_or_create(
                 user=user
             )
 
             if security_settings.two_factor_enabled:
-                # Generate 2FA OTP and create login checkpoint
                 return self._initiate_2fa(
                     user, request, client_ip, user_agent, device_name
                 )
             else:
-                # Proceed with normal login
                 return self._complete_login(
                     user, request, client_ip, user_agent, device_name
                 )
@@ -164,12 +157,8 @@ class LoginView(APIView):
             )
 
     def _initiate_2fa(self, user, request, client_ip, user_agent, device_name):
-        """Initiate 2FA process by sending OTP"""
         try:
-            # Generate 6-digit OTP
             otp_code = f"{random.randint(0, 999999):06d}"
-
-            # Create login checkpoint
             checkpoint_token = uuid.uuid4()
             LoginCheckpoint.objects.create(
                 user=user,
@@ -177,8 +166,6 @@ class LoginView(APIView):
                 token=checkpoint_token,
                 expires_at=timezone.now() + timedelta(minutes=10),
             )
-
-            # Create OTP record
             OtpRequest.objects.create(
                 user=user,
                 otp_code=otp_code,
@@ -186,21 +173,19 @@ class LoginView(APIView):
                 email=user.email,
                 expires_at=timezone.now() + timedelta(minutes=5),
             )
-
-            # TODO: Send OTP via email/SMS - integrate with your email service
             logger.info(f"2FA OTP for {user.email}: {otp_code}")
 
+            # Return using 2FA response serializer structure
             return Response(
                 {
                     "status": True,
                     "requires_2fa": True,
                     "checkpoint_token": str(checkpoint_token),
                     "message": "Two-factor authentication required. Please check your email for the verification code.",
-                    "expires_in": 300,  # 5 minutes in seconds
+                    "expires_in": 300,
                 },
                 status=status.HTTP_200_OK,
             )
-
         except Exception as e:
             logger.error(f"Error initiating 2FA for user {user.id}: {str(e)}")
             return Response(
@@ -212,13 +197,10 @@ class LoginView(APIView):
             )
 
     def _complete_login(self, user, request, client_ip, user_agent, device_name):
-        """Complete the login process by generating tokens"""
         try:
-            # Update last login
             user.last_login = timezone.now()
             user.save()
 
-            # Generate tokens
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
             refresh_token = refresh
@@ -226,17 +208,14 @@ class LoginView(APIView):
             access_exp = int(refresh.access_token.payload["exp"])
             refresh_exp = int(refresh.payload["exp"])
 
-            # Get token identifiers
             refresh_jti = refresh["jti"]
             access_jti = access_token["jti"]
 
-            # Calculate expiration time
             lifetime = settings.SIMPLE_JWT.get(
                 "REFRESH_TOKEN_LIFETIME", timezone.timedelta(days=7)
             )
             expires_at = timezone.now() + lifetime
 
-            # Create login session
             LoginSession.objects.create(
                 id=uuid.uuid4(),
                 user=user,
@@ -248,7 +227,6 @@ class LoginView(APIView):
                 access_token=access_jti,
             )
 
-            # Log security event
             SecurityLog.objects.create(
                 user=user,
                 event_type="login",
@@ -259,6 +237,7 @@ class LoginView(APIView):
 
             user_data = UserProfileSerializer(user).data
             logger.debug(f"User data: {user_data}")
+            # Return using success response serializer structure
             return Response(
                 {
                     "status": True,
@@ -269,7 +248,6 @@ class LoginView(APIView):
                     "message": "Login successful",
                 }
             )
-
         except Exception as e:
             logger.error(f"Error completing login for user {user.id}: {str(e)}")
             return Response(
@@ -279,8 +257,6 @@ class LoginView(APIView):
 
 
 class Verify2FALoginView(APIView):
-    """Verify 2FA OTP and complete login"""
-
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -334,7 +310,6 @@ class Verify2FALoginView(APIView):
         user_agent = request.META.get("HTTP_USER_AGENT", "")
         device_name = user_agent[:100]
 
-        # Validate request data using serializer
         serializer = Verify2FARequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -343,7 +318,6 @@ class Verify2FALoginView(APIView):
         otp_code = serializer.validated_data["otp_code"]
 
         try:
-            # Find valid checkpoint
             checkpoint = LoginCheckpoint.objects.filter(
                 token=checkpoint_token, is_used=False, expires_at__gt=timezone.now()
             ).first()
@@ -356,7 +330,6 @@ class Verify2FALoginView(APIView):
 
             user = checkpoint.user
 
-            # Find valid OTP
             otp = OtpRequest.objects.filter(
                 user=user,
                 otp_code=otp_code,
@@ -371,35 +344,28 @@ class Verify2FALoginView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Mark OTP and checkpoint as used
             otp.is_used = True
             otp.save()
 
             checkpoint.is_used = True
             checkpoint.save()
 
-            # Complete login
-            # Update last login
             user.last_login = timezone.now()
             user.save()
 
-            # Generate tokens
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
             refresh_token = refresh
             access_exp = int(refresh.access_token.payload["exp"])
 
-            # Get token identifiers
             refresh_jti = refresh["jti"]
             access_jti = access_token["jti"]
 
-            # Calculate expiration time
             lifetime = settings.SIMPLE_JWT.get(
                 "REFRESH_TOKEN_LIFETIME", timezone.timedelta(days=7)
             )
             expires_at = timezone.now() + lifetime
 
-            # Create login session
             LoginSession.objects.create(
                 id=uuid.uuid4(),
                 user=user,
@@ -411,7 +377,6 @@ class Verify2FALoginView(APIView):
                 access_token=access_jti,
             )
 
-            # Log security event
             SecurityLog.objects.create(
                 user=user,
                 event_type="login",
@@ -421,6 +386,7 @@ class Verify2FALoginView(APIView):
             )
 
             user_data = UserProfileSerializer(user).data
+            # Return using Verify2FAResponseSerializer structure
             return Response(
                 {
                     "status": True,
@@ -431,7 +397,6 @@ class Verify2FALoginView(APIView):
                     "message": "Login successful with two-factor authentication",
                 }
             )
-
         except Exception as e:
             logger.error(f"Error verifying 2FA: {str(e)}")
             return Response(
@@ -444,8 +409,6 @@ class Verify2FALoginView(APIView):
 
 
 class Resend2FAOTPView(APIView):
-    """Resend 2FA OTP"""
-
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -476,7 +439,6 @@ class Resend2FAOTPView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        # Validate request data using serializer
         serializer = Resend2FARequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -484,7 +446,6 @@ class Resend2FAOTPView(APIView):
         checkpoint_token = serializer.validated_data["checkpoint_token"]
 
         try:
-            # Find valid checkpoint
             checkpoint = LoginCheckpoint.objects.filter(
                 token=checkpoint_token, is_used=False, expires_at__gt=timezone.now()
             ).first()
@@ -497,10 +458,7 @@ class Resend2FAOTPView(APIView):
 
             user = checkpoint.user
 
-            # Generate new OTP
             otp_code = f"{random.randint(0, 999999):06d}"
-
-            # Create new OTP record
             OtpRequest.objects.create(
                 user=user,
                 otp_code=otp_code,
@@ -509,17 +467,16 @@ class Resend2FAOTPView(APIView):
                 expires_at=timezone.now() + timedelta(minutes=5),
             )
 
-            # TODO: Send OTP via email/SMS
             logger.info(f"Resent 2FA OTP for {user.email}: {otp_code}")
 
+            # Return using Resend2FAResponseSerializer structure
             return Response(
                 {
                     "status": True,
                     "message": "Verification code has been resent",
-                    "expires_in": 300,  # 5 minutes in seconds
+                    "expires_in": 300,
                 }
             )
-
         except Exception as e:
             logger.error(f"Error resending 2FA OTP: {str(e)}")
             return Response(

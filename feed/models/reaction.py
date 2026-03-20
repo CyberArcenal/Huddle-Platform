@@ -1,7 +1,8 @@
+from django.conf import settings
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from users.models import User
+
 
 class ReactionType(models.TextChoices):
     LIKE = "like", "Like"
@@ -15,7 +16,7 @@ class ReactionType(models.TextChoices):
 REACTION_TYPES = [(tag.value, tag.label) for tag in ReactionType]  # keep for choices
 
 class Reaction(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reactions')
     
     # Generic relation to any content object
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)

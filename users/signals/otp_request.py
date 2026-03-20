@@ -28,6 +28,7 @@ def otp_request_pre_save(sender, instance, **kwargs):
 def otp_request_post_save(sender, instance, created, **kwargs):
     """After save, handle is_used transition if any."""
     if created:
+        #send otp email/sms TODO
         return
 
     if hasattr(instance, '_state_transition_changes'):

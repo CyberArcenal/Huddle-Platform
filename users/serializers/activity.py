@@ -247,3 +247,16 @@ class BulkTerminateSessionsSerializer(serializers.Serializer):
             )
             
             return {'terminated_count': terminated_count, 'terminated_all': False}
+        
+        
+        
+# ===== Response serializers for drf-spectacular =====
+
+class ActivitySummaryResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    summary = ActivitySummarySerializer()
+
+
+class LogActivityResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    activity = UserActivitySerializer()

@@ -6,7 +6,8 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from admin_pannel.models.admin_log import AdminLog
 from core.settings import logger
-from ..models import ReportedContent, User
+from users.models.user import User
+from ..models import ReportedContent
 import datetime
 
 

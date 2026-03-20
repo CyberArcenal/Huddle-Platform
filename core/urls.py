@@ -45,7 +45,7 @@ for app in app_urls:
         pass
 
 urlpatterns += [
-    # path('', HomeView.as_view(), name='home'),
+    path('', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
 
 

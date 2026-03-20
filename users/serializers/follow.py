@@ -246,3 +246,35 @@ class FollowingListSerializer(serializers.ModelSerializer):
         return UserFollow.objects.filter(
             follower=obj.following, following=obj.follower
         ).exists()
+        
+        
+        
+        
+# ===== Response serializers for drf-spectacular =====
+
+class FollowBasicSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    follower_id = serializers.IntegerField()
+    following_id = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+
+
+class FollowUserResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    follow = FollowBasicSerializer()
+
+
+class UnfollowUserResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class FollowStatusResponseSerializer(serializers.Serializer):
+    is_following = serializers.BooleanField()
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+
+
+class FollowStatsResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    stats = FollowStatsSerializer()  # reuses the existing serializer

@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 from typing import Dict, Any, List, Optional
 
+from users.serializers.activity import UserActivitySerializer
 from users.serializers.base import ActivitySerializer, FollowerSerializer, FollowingSerializer, LoginSessionSerializer, SecurityLogSerializer
 from users.serializers.user import UserProfileSerializer
 from users.services.user import UserService
@@ -356,3 +357,77 @@ class UserExportSerializer(serializers.ModelSerializer):
             'device_name', 'ip_address', 'created_at',
             'last_used', 'expires_at', 'is_active'
         ), many=True).data
+        
+        
+        
+        
+        
+
+
+
+# ===== Response serializers for drf-spectacular =====
+
+class AdminUserDetailResponseSerializer(serializers.Serializer):
+    user = AdminUserListSerializer()
+    recent_activities = UserActivitySerializer(many=True)
+    recent_security_logs = SecurityLogSerializer(many=True)
+
+
+class AdminCreateUserResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    user = AdminUserListSerializer()
+
+
+class BulkActionDetailSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    status = serializers.CharField()
+    error = serializers.CharField(required=False)
+    action = serializers.CharField(required=False)
+
+
+class BulkActionResultSerializer(serializers.Serializer):
+    success = serializers.IntegerField()
+    failed = serializers.IntegerField()
+    details = BulkActionDetailSerializer(many=True)
+
+
+class AdminBulkUserActionResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    results = BulkActionResultSerializer()
+
+
+class DashboardUserStatisticsSerializer(serializers.Serializer):
+    total_users = serializers.IntegerField()
+    active_users = serializers.IntegerField()
+    new_users_today = serializers.IntegerField()
+    new_users_week = serializers.IntegerField()
+    status_breakdown = serializers.ListField(child=serializers.DictField())
+
+
+class DashboardActivityStatisticsSerializer(serializers.Serializer):
+    total_activities = serializers.IntegerField()
+    activities_today = serializers.IntegerField()
+
+
+class DashboardSecurityStatisticsSerializer(serializers.Serializer):
+    failed_logins_24h = serializers.IntegerField()
+    password_changes_24h = serializers.IntegerField()
+
+
+class AdminDashboardResponseSerializer(serializers.Serializer):
+    user_statistics = DashboardUserStatisticsSerializer()
+    activity_statistics = DashboardActivityStatisticsSerializer()
+    security_statistics = DashboardSecurityStatisticsSerializer()
+    timestamp = serializers.DateTimeField()
+
+
+class UserExportResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    export_timestamp = serializers.DateTimeField()
+    data = UserExportSerializer()
+
+
+class CleanupActionResponseSerializer(serializers.Serializer):
+    message = serializers.CharField()
+    count = serializers.IntegerField()

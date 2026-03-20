@@ -687,6 +687,16 @@ class SearchTrendsAPIView(APIView):
             )
 
 
+
+
+# ------------------ Response Serializer ------------------
+class ExportSearchHistoryResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField(default=True)
+    exported_data = serializers.JSONField()
+    error = serializers.CharField(required=False, allow_null=True)
+
+
+# ------------------ API View ------------------
 class ExportSearchHistoryAPIView(APIView):
     """Export user's search history"""
 
@@ -707,11 +717,21 @@ class ExportSearchHistoryAPIView(APIView):
                 required=False,
             ),
         ],
-        responses={200: {"type": "object"}},
+        responses={200: ExportSearchHistoryResponseSerializer},
         examples=[
             OpenApiExample(
                 "Response (file download)",
-                value={"exported_data": "..."},
+                value={
+                    "success": True,
+                    "exported_data": {
+                        "searches": [
+                            {"query": "django rest framework", "timestamp": "2025-03-08T10:00:00Z"},
+                            {"query": "python uuid", "timestamp": "2025-03-08T10:05:00Z"}
+                        ],
+                        "metadata": {"total": 2}
+                    },
+                    "error": None
+                },
                 response_only=True,
             )
         ],
@@ -739,7 +759,11 @@ class ExportSearchHistoryAPIView(APIView):
                 include_metadata=include_metadata,
             )
 
-            response = Response(export_data)
+            response = Response({
+                "success": True,
+                "exported_data": export_data,
+                "error": None
+            })
             response["Content-Disposition"] = (
                 f'attachment; filename="search_history_{request.user.username}.json"'
             )
@@ -749,5 +773,6 @@ class ExportSearchHistoryAPIView(APIView):
 
         except Exception as e:
             return Response(
-                {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
+                {"success": False, "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
             )

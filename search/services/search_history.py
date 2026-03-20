@@ -2,9 +2,9 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import SearchHistory, User
+from ..models import SearchHistory
 from django.db.models import Count, Avg, Max, Min
-
+from users.models.user import User
 
 class SearchHistoryService:
     """Service for SearchHistory model operations"""

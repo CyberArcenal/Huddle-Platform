@@ -11,7 +11,7 @@ from rest_framework.permissions import AllowAny
 import logging
 from global_utils.security import get_client_ip
 from notifications.utils.email import get_dynamic_email_backend
-from users.models.base import LoginCheckpoint, OtpRequest, User
+from users.models import LoginCheckpoint, OtpRequest, User
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
 from users.serializers.auth import (
     PasswordResetCompleteRequestSerializer,

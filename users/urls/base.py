@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from users.views.activity import ActivitySummaryView, FollowingActivityView, LogActivityView, RecentActivitiesView, UserActivityListView
 from users.views.admin import AdminBulkUserActionView, AdminCleanupView, AdminCreateUserView, AdminDashboardView, AdminUserDetailView, AdminUserListView, UserExportView
 from users.views.follow import FollowStatsView, FollowStatusView, FollowUserView, FollowersListView, FollowingListView, MutualFollowsView, MutualFriendsView, PopularUsersView, SuggestedUsersView, UnfollowUserView
-from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfilePictureView, ProfilePictureUploadView, RemoveCoverPhotoView, RemoveProfilePictureView, ValidateImageUploadView
+from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfilePictureView, ProfilePictureUploadView, RemoveCoverPhotoView, RemoveProfilePictureView
 from users.views.search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
 from users.views.security import ActiveSessionsView, BulkTerminateSessionsView, ChangePasswordView, Check2FAStatusView, Disable2FAView, Enable2FAView, FailedLoginAttemptsView, SecurityLogsView, SecuritySettingsView, SuspiciousActivitiesView, TerminateAllSessionsView, TerminateSessionView
 from users.views.user import CheckEmailView, CheckUsernameView, UserDeactivateView, UserDetailView, UserProfileView, UserRegisterView, UserStatusUpdateView, VerifyUserView
@@ -74,7 +74,6 @@ urlpatterns = [
     path('media/remove-cover-photo/', RemoveCoverPhotoView.as_view(), name='remove-cover-photo'),
     path('media/profile-picture/<int:user_id>/', GetProfilePictureView.as_view(), name='get-profile-picture'),
     path('media/cover-photo/<int:user_id>/', GetCoverPhotoView.as_view(), name='get-cover-photo'),
-    path('media/validate-image/', ValidateImageUploadView.as_view(), name='validate-image'),
     
     # Search endpoints
     path('search/users/', UserSearchView.as_view(), name='search-users'),

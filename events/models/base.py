@@ -1,5 +1,5 @@
+from django.conf import settings
 from django.db import models
-from users.models import User
 from groups.models import Group
 
 
@@ -13,7 +13,7 @@ class Event(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
     organizer = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="organized_events"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="organized_events"
     )
     group = models.ForeignKey(
         Group, on_delete=models.CASCADE, null=True, blank=True, related_name="events"
@@ -43,7 +43,7 @@ class EventAttendance(models.Model):
         Event, on_delete=models.CASCADE, related_name="attendances"
     )
     user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="event_attendances"
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="event_attendances"
     )
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="going")
     joined_at = models.DateTimeField(auto_now_add=True)

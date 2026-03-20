@@ -3,9 +3,9 @@ from typing import List, Dict, Any
 
 from stories.services.story import StoryService
 from stories.services.story_view import StoryViewService
-from ..models import Story, User
+from ..models import Story
 from users.services import UserFollowService
-
+from users.models.user import User
 
 class StoryFeedService:
     """Service for story feed generation and management"""

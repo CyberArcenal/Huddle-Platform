@@ -7,7 +7,7 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from users.models.base import BlacklistedAccessToken
+from users.models import BlacklistedAccessToken
 from users.serializers.user import UserMinimalSerializer
 
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes

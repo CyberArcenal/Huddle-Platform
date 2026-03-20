@@ -1,5 +1,4 @@
 from django.db import models
-from users.models import User
 
 class PlatformAnalytics(models.Model):
     date = models.DateField(unique=True)

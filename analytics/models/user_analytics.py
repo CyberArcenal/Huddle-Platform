@@ -1,8 +1,8 @@
+from django.conf import settings
 from django.db import models
-from users.models import User
 
 class UserAnalytics(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='analytics')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='analytics')
     date = models.DateField()
     posts_count = models.IntegerField(default=0)
     likes_received = models.IntegerField(default=0)

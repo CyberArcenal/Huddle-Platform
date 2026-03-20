@@ -26,7 +26,7 @@ from feed.serializers.share import (
 )
 from feed.services.share import ShareService
 from global_utils.pagination import StandardResultsSetPagination
-from users.models.base import User
+from users.models import User
 
 logger = logging.getLogger(__name__)
 

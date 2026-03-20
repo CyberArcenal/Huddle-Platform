@@ -275,12 +275,30 @@ class ReportUpdateStatusView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+# ------------------ Response Serializers ------------------
+class ReportActionResultSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    content_type = serializers.CharField()
+    object_id = serializers.IntegerField()
+    action_taken = serializers.CharField()
+    resolved_by = serializers.CharField()
+    resolved_at = serializers.DateTimeField()
+    error = serializers.CharField(required=False, allow_null=True)
+
+
+class ReportResolveResponseSerializer(serializers.Serializer):
+    report = ReportedContentDisplaySerializer()
+    action_result = ReportActionResultSerializer()
+
+
+# ------------------ API View ------------------
 class ReportResolveView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
         request=ResolveReportInputSerializer,
-        responses={200: {"type": "object"}},
+        responses={200: ReportResolveResponseSerializer},
         examples=[
             OpenApiExample(
                 "Resolve request",
@@ -337,12 +355,12 @@ class ReportResolveView(APIView):
                 resolved_by=request.user,
                 resolution_details=data.get("resolution_details"),
             )
-            return Response(
-                {
-                    "report": ReportedContentDisplaySerializer(resolved_report).data,
-                    "action_result": action_result,
-                }
-            )
+            response_data = {
+                "report": ReportedContentDisplaySerializer(resolved_report).data,
+                "action_result": action_result,
+            }
+            response_serializer = ReportResolveResponseSerializer(response_data)
+            return Response(response_serializer.data)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -428,6 +446,20 @@ class ReportStatisticsView(APIView):
         return Response(serializer.data)
 
 
+
+# ------------------ Response Serializers ------------------
+class UrgentReportSerializer(serializers.Serializer):
+    content_type = serializers.CharField()
+    object_id = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+    unique_reporter_count = serializers.IntegerField()
+    first_reported = serializers.DateTimeField()
+    last_reported = serializers.DateTimeField()
+    # If you want to include nested reports, you can define a minimal ReportedContent serializer
+    # and add: reports = ReportedContentMinimalSerializer(many=True)
+
+
+# ------------------ API View ------------------
 class ReportUrgentView(APIView):
     permission_classes = [IsAdminUser]
 
@@ -446,14 +478,31 @@ class ReportUrgentView(APIView):
                 required=False,
             ),
         ],
-        responses={200: {"type": "array", "items": {"type": "object"}}},
+        responses={200: UrgentReportSerializer(many=True)},
+        examples=[
+            OpenApiExample(
+                "Urgent reports example",
+                value=[
+                    {
+                        "content_type": "post",
+                        "object_id": 123,
+                        "report_count": 8,
+                        "unique_reporter_count": 5,
+                        "first_reported": "2026-03-20T12:00:00Z",
+                        "last_reported": "2026-03-20T15:00:00Z",
+                    }
+                ],
+                response_only=True,
+            )
+        ],
         description="Get urgent reports (multiple reports on the same content in a short time).",
     )
     def get(self, request):
         threshold = int(request.query_params.get("threshold", 5))
         hours = int(request.query_params.get("hours", 24))
         urgent = ReportedContentService.get_urgent_reports(threshold, hours)
-        return Response(urgent)
+        serializer = UrgentReportSerializer(urgent, many=True)
+        return Response(serializer.data)
 
 
 class ReportUserHistoryView(APIView):
@@ -554,6 +603,54 @@ class ReportCleanupView(APIView):
         return Response({"message": f"Deleted {count} old reports."})
 
 
+
+
+
+# ------------------ Response Serializers ------------------
+class ModerationReportPeriodSerializer(serializers.Serializer):
+    start = serializers.DateTimeField()
+    end = serializers.DateTimeField()
+    days = serializers.IntegerField()
+
+
+class ModerationReportStatisticsSerializer(serializers.Serializer):
+    total_reports = serializers.IntegerField()
+    resolved_reports = serializers.IntegerField()
+    pending_reports = serializers.IntegerField()
+    resolution_rate = serializers.FloatField()
+    avg_resolution_hours = serializers.FloatField()
+
+
+class ActionBreakdownSerializer(serializers.Serializer):
+    action = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class TopModeratorSerializer(serializers.Serializer):
+    admin_user__username = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class ModerationActionsSerializer(serializers.Serializer):
+    total_actions = serializers.IntegerField()
+    action_breakdown = ActionBreakdownSerializer(many=True)
+    top_moderators = TopModeratorSerializer(many=True)
+
+
+class ModerationTrendsSerializer(serializers.Serializer):
+    reports_per_day = serializers.FloatField()
+    actions_per_day = serializers.FloatField()
+
+
+class ModerationReportResponseSerializer(serializers.Serializer):
+    period = ModerationReportPeriodSerializer()
+    report_statistics = ModerationReportStatisticsSerializer()
+    moderation_actions = ModerationActionsSerializer()
+    trends = ModerationTrendsSerializer()
+    generated_at = serializers.DateTimeField()
+
+
+# ------------------ API View ------------------
 class ReportModerationReportView(APIView):
     permission_classes = [IsAdminUser]
 
@@ -572,7 +669,44 @@ class ReportModerationReportView(APIView):
                 required=False,
             ),
         ],
-        responses={200: {"type": "object"}},
+        responses={200: ModerationReportResponseSerializer},
+        examples=[
+            OpenApiExample(
+                "Moderation report example",
+                value={
+                    "period": {
+                        "start": "2026-02-20T00:00:00Z",
+                        "end": "2026-03-20T00:00:00Z",
+                        "days": 29,
+                    },
+                    "report_statistics": {
+                        "total_reports": 120,
+                        "resolved_reports": 80,
+                        "pending_reports": 40,
+                        "resolution_rate": 66.7,
+                        "avg_resolution_hours": 12.5,
+                    },
+                    "moderation_actions": {
+                        "total_actions": 95,
+                        "action_breakdown": [
+                            {"action": "remove_content", "count": 50},
+                            {"action": "warn_user", "count": 30},
+                            {"action": "ban_user", "count": 15},
+                        ],
+                        "top_moderators": [
+                            {"admin_user__username": "moderator1", "count": 40},
+                            {"admin_user__username": "moderator2", "count": 30},
+                        ],
+                    },
+                    "trends": {
+                        "reports_per_day": 4.1,
+                        "actions_per_day": 3.2,
+                    },
+                    "generated_at": "2026-03-20T15:30:00Z",
+                },
+                response_only=True,
+            )
+        ],
         description="Generate a moderation report for a given period.",
     )
     def get(self, request):
@@ -590,4 +724,5 @@ class ReportModerationReportView(APIView):
             )
 
         report = ReportedContentService.generate_moderation_report(start_date, end_date)
-        return Response(report)
+        serializer = ModerationReportResponseSerializer(report)
+        return Response(serializer.data)

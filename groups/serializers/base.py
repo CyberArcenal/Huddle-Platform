@@ -1,16 +1,14 @@
 from rest_framework import serializers
 from groups.models.group import GROUP_PRIVACY_CHOICES, Group
 from groups.services.group_member import GroupMemberService
-from users.models.base import User
+from users.models import User
 
 
 class GroupSearchSerializer(serializers.Serializer):
     """Serializer for group search parameters."""
 
     query = serializers.CharField(required=False)
-    privacy = serializers.ChoiceField(
-        choices=GROUP_PRIVACY_CHOICES, required=False
-    )
+    privacy = serializers.ChoiceField(choices=GROUP_PRIVACY_CHOICES, required=False)
     limit = serializers.IntegerField(min_value=1, max_value=100, default=20)
     offset = serializers.IntegerField(min_value=0, default=0)
 

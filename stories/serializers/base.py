@@ -1,17 +1,19 @@
 from rest_framework import serializers
 from django.utils import timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from feed.models.reaction import ReactionType
 from feed.serializers.base import ReactionCountSerializer
 from feed.serializers.comment import CommentDisplaySerializer
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
-from stories.models.base import Story, StoryView
+from stories.models import Story, StoryView
 from stories.services.story import StoryService
 from stories.services.story_view import StoryViewService
-from users.models.base import User
+from users.models import User
 from users.serializers.user import UserMinimalSerializer
+
+
 class StoryStatsSerializer(serializers.Serializer):
     total_stories = serializers.IntegerField()
     active_stories = serializers.IntegerField()
@@ -28,10 +30,10 @@ class StorySerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
-    
+
     comments = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
-    
+
     like_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
     reaction_counts = serializers.SerializerMethodField()
@@ -52,10 +54,8 @@ class StorySerializer(serializers.ModelSerializer):
             "has_viewed",
             "remaining_time",
             "is_expired",
-            
             "comments",
             "comment_count",
-            
             "like_count",
             "liked",
             "reaction_counts",
@@ -93,7 +93,7 @@ class StorySerializer(serializers.ModelSerializer):
     def get_is_expired(self, obj) -> bool:
         """Check if story is expired"""
         return not obj.is_active or obj.expires_at <= timezone.now()
-    
+
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
         return ReactionService.get_reaction_counts(obj, obj.id)
 
@@ -113,7 +113,7 @@ class StorySerializer(serializers.ModelSerializer):
                 user=request.user, content_type=obj, object_id=obj.id
             )
         return False
-    
+
     def get_comments(self, obj) -> CommentDisplaySerializer(many=True):  # type: ignore
         comments = CommentService.get_comments_for_object(
             content_object=obj, include_replies=False, limit=10
@@ -229,7 +229,7 @@ class StoryFeedSerializer(serializers.Serializer):
         """Get count of stories"""
         return len(obj.get("stories", []))
 
-    def get_stories(self, obj) -> StorySerializer(many=True): # type: ignore
+    def get_stories(self, obj) -> StorySerializer(many=True):  # type: ignore
         """Pass context down to StorySerializer"""
         stories = obj.get("stories", [])
         serializer = StorySerializer(stories, many=True, context=self.context)

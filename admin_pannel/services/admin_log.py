@@ -3,7 +3,9 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q, Count
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import AdminLog, User
+
+from users.models.user import User
+from ..models import AdminLog
 import datetime
 
 

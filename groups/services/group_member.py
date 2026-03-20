@@ -1,9 +1,10 @@
 from django.utils import timezone
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any, Tuple
-from ..models import Group, GroupMember, User
-import uuid
+
+from users.models.user import User
+from ..models import Group, GroupMember
 
 
 class GroupMemberService:

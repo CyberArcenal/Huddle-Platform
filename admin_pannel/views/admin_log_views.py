@@ -284,6 +284,43 @@ class AdminLogSearchView(APIView):
         return paginator.get_paginated_response(log_serializer.data)
 
 
+
+# ------------------ Response Serializers ------------------
+class AdminUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    email = serializers.EmailField()
+
+
+class TargetUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    email = serializers.EmailField()
+
+
+class AdminLogEntrySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    action = serializers.CharField()
+    admin_user = AdminUserSerializer(allow_null=True)
+    target_user = TargetUserSerializer(allow_null=True)
+    target_id = serializers.IntegerField(allow_null=True)
+    reason = serializers.CharField()
+    created_at = serializers.DateTimeField()
+
+
+class TimeRangeSerializer(serializers.Serializer):
+    start = serializers.CharField(allow_null=True)
+    end = serializers.CharField(allow_null=True)
+
+
+class ExportAdminLogsResponseSerializer(serializers.Serializer):
+    exported_at = serializers.DateTimeField()
+    total_logs = serializers.IntegerField()
+    time_range = TimeRangeSerializer()
+    logs = AdminLogEntrySerializer(many=True)
+
+
+# ------------------ API View ------------------
 class AdminLogExportView(APIView):
     permission_classes = [IsAdminUser]
 
@@ -308,7 +345,53 @@ class AdminLogExportView(APIView):
                 required=False,
             ),
         ],
-        responses={200: {"type": "object"}},
+        responses={200: ExportAdminLogsResponseSerializer},
+        examples=[
+            OpenApiExample(
+                "Export logs response",
+                value={
+                    "exported_at": "2026-03-20T15:30:00Z",
+                    "total_logs": 2,
+                    "time_range": {
+                        "start": "2026-03-01T00:00:00Z",
+                        "end": "2026-03-20T00:00:00Z",
+                    },
+                    "logs": [
+                        {
+                            "id": 1,
+                            "action": "user_ban",
+                            "admin_user": {
+                                "id": 10,
+                                "username": "moderator1",
+                                "email": "mod1@example.com",
+                            },
+                            "target_user": {
+                                "id": 42,
+                                "username": "offender",
+                                "email": "offender@example.com",
+                            },
+                            "target_id": None,
+                            "reason": "Violation of community guidelines",
+                            "created_at": "2026-03-19T12:00:00Z",
+                        },
+                        {
+                            "id": 2,
+                            "action": "post_remove",
+                            "admin_user": {
+                                "id": 11,
+                                "username": "moderator2",
+                                "email": "mod2@example.com",
+                            },
+                            "target_user": None,
+                            "target_id": 123,
+                            "reason": "Inappropriate content",
+                            "created_at": "2026-03-18T09:30:00Z",
+                        },
+                    ],
+                },
+                response_only=True,
+            )
+        ],
         description="Export admin logs as JSON.",
     )
     def get(self, request):
@@ -329,7 +412,8 @@ class AdminLogExportView(APIView):
 
         try:
             data = AdminLogService.export_admin_logs(start_date, end_date, fmt)
-            return Response(data)
+            serializer = ExportAdminLogsResponseSerializer(data)
+            return Response(serializer.data)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -356,12 +440,27 @@ class AdminLogCleanupView(APIView):
 
 
 # ---------- Action Views ----------
+
+
+# ------------------ Response Serializer ------------------
+class BanUserResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    previous_status = serializers.CharField()
+    new_status = serializers.CharField()
+    duration_days = serializers.IntegerField(allow_null=True)
+    banned_at = serializers.DateTimeField()
+    banned_by = serializers.CharField()
+    reason = serializers.CharField()
+
+
+# ------------------ API View ------------------
 class AdminBanUserView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
         request=BanUserInputSerializer,
-        responses={200: {"type": "object"}},
+        responses={200: BanUserResponseSerializer},
         examples=[
             OpenApiExample(
                 "Ban request",
@@ -405,17 +504,31 @@ class AdminBanUserView(APIView):
                 reason=data["reason"],
                 duration_days=data.get("duration_days"),
             )
-            return Response(result, status=status.HTTP_200_OK)
+            response_serializer = BanUserResponseSerializer(result)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+# ------------------ Response Serializer ------------------
+class WarnUserResponseSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    warning_severity = serializers.CharField()
+    warned_at = serializers.DateTimeField()
+    warned_by = serializers.CharField()
+    reason = serializers.CharField()
+    warning_count = serializers.IntegerField()
+
+
+# ------------------ API View ------------------
 class AdminWarnUserView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
         request=WarnUserInputSerializer,
-        responses={200: {"type": "object"}},
+        responses={200: WarnUserResponseSerializer},
         examples=[
             OpenApiExample(
                 "Warn request",
@@ -454,17 +567,29 @@ class AdminWarnUserView(APIView):
                 reason=data["reason"],
                 severity=data.get("severity", "low"),
             )
-            return Response(result, status=status.HTTP_200_OK)
+            response_serializer = WarnUserResponseSerializer(result)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+# ------------------ Response Serializer ------------------
+class RemoveContentResponseSerializer(serializers.Serializer):
+    content_type = serializers.CharField()
+    object_id = serializers.IntegerField()
+    removed_at = serializers.DateTimeField()
+    removed_by = serializers.CharField()
+    reason = serializers.CharField()
+
+
+# ------------------ API View ------------------
 class AdminRemoveContentView(APIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
         request=RemoveContentInputSerializer,
-        responses={200: {"type": "object"}},
+        responses={200: RemoveContentResponseSerializer},
         examples=[
             OpenApiExample(
                 "Remove content request",
@@ -503,6 +628,7 @@ class AdminRemoveContentView(APIView):
                 object_id=data["object_id"],
                 reason=data["reason"],
             )
-            return Response(result, status=status.HTTP_200_OK)
+            response_serializer = RemoveContentResponseSerializer(result)
+            return Response(response_serializer.data, status=status.HTTP_200_OK)
         except ValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -16,16 +16,23 @@ from ..serializers.admin import (
     AdminUserListSerializer,
     BulkUserActionSerializer,
     UserExportSerializer,
+    AdminUserDetailResponseSerializer,
+    AdminCreateUserResponseSerializer,
+    AdminBulkUserActionResponseSerializer,
+    AdminDashboardResponseSerializer,
+    UserExportResponseSerializer,
+    CleanupActionResponseSerializer,
 )
 from ..services.user import UserService
 from ..services.security_log import SecurityLogService
 from ..services.user_activity import UserActivityService
 from ..models import User, UserStatus, SecurityLog, UserActivity
 from rest_framework import serializers
-from ..serializers.admin import AdminUserListSerializer
+from ..serializers.activity import UserActivitySerializer
+from ..serializers.security import SecurityLogSerializer
 
 
-# ----- New input serializer for AdminCleanupView -----
+# ----- Input serializer for AdminCleanupView -----
 class CleanupActionInputSerializer(serializers.Serializer):
     action = serializers.ChoiceField(
         choices=[
@@ -43,9 +50,6 @@ class CleanupActionInputSerializer(serializers.Serializer):
         min_value=1,
         help_text="Number of days (used for old logs/activities)",
     )
-
-
-# ------------------------------------------------------
 
 
 class PaginatedAdminUserListSerializer(serializers.Serializer):
@@ -144,50 +148,29 @@ class AdminUserDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "user": AdminUserListSerializer().data,
-                    "recent_activities": {"type": "array"},
-                    "recent_security_logs": {"type": "array"},
-                },
-            }
-        },
+        responses={200: AdminUserDetailResponseSerializer},
         description="Retrieve detailed user information including recent activities and security logs.",
     )
     def get(self, request, user_id):
         try:
             user = get_object_or_404(User, id=user_id)
 
-            serializer = AdminUserListSerializer(user, context={"request": request})
-
-            recent_activities = UserActivity.objects.filter(user=user).order_by(
-                "-timestamp"
-            )[:10]
-
-            security_logs = SecurityLog.objects.filter(user=user).order_by(
-                "-created_at"
-            )[:10]
-
-            from ..serializers.activity import UserActivitySerializer
-            from ..serializers.security import SecurityLogSerializer
+            user_serializer = AdminUserListSerializer(user, context={"request": request})
+            recent_activities = UserActivity.objects.filter(user=user).order_by("-timestamp")[:10]
+            security_logs = SecurityLog.objects.filter(user=user).order_by("-created_at")[:10]
 
             activity_serializer = UserActivitySerializer(
                 recent_activities, many=True, context={"request": request}
             )
-
             security_serializer = SecurityLogSerializer(
                 security_logs, many=True, context={"request": request}
             )
 
-            return Response(
-                {
-                    "user": serializer.data,
-                    "recent_activities": activity_serializer.data,
-                    "recent_security_logs": security_serializer.data,
-                }
-            )
+            return Response({
+                "user": user_serializer.data,
+                "recent_activities": activity_serializer.data,
+                "recent_security_logs": security_serializer.data,
+            })
 
         except User.DoesNotExist:
             return Response(
@@ -198,15 +181,7 @@ class AdminUserDetailView(APIView):
 
     @extend_schema(
         request=AdminUserUpdateSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "user": AdminUserListSerializer().data,
-                },
-            }
-        },
+        responses={200: AdminCreateUserResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update user",
@@ -227,15 +202,11 @@ class AdminUserDetailView(APIView):
 
             if serializer.is_valid():
                 updated_user = serializer.save()
-
-                return Response(
-                    {
-                        "message": "User updated successfully",
-                        "user": AdminUserListSerializer(
-                            updated_user, context={"request": request}
-                        ).data,
-                    }
-                )
+                user_serializer = AdminUserListSerializer(updated_user, context={"request": request})
+                return Response({
+                    "message": "User updated successfully",
+                    "user": user_serializer.data,
+                })
 
             return Response(
                 {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
@@ -256,7 +227,7 @@ class AdminCreateUserView(APIView):
 
     @extend_schema(
         request=AdminUserCreateSerializer,
-        responses={201: AdminUserListSerializer},
+        responses={201: AdminCreateUserResponseSerializer},
         examples=[
             OpenApiExample(
                 "Create user",
@@ -284,17 +255,14 @@ class AdminCreateUserView(APIView):
         if serializer.is_valid():
             try:
                 user = serializer.save()
-
+                user_serializer = AdminUserListSerializer(user, context={"request": request})
                 return Response(
                     {
                         "message": "User created successfully",
-                        "user": AdminUserListSerializer(
-                            user, context={"request": request}
-                        ).data,
+                        "user": user_serializer.data,
                     },
                     status=status.HTTP_201_CREATED,
                 )
-
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -310,15 +278,7 @@ class AdminBulkUserActionView(APIView):
 
     @extend_schema(
         request=BulkUserActionSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "results": {"type": "object"},
-                },
-            }
-        },
+        responses={200: AdminBulkUserActionResponseSerializer},
         examples=[
             OpenApiExample(
                 "Bulk action",
@@ -337,14 +297,12 @@ class AdminBulkUserActionView(APIView):
         if serializer.is_valid():
             try:
                 results = serializer.execute()
-
                 return Response(
                     {
                         "message": f'Bulk action completed: {results["success"]} successful, {results["failed"]} failed',
                         "results": results,
                     }
                 )
-
             except Exception as e:
                 return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -359,7 +317,7 @@ class AdminDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
-        responses={200: {"type": "object"}},
+        responses={200: AdminDashboardResponseSerializer},
         description="Get admin dashboard statistics: user counts, activity, security events.",
     )
     def get(self, request):
@@ -398,26 +356,24 @@ class AdminDashboardView(APIView):
                 created_at__gte=timezone.now() - timedelta(hours=24),
             ).count()
 
-            return Response(
-                {
-                    "user_statistics": {
-                        "total_users": total_users,
-                        "active_users": active_users,
-                        "new_users_today": new_users_today,
-                        "new_users_week": new_users_week,
-                        "status_breakdown": list(status_breakdown),
-                    },
-                    "activity_statistics": {
-                        "total_activities": total_activities,
-                        "activities_today": activities_today,
-                    },
-                    "security_statistics": {
-                        "failed_logins_24h": failed_logins_24h,
-                        "password_changes_24h": password_changes_24h,
-                    },
-                    "timestamp": timezone.now(),
-                }
-            )
+            return Response({
+                "user_statistics": {
+                    "total_users": total_users,
+                    "active_users": active_users,
+                    "new_users_today": new_users_today,
+                    "new_users_week": new_users_week,
+                    "status_breakdown": list(status_breakdown),
+                },
+                "activity_statistics": {
+                    "total_activities": total_activities,
+                    "activities_today": activities_today,
+                },
+                "security_statistics": {
+                    "failed_logins_24h": failed_logins_24h,
+                    "password_changes_24h": password_changes_24h,
+                },
+                "timestamp": timezone.now(),
+            })
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -429,22 +385,18 @@ class UserExportView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
-        responses={200: {"type": "object"}},
+        responses={200: UserExportResponseSerializer},
         description="Export all data for a user (GDPR compliance).",
     )
     def get(self, request, user_id):
         try:
             user = get_object_or_404(User, id=user_id)
-
-            serializer = UserExportSerializer(user, context={"request": request})
-
-            return Response(
-                {
-                    "user_id": user_id,
-                    "export_timestamp": timezone.now(),
-                    "data": serializer.data,
-                }
-            )
+            export_serializer = UserExportSerializer(user, context={"request": request})
+            return Response({
+                "user_id": user_id,
+                "export_timestamp": timezone.now(),
+                "data": export_serializer.data,
+            })
 
         except User.DoesNotExist:
             return Response(
@@ -460,8 +412,8 @@ class AdminCleanupView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
 
     @extend_schema(
-        request=CleanupActionInputSerializer,  # ✅ Now using dedicated serializer
-        responses={200: {"type": "object"}},
+        request=CleanupActionInputSerializer,
+        responses={200: CleanupActionResponseSerializer},
         examples=[
             OpenApiExample(
                 "Cleanup expired sessions",
@@ -478,70 +430,62 @@ class AdminCleanupView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        serializer = CleanupActionInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        input_serializer = CleanupActionInputSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        data = serializer.validated_data
+        data = input_serializer.validated_data
         action = data["action"]
 
         try:
             from ..services.login_session import LoginSessionService
-            from ..services.blacklisted_access_token import (
-                BlacklistedAccessTokenService,
-            )
+            from ..services.blacklisted_access_token import BlacklistedAccessTokenService
             from ..services.otp_request import OtpRequestService
             from ..services.login_checkpoint import LoginCheckpointService
 
             if action == "cleanup_expired_sessions":
                 count = LoginSessionService.cleanup_expired_sessions()
-                return Response(
-                    {"message": f"Cleaned up {count} expired sessions", "count": count}
-                )
+                return Response({
+                    "message": f"Cleaned up {count} expired sessions",
+                    "count": count,
+                })
 
             elif action == "cleanup_expired_tokens":
                 count = BlacklistedAccessTokenService.cleanup_expired_tokens()
-                return Response(
-                    {
-                        "message": f"Cleaned up {count} expired blacklisted tokens",
-                        "count": count,
-                    }
-                )
+                return Response({
+                    "message": f"Cleaned up {count} expired blacklisted tokens",
+                    "count": count,
+                })
 
             elif action == "cleanup_expired_otps":
                 count = OtpRequestService.cleanup_expired_otps()
-                return Response(
-                    {"message": f"Cleaned up {count} expired OTPs", "count": count}
-                )
+                return Response({
+                    "message": f"Cleaned up {count} expired OTPs",
+                    "count": count,
+                })
 
             elif action == "cleanup_expired_checkpoints":
                 count = LoginCheckpointService.cleanup_expired_checkpoints()
-                return Response(
-                    {
-                        "message": f"Cleaned up {count} expired checkpoints",
-                        "count": count,
-                    }
-                )
+                return Response({
+                    "message": f"Cleaned up {count} expired checkpoints",
+                    "count": count,
+                })
 
             elif action == "cleanup_old_logs":
                 days = data.get("days", 90)
                 count = SecurityLogService.cleanup_old_logs(days)
-                return Response(
-                    {
-                        "message": f"Cleaned up {count} logs older than {days} days",
-                        "count": count,
-                    }
-                )
+                return Response({
+                    "message": f"Cleaned up {count} logs older than {days} days",
+                    "count": count,
+                })
 
             elif action == "cleanup_old_activities":
                 days = data.get("days", 365)
                 count = UserActivityService.cleanup_old_activities(days)
-                return Response(
-                    {
-                        "message": f"Cleaned up {count} activities older than {days} days",
-                        "count": count,
-                    }
-                )
+                return Response({
+                    "message": f"Cleaned up {count} activities older than {days} days",
+                    "count": count,
+                })
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

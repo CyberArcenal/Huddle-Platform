@@ -12,7 +12,7 @@ from rest_framework_simplejwt.token_blacklist.models import (
     OutstandingToken,
 )
 from django.db import transaction
-from users.models.base import BlacklistedAccessToken, LoginSession, SecurityLog, User
+from users.models import BlacklistedAccessToken, LoginSession, SecurityLog, User
 from users.serializers.auth import LogoutRequestSerializer, LogoutResponseSerializer
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
 
