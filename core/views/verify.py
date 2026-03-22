@@ -23,7 +23,7 @@ class TokenVerifyView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["Token Verify"],
+        tags=["Token"],
         
         request=TokenVerifyRequestSerializer,
         responses={
@@ -43,6 +43,7 @@ class TokenVerifyView(APIView):
                 "Verify token successful",
                 value={
                     "valid": True,
+                    "detail": "message for validation",
                     "user": {
                         "id": 1,
                         "username": "johndoe",
@@ -60,7 +61,7 @@ class TokenVerifyView(APIView):
         # Validate request data using serializer
         serializer = TokenVerifyRequestSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"valid": False, "detail": "invalid data"}, status=status.HTTP_400_BAD_REQUEST)
 
         token_str = serializer.validated_data["token"]
 
@@ -70,21 +71,21 @@ class TokenVerifyView(APIView):
 
             if token.get("token_type") != "access":
                 return Response(
-                    {"detail": "Only access tokens are allowed"},
+                    {"valid": False,"detail": "Only access tokens are allowed"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Check 1: Kung expired na
             if token.get("exp") < timezone.now().timestamp():
                 return Response(
-                    {"detail": "Token has expired"}, status=status.HTTP_401_UNAUTHORIZED
+                    {"valid": False,"detail": "Token has expired"}, status=status.HTTP_401_UNAUTHORIZED
                 )
 
             # Check 2: Custom access token blacklist
             jti = token.get("jti")
             if BlacklistedAccessToken.is_blacklisted(jti):
                 return Response(
-                    {"detail": "Token has been revoked"},
+                    {"valid": False, "detail": "Token has been revoked"},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
@@ -94,7 +95,7 @@ class TokenVerifyView(APIView):
                 user = User.objects.get(id=user_id, is_active=True)
             except User.DoesNotExist:
                 return Response(
-                    {"detail": "User not found or inactive"},
+                    {"valid": False, "detail": "User not found or inactive"},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
@@ -110,6 +111,6 @@ class TokenVerifyView(APIView):
 
         except (InvalidToken, TokenError) as e:
             return Response(
-                {"detail": "Invalid or expired token"},
+                {"valid": False, "detail": "Invalid or expired token"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )

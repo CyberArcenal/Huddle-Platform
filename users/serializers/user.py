@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from typing import Dict, Any, Optional, List
 
+from feed.models.post import Post
 from users.services.user import UserService
 from users.services.user_follow import UserFollowService
 
@@ -525,7 +526,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return False
 
     def get_posts_count(self, obj) -> int:
-        from feed.models.base import Post
         return Post.objects.filter(user_id=obj.id).count()
 
     def to_representation(self, instance):

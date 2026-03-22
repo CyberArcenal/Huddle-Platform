@@ -24,6 +24,7 @@ from .components.time               import *
 from .components.mail               import *
 # from .components.pdfkit             import *
 from .components.jwt                import *
+from .components.spectacular        import *
 
 # from .components.cloudinary         import *
 

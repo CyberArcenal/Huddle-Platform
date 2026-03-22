@@ -4,17 +4,17 @@ from django.core.exceptions import ValidationError
 from groups.models.member import GROUP_ROLE_CHOICES, GroupMember
 from groups.services.group_member import GroupMemberService
 from users.models import User
+from users.serializers.user import UserMinimalSerializer
 
 
 class GroupMemberMinimalSerializer(serializers.ModelSerializer):
     """Lightweight member info for lists."""
-    user_id = serializers.IntegerField(source='user.id')
-    username = serializers.CharField(source='user.username')
+    user = UserMinimalSerializer(read_only=True)
     role = serializers.ChoiceField(choices=GROUP_ROLE_CHOICES)
 
     class Meta:
         model = GroupMember
-        fields = ['id', 'user_id', 'username', 'role', 'joined_at']
+        fields = ['id', 'user', 'role', 'joined_at']
         read_only_fields = fields
 
 
@@ -64,20 +64,16 @@ class GroupMemberCreateSerializer(serializers.Serializer):
 
 class GroupMemberDisplaySerializer(serializers.ModelSerializer):
     """Detailed view for a group member."""
-    user_id = serializers.IntegerField(source='user.id')
-    username = serializers.CharField(source='user.username')
-    email = serializers.EmailField(source='user.email', required=False)
-    first_name = serializers.CharField(source='user.first_name', required=False)
-    last_name = serializers.CharField(source='user.last_name', required=False)
+    user = UserMinimalSerializer(read_only=True)
     is_creator = serializers.SerializerMethodField()
 
     class Meta:
         model = GroupMember
         fields = [
-            'id', 'user_id', 'username', 'email', 'first_name', 'last_name',
+            'id', 'user',
             'role', 'joined_at', 'is_creator'
         ]
-        read_only_fields = ['user_id', 'username', 'email', 'joined_at', 'is_creator']
+        read_only_fields = ['user_id', 'joined_at', 'is_creator']
 
     def get_is_creator(self, obj) -> bool:
         return obj.group.creator == obj.user

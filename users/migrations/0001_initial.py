@@ -4,7 +4,7 @@ import django.contrib.auth.models
 import django.contrib.auth.validators
 import django.db.models.deletion
 import django.utils.timezone
-import users.models.base
+import users.models.utilities
 import uuid
 from django.conf import settings
 from django.db import migrations, models
@@ -453,7 +453,7 @@ class Migration(migrations.Migration):
                     "type",
                     models.CharField(
                         choices=[("email", "Email"), ("phone", "Phone")],
-                        default=users.models.base.OtpRequestTypes["EMAIL"],
+                        default=users.models.utilities.OtpRequestTypes["EMAIL"],
                         max_length=10,
                     ),
                 ),

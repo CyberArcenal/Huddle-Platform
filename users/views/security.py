@@ -8,6 +8,7 @@ from drf_spectacular.utils import inline_serializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from rest_framework import serializers
 from global_utils.pagination import UsersPagination
+from users.serializers.session import BulkTerminateSessionsSerializer, LoginSessionSerializer, TerminateSessionSerializer
 
 from ..services.security_log import SecurityLogService
 from ..services.user_security_settings import UserSecuritySettingsService
@@ -32,11 +33,6 @@ from ..serializers.security import (
     SecurityLogSerializer,
 )
 from django.db import transaction
-from ..serializers.activity import (
-    LoginSessionSerializer,
-    TerminateSessionSerializer,
-    BulkTerminateSessionsSerializer,
-)
 from ..models import UserSecuritySettings, SecurityLog, LoginSession
 from rest_framework import serializers
 from ..serializers.security import SecurityLogSerializer

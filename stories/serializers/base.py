@@ -216,24 +216,66 @@ class StoryViewCreateSerializer(serializers.Serializer):
         return StoryViewService.record_view(story, user)
 
 
-class StoryFeedSerializer(serializers.Serializer):
-    """Serializer for story feed using StoryFeedService"""
 
+
+
+class StoryFeedSerializer(serializers.Serializer):
     user = UserMinimalSerializer()
     stories = serializers.SerializerMethodField()
-    has_viewed_all = serializers.BooleanField()
-    type = serializers.CharField()  # 'own', 'following', 'discovery'
+    has_viewed_all = serializers.SerializerMethodField()
+    type = serializers.CharField(read_only=True)
     stories_count = serializers.SerializerMethodField()
 
-    def get_stories_count(self, obj) -> int:
-        """Get count of stories"""
-        return len(obj.get("stories", []))
+    def _as_mapping(self, obj: Any) -> dict:
+        """
+        Normalize obj to a mapping-like object.
+        If obj is a dict-like, return as-is.
+        If obj is a Story instance (or model), wrap it into a dict with 'stories' key.
+        """
+        if obj is None:
+            return {}
+        if isinstance(obj, dict):
+            return obj
+        # If obj is a Story instance: treat it as single-story feed
+        # If obj is a QuerySet or list of Story instances, caller should pass a dict,
+        # but we still handle a single Story gracefully.
+        if hasattr(obj, "_meta") and hasattr(obj, "id"):
+            return {"user": getattr(obj, "user", None), "stories": [obj], "has_viewed_all": False, "type": "own"}
+        # Fallback: try to coerce to dict
+        try:
+            return dict(obj)
+        except Exception:
+            return {}
 
-    def get_stories(self, obj) -> StorySerializer(many=True):  # type: ignore
-        """Pass context down to StorySerializer"""
-        stories = obj.get("stories", [])
+    def get_stories_count(self, obj) -> int:
+        data = self._as_mapping(obj)
+        stories = data.get("stories", [])
+        try:
+            return len(stories)
+        except Exception:
+            return 0
+
+    def get_has_viewed_all(self, obj) -> bool:
+        data = self._as_mapping(obj)
+        return bool(data.get("has_viewed_all", False))
+
+    def get_stories(self, obj) -> StorySerializer(many=True): # type: ignore
+        data = self._as_mapping(obj)
+        stories = data.get("stories", []) or []
+
+        if not stories:
+            return []
+
+        first = stories[0]
+        # If first element is a dict, assume raw dicts already serialized
+        if isinstance(first, dict):
+            # Return raw dicts (or validate if you prefer)
+            return stories
+        # Otherwise assume model instances / QuerySet
         serializer = StorySerializer(stories, many=True, context=self.context)
         return serializer.data
+
+
 
 
 class StoryStatsSerializer(serializers.Serializer):

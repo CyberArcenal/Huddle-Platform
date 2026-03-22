@@ -1,16 +1,22 @@
 # accounts/views/refresh_token.py
+import django
+import drf_spectacular
+import rest_framework
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+import rest_framework_simplejwt
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.utils import timezone
 from django.db import transaction
 from rest_framework.permissions import AllowAny
 import logging
+from global_utils.logger import log_audit_event
 from global_utils.security import get_client_ip
 import uuid
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
+from users.enums import UserStatus
 from users.serializers.auth import (
     TokenRefreshRequestSerializer,
     TokenRefreshResponseSerializer,
@@ -28,7 +34,7 @@ class RefreshTokenView(APIView):
     """
 
     @extend_schema(
-        tags=["Token Refresh"],
+        tags=["Token"],
         request=TokenRefreshRequestSerializer,
         responses={
             200: TokenRefreshResponseSerializer,
@@ -147,3 +153,4 @@ class RefreshTokenView(APIView):
                 {"detail": "An error occurred during token refresh"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+

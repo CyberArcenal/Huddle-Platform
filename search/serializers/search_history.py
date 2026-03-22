@@ -1,7 +1,7 @@
 # serializers.py
 from rest_framework import serializers
 
-from search.models.base import SearchHistory
+from search.models.search_history import SearchHistory
 
 class SearchHistorySerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)

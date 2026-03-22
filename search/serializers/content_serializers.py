@@ -5,7 +5,6 @@ from rest_framework import serializers
 from users.models import User
 from groups.models import Group
 from events.models import Event
-from feed.models.base import Post
 
 
 class UserSearchSerializer(serializers.ModelSerializer):

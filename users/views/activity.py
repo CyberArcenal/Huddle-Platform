@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
 from global_utils.pagination import UsersPagination
-from users.models.base import ACTION_TYPES
+from users.models.utilities import ACTION_TYPES
 
 from ..services.user_activity import UserActivityService
 from ..serializers.activity import (

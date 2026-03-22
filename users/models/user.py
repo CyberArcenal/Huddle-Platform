@@ -3,25 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 from users.enums import UserStatus
-from users.models.base import USER_STATUS_CHOICES
-
-class MBTIType(models.TextChoices):
-    ISTJ = "ISTJ", "Inspector"
-    ISFJ = "ISFJ", "Protector"
-    INFJ = "INFJ", "Counselor"
-    INTJ = "INTJ", "Mastermind"
-    ISTP = "ISTP", "Crafter"
-    ISFP = "ISFP", "Composer"
-    INFP = "INFP", "Healer"
-    INTP = "INTP", "Architect"
-    ESTP = "ESTP", "Dynamo"
-    ESFP = "ESFP", "Performer"
-    ENFP = "ENFP", "Champion"
-    ENTP = "ENTP", "Visionary"
-    ESTJ = "ESTJ", "Supervisor"
-    ESFJ = "ESFJ", "Provider"
-    ENFJ = "ENFJ", "Teacher"
-    ENTJ = "ENTJ", "Commander"
+from users.models.utilities import USER_STATUS_CHOICES
 
 
 class Hobby(models.Model):
@@ -77,6 +59,12 @@ class LoveLanguage(models.TextChoices):
     TIME = "Time", "Quality Time"
     GIFTS = "Gifts", "Receiving Gifts"
     TOUCH = "Touch", "Physical Touch"
+    
+class RelationshipGoal(models.TextChoices):
+    FRIENDSHIP = "Friendship", "Friendship"
+    DATING = "Dating", "Dating"
+    LONG_TERM = "LongTerm", "Long-term Relationship"
+    MARRIAGE = "Marriage", "Marriage"
 
 
 class User(AbstractUser):
@@ -121,9 +109,10 @@ class User(AbstractUser):
     )
     relationship_goal = models.CharField(
         max_length=50,
+        choices=RelationshipGoal.choices,
         null=True,
         blank=True,
-        help_text="User's relationship goal (friendship, dating, long-term)"
+        help_text="User's relationship goal"
     )
 
     # Location auto-fetched from Android app

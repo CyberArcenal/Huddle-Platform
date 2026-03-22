@@ -1,10 +1,8 @@
 import logging
 from typing import Dict, Any, List, Optional
-
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
-
-from feed.models.base import Post
+from feed.models.post import Post
 from feed.models.reaction import ReactionType
 from feed.serializers.base import (
     PostStatisticsSerializer,

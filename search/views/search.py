@@ -13,7 +13,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 from core.settings.dev import LOGGER
 from global_utils.pagination import SearchPagination
-from search.serializers.base import (
+from search.serializers.search_history import (
     ClearHistoryRequestSerializer,
     PopularSearchSerializer,
     SearchHistorySerializer,
@@ -23,7 +23,7 @@ from search.serializers.base import (
 from search.services.search_history import SearchHistoryService
 from users.models import User
 from rest_framework import serializers
-from search.serializers.base import SearchHistorySerializer
+from search.serializers.search_history import SearchHistorySerializer
 
 
 # ----- Paginated response serializer for drf-spectacular -----
@@ -48,7 +48,7 @@ class SearchHistoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="search_type",
@@ -99,7 +99,7 @@ class SearchHistoryAPIView(APIView):
             )
 
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         request=RecordSearchInputSerializer,  # ✅ Now using dedicated serializer
         responses={201: SearchHistorySerializer},
         examples=[
@@ -170,7 +170,7 @@ class SearchHistoryAPIView(APIView):
             )
 
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         request=ClearHistoryRequestSerializer,
         responses={
             200: {
@@ -246,7 +246,7 @@ class DeleteSearchEntryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         responses={
             200: {
                 "type": "object",
@@ -316,7 +316,7 @@ class RecentSearchesAPIView(APIView):
     @method_decorator(cache_page(60 * 5))
     @method_decorator(vary_on_cookie)
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="limit",
@@ -382,7 +382,7 @@ class PopularSearchesAPIView(APIView):
 
     @method_decorator(cache_page(60 * 30))
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -463,7 +463,7 @@ class SearchSuggestionsAPIView(APIView):
     """Get search suggestions based on prefix"""
 
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="prefix",
@@ -566,7 +566,7 @@ class SearchStatisticsAPIView(APIView):
     @method_decorator(cache_page(60 * 10))
     @method_decorator(vary_on_cookie)
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -621,7 +621,7 @@ class SearchTrendsAPIView(APIView):
 
     @method_decorator(cache_page(60 * 60))
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="days",
@@ -713,7 +713,7 @@ class ExportSearchHistoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Global Search's"],
+        tags=["Search's History"],
         parameters=[
             OpenApiParameter(
                 name="format",

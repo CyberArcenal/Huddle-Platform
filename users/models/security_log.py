@@ -2,7 +2,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import models
 
-from users.models.base import SECURITY_EVENT_TYPES
+from users.models.utilities import SECURITY_EVENT_TYPES
 
 class SecurityLog(models.Model):
 

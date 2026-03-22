@@ -3,7 +3,7 @@ import os
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.db import transaction
-from feed.models.base import Post
+from feed.models.post import POST_TYPES, Post
 from feed.services.post import PostService
 from users.models import User
 from users.state_transition_service.user import UserStateTransitionService
@@ -137,7 +137,7 @@ def user_post_save(sender, instance, created, **kwargs):
                     # choose post_type safely
                     post_type = "system"
                     try:
-                        valid_types = [choice[0] for choice in Post.POST_TYPES]
+                        valid_types = [choice[0] for choice in POST_TYPES]
                     except Exception:
                         valid_types = []
 

@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from users.models.base import OTP_TYPES, OtpRequestTypes
+from users.models.utilities import OTP_TYPES, OtpRequestTypes
 
 
 class OtpRequest(models.Model):
@@ -29,7 +29,7 @@ class OtpRequest(models.Model):
     is_phone_delivered = models.BooleanField(default=False)
 
     def clean(self):
-        if not self.type in dict(self.OTP_TYPES):
+        if not self.type in dict(OTP_TYPES):
             raise ValidationError({"type": "Invalid OTP type."})
 
         if not self.email and not self.phone:

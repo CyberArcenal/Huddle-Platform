@@ -1,9 +1,11 @@
+from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
-from django.db.models import Q, Count
-from typing import Optional, List, Dict, Any, Tuple
+from django.db.models import Q, Count, QuerySet
+from typing import Iterable, Optional, List, Dict, Any, Tuple
 
+from feed.models.post import POST_TYPES
 from feed.serializers.base import PostStatisticsSerializer
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
@@ -11,7 +13,7 @@ from users.models import User
 from users.services.user_follow import UserFollowService
 from ..models import Post, PostMedia
 import uuid
-
+MAX_FEED_LIMIT = getattr(settings, "MAX_FEED_LIMIT", 100)
 
 class PostService:
     """Service for Post model operations"""
@@ -27,7 +29,7 @@ class PostService:
     ) -> Post:
         """Create a new post with optional media files"""
         # Validate post type
-        valid_types = [choice[0] for choice in Post.POST_TYPES]
+        valid_types = [choice[0] for choice in POST_TYPES]
         if post_type not in valid_types:
             raise ValidationError(f"Post type must be one of {valid_types}")
 
@@ -107,24 +109,70 @@ class PostService:
 
         return list(queryset.order_by("-created_at")[offset : offset + limit])
 
+
+
+
+   
+
     @staticmethod
-    def get_feed_posts(user: User, limit=50, offset=0) -> List[Post]:
+    def _to_id_list(maybe_qs_or_list: Iterable) -> List[int]:
+        """
+        Convert a QuerySet, list of model instances, or list of ints to a list of ids.
+        """
+        if maybe_qs_or_list is None:
+            return []
+        # QuerySet: has values_list
+        if hasattr(maybe_qs_or_list, "values_list"):
+            return list(maybe_qs_or_list.values_list("id", flat=True))
+        # List of model instances: try to extract .id attribute
+        try:
+            return [int(getattr(item, "id", item)) for item in maybe_qs_or_list]
+        except Exception:
+            # Fallback: empty list if unexpected shape
+            return []
+
+    @staticmethod
+    def get_feed_posts(user: "User", limit: int = 50, offset: int = 0) -> List["Post"]:
+        """
+        Return a list of posts for the user's feed.
+
+        - Handles service returns that may be QuerySet or list.
+        - Uses ids for filtering to avoid embedding large querysets.
+        """
         from groups.services import GroupMemberService
+        from users.services import UserFollowService
+        from feed.models.post import Post
 
-        following_users = UserFollowService.get_following(user)
-        user_groups = GroupMemberService.get_user_groups(user)
+        # sanitize limit/offset
+        if limit <= 0:
+            limit = 1
+        limit = min(limit, MAX_FEED_LIMIT)
+        if offset < 0:
+            offset = 0
 
-        feed_posts = (
-            Post.objects.filter(
-                (Q(user__in=following_users) | Q(user=user), Q(group__isnull=True))
-                | (Q(group__in=user_groups), Q(group__isnull=False)),
-                is_deleted=False,
-            )
+        # Get following users (could be QuerySet or list)
+        following_qs = UserFollowService.get_following(user)
+        following_ids = PostService._to_id_list(following_qs)
+
+        # Get groups the user belongs to (could be QuerySet or list)
+        user_groups_qs = GroupMemberService.get_user_groups(user)
+        user_group_ids = PostService._to_id_list(user_groups_qs)
+
+        # Build Q expressions with explicit grouping
+        non_group_posts_q = (Q(user__in=following_ids) | Q(user=user)) & Q(group__isnull=True)
+        group_posts_q = Q(group__in=user_group_ids) & Q(group__isnull=False)
+
+        qs: QuerySet = (
+            Post.objects.filter((non_group_posts_q | group_posts_q), is_deleted=False)
             .select_related("user", "group")
-            .order_by("-created_at")[offset : offset + limit]
+            .order_by("-created_at")
+            .distinct()
         )
 
+        feed_posts = qs[offset : offset + limit]
         return list(feed_posts)
+
+
 
     @staticmethod
     def update_post(post: Post, update_data: Dict[str, Any]) -> Post:

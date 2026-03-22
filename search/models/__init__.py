@@ -1,1 +1,1 @@
-from .base import *
+from .search_history import *

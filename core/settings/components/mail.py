@@ -10,4 +10,6 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 
 
-SUPPORT_EMAIL = 'support@example.com'
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", 'support@example.com')
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")

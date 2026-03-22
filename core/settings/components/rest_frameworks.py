@@ -12,14 +12,4 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
 }
 
-SPECTACULAR_SETTINGS = {
-    "TITLE": "Huddle Platform API",
-    "DESCRIPTION": "API for the Huddle social media app",
-    "VERSION": "1.0.0",
-    "SERVE_INCLUDE_SCHEMA": False,
-    # ← ITO ANG MAHALAGA
-    "COMPONENT_SPLIT_REQUEST": True,  # ← ginagawa nitong hiwalay ang request at response
-    # Optional pero recommended para siguradong multipart
-    "COMPONENT_SPLIT_PATCH": True,
-    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
-}
+

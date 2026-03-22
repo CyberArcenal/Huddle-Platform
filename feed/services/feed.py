@@ -10,9 +10,15 @@ from feed.services.share import ShareService
 from stories.services.story_feed import StoryFeedService
 from users.services.matching import MatchingService
 from groups.services.group_suggestion import GroupSuggestionService
-from groups.services.group import GroupService   # for group posts
+from groups.services.group import GroupService  # for group posts
 
 logger = logging.getLogger(__name__)
+
+import inspect
+from typing import Callable
+
+
+
 
 
 class FeedService:
@@ -31,15 +37,30 @@ class FeedService:
 
     # Curated rows only (fixed count)
     ROW_CONFIG = {
-        'reels': {'limit': 10, 'service': ReelService.get_feed_reels},
-        'stories': {'limit': 10, 'service': StoryFeedService.generate_story_feed},
-        'suggested_users': {'limit': 10, 'service': MatchingService.get_suggested_users},
-        'match_users': {'limit': 10, 'service': MatchingService.get_matches},
-        'recommended_groups': {'limit': 10, 'service': GroupSuggestionService.get_ranked_recommendations},
-        'events': {'limit': 10, 'service': EventService.get_recommended_events},
-        'group_posts': {'limit': 10, 'service': GroupService.get_user_group_posts},   # new for groups tab
-        'following_posts': {'limit': 10, 'service': PostService.get_following_posts},  # new for following tab
-        'friends_posts': {'limit': 10, 'service': PostService.get_friend_posts},       # new for friends tab
+        "reels": {"limit": 10, "service": ReelService.get_feed_reels},
+        "stories": {"limit": 10, "service": StoryFeedService.generate_story_feed},
+        "suggested_users": {
+            "limit": 10,
+            "service": MatchingService.get_suggested_users,
+        },
+        "match_users": {"limit": 10, "service": MatchingService.get_matches},
+        "recommended_groups": {
+            "limit": 10,
+            "service": GroupSuggestionService.get_ranked_recommendations,
+        },
+        "events": {"limit": 10, "service": EventService.get_recommended_events},
+        "group_posts": {
+            "limit": 10,
+            "service": GroupService.get_user_group_posts,
+        },  # new for groups tab
+        "following_posts": {
+            "limit": 10,
+            "service": PostService.get_following_posts,
+        },  # new for following tab
+        "friends_posts": {
+            "limit": 10,
+            "service": PostService.get_friend_posts,
+        },  # new for friends tab
     }
 
     # Defaults for previews
@@ -55,6 +76,36 @@ class FeedService:
     @classmethod
     def get_feed_shares(cls, user: User, limit: int = 20, offset: int = 0):
         return ShareService.get_feed_shares(user, limit=limit, offset=offset)
+    
+    # helper: call a service with limit if supported, otherwise call without it
+    @classmethod
+    def _call_service_with_limit(cls, service: Callable, user, limit: int):
+        """
+        Try to call service(user, limit=limit). If the service signature
+        doesn't accept 'limit', call service(user) instead. If service expects
+        positional args, try service(user, limit).
+        """
+        try:
+            sig = inspect.signature(service)
+            params = sig.parameters
+
+            # If service accepts 'limit' as a parameter name, call with keyword
+            if "limit" in params:
+                return service(user, limit=limit)
+
+            # If service accepts a second positional parameter, call positionally
+            # (first param is assumed to be 'user')
+            if len(params) >= 2:
+                return service(user, limit)
+
+            # Otherwise, call with only user
+            return service(user)
+        except (TypeError, ValueError):
+            # Fallback: try calling with keyword, then without
+            try:
+                return service(user, limit=limit)
+            except TypeError:
+                return service(user)
 
     @classmethod
     def get_feed_rows(
@@ -81,7 +132,11 @@ class FeedService:
         # Determine which rows to include based on feed_type
         if feed_type == "home":
             # Default: posts, shares, and all curated rows except group_posts
-            curated_types = [t for t in cls.ROW_CONFIG.keys() if t not in ('group_posts', 'following_posts', 'friends_posts')]
+            curated_types = [
+                t
+                for t in cls.ROW_CONFIG.keys()
+                if t not in ("group_posts", "following_posts", "friends_posts")
+            ]
             include_posts_row = True
             include_shares_row = True
         elif feed_type == "discover":
@@ -89,7 +144,9 @@ class FeedService:
             include_posts_row = False
             include_shares_row = False
         elif feed_type == "friends":
-            curated_types = []   # no curated rows for friends tab (only posts from friends)
+            curated_types = (
+                []
+            )  # no curated rows for friends tab (only posts from friends)
             include_posts_row = False
             include_shares_row = False
             # We'll add a dedicated friends_posts row below
@@ -99,7 +156,7 @@ class FeedService:
             include_shares_row = False
             # We'll add a dedicated following_posts row below
         elif feed_type == "groups":
-            curated_types = ["recommended_groups", "events"]   # optionally include these
+            curated_types = ["recommended_groups", "events"]  # optionally include these
             include_posts_row = False
             include_shares_row = False
             # We'll add a dedicated group_posts row below
@@ -122,105 +179,146 @@ class FeedService:
         # 1) Posts row (if enabled)
         if include_posts_row:
             try:
-                posts = cls.get_feed_posts(user, limit=posts_preview, offset=post_offset)
+                posts = cls.get_feed_posts(
+                    user, limit=posts_preview, offset=post_offset
+                )
             except Exception as e:
                 logger.exception("Error fetching posts preview: %s", e)
                 posts = []
             if posts:
                 fetched = len(posts)
                 has_more = fetched == posts_preview
-                rows.append({
-                    "row_type": "posts",
-                    "items": posts,
-                    "title": cls._get_row_title("posts", feed_type),
-                    "pagination": {"next_offset": post_offset + fetched, "has_more": has_more, "limit": posts_preview},
-                })
+                rows.append(
+                    {
+                        "row_type": "posts",
+                        "items": posts,
+                        "title": cls._get_row_title("posts", feed_type),
+                        "pagination": {
+                            "next_offset": post_offset + fetched,
+                            "has_more": has_more,
+                            "limit": posts_preview,
+                        },
+                    }
+                )
                 slots_left -= 1
 
         # 2) Shares row (if enabled)
         if include_shares_row and slots_left > 0:
             try:
-                shares = cls.get_feed_shares(user, limit=shares_preview, offset=share_offset)
+                shares = cls.get_feed_shares(
+                    user, limit=shares_preview, offset=share_offset
+                )
             except Exception as e:
                 logger.exception("Error fetching shares preview: %s", e)
                 shares = []
             if shares:
                 fetched = len(shares)
                 has_more = fetched == shares_preview
-                rows.append({
-                    "row_type": "shares",
-                    "items": shares,
-                    "title": cls._get_row_title("shares", feed_type),
-                    "pagination": {"next_offset": share_offset + fetched, "has_more": has_more, "limit": shares_preview},
-                })
+                rows.append(
+                    {
+                        "row_type": "shares",
+                        "items": shares,
+                        "title": cls._get_row_title("shares", feed_type),
+                        "pagination": {
+                            "next_offset": share_offset + fetched,
+                            "has_more": has_more,
+                            "limit": shares_preview,
+                        },
+                    }
+                )
                 slots_left -= 1
 
         # 3) Special rows for friends/following/groups tabs (dedicated posts rows)
         if feed_type == "friends" and slots_left > 0:
             try:
-                friends_posts = cls.ROW_CONFIG['friends_posts']['service'](user, limit=posts_preview)
+                friends_posts = cls.ROW_CONFIG["friends_posts"]["service"](
+                    user, limit=posts_preview
+                )
             except Exception as e:
                 logger.exception("Error fetching friends posts: %s", e)
                 friends_posts = []
             if friends_posts:
-                rows.append({
-                    "row_type": "friends_posts",
-                    "items": friends_posts,
-                    "title": cls._get_row_title("friends_posts", feed_type),
-                    "pagination": None,
-                })
+                rows.append(
+                    {
+                        "row_type": "friends_posts",
+                        "items": friends_posts,
+                        "title": cls._get_row_title("friends_posts", feed_type),
+                        "pagination": None,
+                    }
+                )
                 slots_left -= 1
 
         if feed_type == "following" and slots_left > 0:
             try:
-                following_posts = cls.ROW_CONFIG['following_posts']['service'](user, limit=posts_preview)
+                following_posts = cls.ROW_CONFIG["following_posts"]["service"](
+                    user, limit=posts_preview
+                )
             except Exception as e:
                 logger.exception("Error fetching following posts: %s", e)
                 following_posts = []
             if following_posts:
-                rows.append({
-                    "row_type": "following_posts",
-                    "items": following_posts,
-                    "title": cls._get_row_title("following_posts", feed_type),
-                    "pagination": None,
-                })
+                rows.append(
+                    {
+                        "row_type": "following_posts",
+                        "items": following_posts,
+                        "title": cls._get_row_title("following_posts", feed_type),
+                        "pagination": None,
+                    }
+                )
                 slots_left -= 1
 
         if feed_type == "groups" and slots_left > 0:
             try:
-                group_posts = cls.ROW_CONFIG['group_posts']['service'](user, limit=posts_preview)
+                group_posts = cls.ROW_CONFIG["group_posts"]["service"](
+                    user, limit=posts_preview
+                )
             except Exception as e:
                 logger.exception("Error fetching group posts: %s", e)
                 group_posts = []
             if group_posts:
-                rows.append({
-                    "row_type": "group_posts",
-                    "items": group_posts,
-                    "title": cls._get_row_title("group_posts", feed_type),
-                    "pagination": None,
-                })
+                rows.append(
+                    {
+                        "row_type": "group_posts",
+                        "items": group_posts,
+                        "title": cls._get_row_title("group_posts", feed_type),
+                        "pagination": None,
+                    }
+                )
                 slots_left -= 1
 
         # 4) Fill remaining slots with curated rows
         for row_type in curated_types:
             if slots_left <= 0:
                 break
-            if row_type in ("posts", "shares", "group_posts", "following_posts", "friends_posts"):
+            if row_type in (
+                "posts",
+                "shares",
+                "group_posts",
+                "following_posts",
+                "friends_posts",
+            ):
                 continue  # already handled or not a curated row
             config = cls.ROW_CONFIG[row_type]
             try:
-                items = config['service'](user, limit=min(config.get('limit', cls.CURATED_PREVIEW), cls.CURATED_PREVIEW))
+                # Use helper to call service safely with/without limit
+                service = config["service"]
+                service_limit = min(
+                    config.get("limit", cls.CURATED_PREVIEW), cls.CURATED_PREVIEW
+                )
+                items = FeedService._call_service_with_limit(service, user, service_limit)
             except Exception as e:
                 logger.exception("Error fetching %s: %s", row_type, e)
                 continue
             if not items:
                 continue
-            rows.append({
-                "row_type": row_type,
-                "items": items,
-                "title": cls._get_row_title(row_type, feed_type),
-                "pagination": None,
-            })
+            rows.append(
+                {
+                    "row_type": row_type,
+                    "items": items,
+                    "title": cls._get_row_title(row_type, feed_type),
+                    "pagination": None,
+                }
+            )
             slots_left -= 1
 
         return rows
@@ -229,45 +327,45 @@ class FeedService:
     def _get_row_title(row_type: str, feed_type: str) -> str:
         # default titles
         titles = {
-            'reels': 'Reels you might like',
-            'stories': 'Stories from people you follow',
-            'suggested_users': 'People you may know',
-            'match_users': 'Your best matches',
-            'recommended_groups': 'Recommended groups',
-            'events': 'Upcoming events you may join',
-            'posts': 'Posts from people you follow',
-            'shares': 'Shared posts from your network',
-            'group_posts': 'Posts from your groups',
-            'following_posts': 'Posts from people you follow',
-            'friends_posts': 'Posts from your friends',
+            "reels": "Reels you might like",
+            "stories": "Stories from people you follow",
+            "suggested_users": "People you may know",
+            "match_users": "Your best matches",
+            "recommended_groups": "Recommended groups",
+            "events": "Upcoming events you may join",
+            "posts": "Posts from people you follow",
+            "shares": "Shared posts from your network",
+            "group_posts": "Posts from your groups",
+            "following_posts": "Posts from people you follow",
+            "friends_posts": "Posts from your friends",
         }
 
         # override titles based on feed_type
         if feed_type == "discover":
             overrides = {
-                'reels': 'Trending reels',
-                'suggested_users': 'Discover new people',
-                'match_users': 'Potential matches',
-                'events': 'Events you might be interested in',
+                "reels": "Trending reels",
+                "suggested_users": "Discover new people",
+                "match_users": "Potential matches",
+                "events": "Events you might be interested in",
             }
-            return overrides.get(row_type, titles.get(row_type, ''))
+            return overrides.get(row_type, titles.get(row_type, ""))
 
         if feed_type == "groups":
             overrides = {
-                'recommended_groups': 'Groups you may want to join',
-                'events': 'Group events happening soon',
-                'group_posts': 'Latest group posts',
+                "recommended_groups": "Groups you may want to join",
+                "events": "Group events happening soon",
+                "group_posts": "Latest group posts",
             }
-            return overrides.get(row_type, titles.get(row_type, ''))
+            return overrides.get(row_type, titles.get(row_type, ""))
 
         if feed_type == "friends":
-            return titles.get('friends_posts', 'Posts from friends')
+            return titles.get("friends_posts", "Posts from friends")
 
         if feed_type == "following":
-            return titles.get('following_posts', 'Posts from people you follow')
+            return titles.get("following_posts", "Posts from people you follow")
 
         if feed_type == "stories":
             return "Latest stories"
 
         # default (home feed)
-        return titles.get(row_type, '')
+        return titles.get(row_type, "")

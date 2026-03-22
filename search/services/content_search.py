@@ -3,10 +3,10 @@ from typing import List, Dict, Any, Optional, Tuple
 
 from django.db.models import Q
 
+from feed.models.post import Post
 from users.models import User
 from groups.models import Group, GroupMember
 from events.models import Event
-from feed.models.base import Post
 
 
 class SearchService:

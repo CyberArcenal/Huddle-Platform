@@ -1,21 +1,15 @@
 from typing import Optional
 
 from rest_framework import serializers
-
-from feed.models.base import Comment
+from feed.models.comment import Comment
 from feed.models.reaction import ReactionType
-
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
 from users.serializers.user import UserMinimalSerializer
-
-
-from rest_framework import serializers
 from django.contrib.contenttypes.models import ContentType
-
-from feed.models.base import Comment
 from feed.services.comment import CommentService
 from users.serializers.user import UserMinimalSerializer
+
 
 class ReactionCountSerializer(serializers.Serializer):
     # dynamic fields per reaction type
@@ -27,6 +21,7 @@ class ReactionCountSerializer(serializers.Serializer):
     sad = serializers.IntegerField(default=0)
     angry = serializers.IntegerField(default=0)
 
+
 class CommentMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for comments."""
 
@@ -37,7 +32,14 @@ class CommentMinimalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ["id", "user", "content_preview", "created_at", "target_type", "target_id"]
+        fields = [
+            "id",
+            "user",
+            "content_preview",
+            "created_at",
+            "target_type",
+            "target_id",
+        ]
         read_only_fields = fields
 
     def get_content_preview(self, obj) -> str:
@@ -64,7 +66,7 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
         allow_null=True,
-        source="parent_comment"
+        source="parent_comment",
     )
 
     class Meta:
@@ -99,6 +101,7 @@ class CommentCreateSerializer(serializers.ModelSerializer):
             comment=instance,
             new_content=validated_data.get("content", instance.content),
         )
+
 
 class CommentDisplaySerializerNoReplies(serializers.ModelSerializer):
     """Detailed view for a comment without nested replies."""
@@ -193,9 +196,11 @@ class CommentDisplaySerializer(serializers.ModelSerializer):
     def get_target_id(self, obj) -> int:
         return obj.object_id
 
-    def get_replies(self, obj) -> CommentDisplaySerializerNoReplies(many=True): # type: ignore
+    def get_replies(self, obj) -> CommentDisplaySerializerNoReplies(many=True):  # type: ignore
         replies = CommentService.get_comment_replies(obj, limit=10)
-        return CommentDisplaySerializerNoReplies(replies, many=True, context=self.context).data
+        return CommentDisplaySerializerNoReplies(
+            replies, many=True, context=self.context
+        ).data
 
     def get_reaction_counts(self, obj) -> ReactionCountSerializer:
         return ReactionService.get_reaction_counts(obj, obj.id)

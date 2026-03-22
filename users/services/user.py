@@ -27,10 +27,10 @@ class UserService:
         try:
             with transaction.atomic():
                 user = User(
-                    username=username,
+                    username=str(username),
                     email=email,
-                    first_name=first_name or "",
-                    last_name=last_name or "",
+                    first_name=str(first_name).title() or "",
+                    last_name=str(last_name).title() or "",
                     phone_number=phone_number or "",
                     is_active=is_active, 
                     **extra_fields,

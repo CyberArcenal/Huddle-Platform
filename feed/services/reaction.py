@@ -1,9 +1,9 @@
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
-from django.db.models import Count
+from django.db.models import Count, Model
 from django.contrib.contenttypes.models import ContentType
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Type, Union
 
 from users.models import User
 from ..models import Reaction, Post, Comment
@@ -16,15 +16,21 @@ class ReactionService:
     SERVICE_REACTION_TYPES = [rt[0] for rt in REACTION_TYPES]
 
     @staticmethod
-    def _get_content_type(model_name: str) -> ContentType:
+    def _get_content_type(model: Union[str, Type[Model], Model]) -> ContentType:
         """
-        Helper to fetch a ContentType by its model name.
-        Raises ValidationError if the model does not exist.
+        Helper to fetch a ContentType by model name (string),
+        model class, or model instance.
+        Raises ValidationError if the content type does not exist.
         """
         try:
-            return ContentType.objects.get(model=model_name)
+            if isinstance(model, str):
+                # lookup by model name string
+                return ContentType.objects.get(model=model.lower())
+            else:
+                # lookup by model class or instance
+                return ContentType.objects.get_for_model(model)
         except ContentType.DoesNotExist:
-            raise ValidationError(f"Invalid content type: '{model_name}'")
+            raise ValidationError(f"Invalid content type: '{model}'")
 
     @staticmethod
     def _validate_reaction_type(reaction_type: Optional[str]) -> None:

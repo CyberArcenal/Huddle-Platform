@@ -3,7 +3,7 @@ from django.utils import timezone
 import logging
 
 from users.models import OtpRequest, User
-from users.models.base import OTP_TYPES
+from users.models.utilities import OTP_TYPES
 from users.serializers.user import UserMinimalSerializer
 from users.services.otp_request import OtpRequestService
 

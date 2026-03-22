@@ -8,13 +8,13 @@ from feed.serializers.post import PostFeedSerializer
 from feed.serializers.reel import ReelMinimalSerializer
 from feed.serializers.share import ShareFeedSerializer
 from groups.serializers.group import GroupMinimalSerializer
-from stories.serializers.base import StorySerializer
+from stories.serializers.base import StoryFeedSerializer
 from users.serializers.user import UserMinimalSerializer
 
 
 class StoryItemSerializer(serializers.Serializer):
     user = UserMinimalSerializer()
-    stories = StorySerializer(many=True)
+    stories = StoryFeedSerializer(many=True)
     has_viewed_all = serializers.BooleanField()
     type = serializers.ChoiceField(choices=['following', 'own'])
 

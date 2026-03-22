@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiParameter
+from core.settings.dev import LOGGER
 from feed.serializers.feed import FeedRowSerializer
 from feed.services.feed import FeedService
 
@@ -17,6 +18,7 @@ class FeedResponseSerializer(serializers.Serializer):
     """
     Direct feed response schema (no DRF paginator).
     """
+
     page = serializers.IntegerField()
     page_size = serializers.IntegerField()
     feed_type = serializers.CharField()
@@ -30,6 +32,7 @@ class FeedView(APIView):
     Returns the user's feed: a list of row slots with nested items.
     Posts and shares rows include per-row pagination metadata.
     """
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -85,25 +88,33 @@ class FeedView(APIView):
     def get(self, request):
         # Parse page and page_size
         try:
-            page = int(request.query_params.get('page', 1))
+            page = int(request.query_params.get("page", 1))
         except (TypeError, ValueError):
             page = 1
 
         try:
-            page_size = int(request.query_params.get('page_size', 10))
+            page_size = int(request.query_params.get("page_size", 10))
         except (TypeError, ValueError):
             page_size = 10
 
-        feed_type = request.query_params.get('feed_type', 'home')
+        feed_type = request.query_params.get("feed_type", "home")
 
         # preview sizes for posts/shares
         try:
-            posts_preview = int(request.query_params.get('posts_preview', FeedService.DEFAULT_POSTS_PREVIEW))
+            posts_preview = int(
+                request.query_params.get(
+                    "posts_preview", FeedService.DEFAULT_POSTS_PREVIEW
+                )
+            )
         except (TypeError, ValueError, AttributeError):
             posts_preview = FeedService.DEFAULT_POSTS_PREVIEW
 
         try:
-            shares_preview = int(request.query_params.get('shares_preview', FeedService.DEFAULT_SHARES_PREVIEW))
+            shares_preview = int(
+                request.query_params.get(
+                    "shares_preview", FeedService.DEFAULT_SHARES_PREVIEW
+                )
+            )
         except (TypeError, ValueError, AttributeError):
             shares_preview = FeedService.DEFAULT_SHARES_PREVIEW
 
@@ -119,20 +130,32 @@ class FeedView(APIView):
                 feed_type=feed_type,
             )
         except Exception as exc:
-            logger.exception("Failed to build feed rows for user %s: %s", getattr(request.user, "id", None), exc)
+            logger.exception(
+                "Failed to build feed rows for user %s: %s",
+                getattr(request.user, "id", None),
+                exc,
+            )
             return Response({"detail": "Failed to build feed"}, status=500)
 
-        serializer = FeedRowSerializer(feed_rows, many=True, context={'request': request})
+        serializer = FeedRowSerializer(
+            feed_rows, many=True, context={"request": request}
+        )
 
         # Compute hasNext/hasPrev
         hasPrev = page > 1
-        hasNext = len(feed_rows) == page_size  # heuristic: if we filled the page, assume may next
+        hasNext = (
+            len(feed_rows) == page_size
+        )  # heuristic: if we filled the page, assume may next
 
-        return Response({
+        response = {
             "page": page,
             "page_size": page_size,
             "feed_type": feed_type,
             "hasNext": hasNext,
             "hasPrev": hasPrev,
             "results": serializer.data,
-        })
+        }
+        
+        logger.debug(response)
+
+        return Response(response)

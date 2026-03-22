@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from feed.models.base import PostMedia
+
+from feed.models.post_media import PostMedia
 
 
 class PostMediaMinimalSerializer(serializers.ModelSerializer):

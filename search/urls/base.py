@@ -6,7 +6,7 @@ from search.views.dedicated import (
     EventSearchView,
     PostSearchView,
 )
-from search.views.base import (  # existing history views
+from search.views.search import (  # existing history views
     SearchHistoryAPIView,
     DeleteSearchEntryAPIView,
     RecentSearchesAPIView,

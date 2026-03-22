@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from users.models.base import ACTION_TYPES
+from users.models.utilities import ACTION_TYPES
 
 class UserActivity(models.Model):
     user = models.ForeignKey(
