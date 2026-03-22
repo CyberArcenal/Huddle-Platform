@@ -1,7 +1,6 @@
 from .base import (
     SearchSerializer,
     TrendingPostsSerializer,
-    PostStatisticsSerializer,
     UserPostStatisticsSerializer,
     ReactionCountSerializer
 )

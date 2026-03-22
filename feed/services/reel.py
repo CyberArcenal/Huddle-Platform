@@ -4,6 +4,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
 from django.db import models
+from feed.services.comment import CommentService
+from feed.services.reaction import ReactionService
 from users.models import User
 
 from ..models import Reel
@@ -53,13 +55,23 @@ class ReelService:
 
     @staticmethod
     def get_user_reels(
-        user: User, include_deleted: bool = False, limit: int = 50, offset: int = 0
+        user: User,
+        requester: Optional[User] = None,
+        include_deleted: bool = False,
+        limit: int = 50,
+        offset: int = 0
     ) -> List[Reel]:
-        """Get reels by a specific user."""
+        """Get reels by a specific user with privacy filtering."""
         queryset = Reel.objects.filter(user=user)
         if not include_deleted:
             queryset = queryset.filter(is_deleted=False)
-        return list(queryset.order_by("-created_at")[offset : offset + limit])
+
+        if requester and requester != user:
+            # Public reels only (or followers if we implement that)
+            queryset = queryset.filter(privacy='public')
+        elif not requester:
+            queryset = queryset.filter(privacy='public')
+        return list(queryset.order_by('-created_at')[offset:offset + limit])
 
     @staticmethod
     def get_public_reels(
@@ -144,13 +156,11 @@ class ReelService:
     @staticmethod
     def get_reel_statistics(reel: Reel) -> Dict[str, Any]:
         """Get like and comment counts for a reel."""
-        from .reaction import LikeService
-        from .reel_comment import ReelCommentService
 
         return {
             "reel_id": reel.id,
-            "like_count": LikeService.get_like_count("reel", reel.id),
-            "comment_count": ReelCommentService.get_reel_comment_count(reel),
+            "like_count": ReactionService.get_like_count("reel", reel.id),
+            "comment_count": CommentService.get_comment_count(reel),
             "created_at": reel.created_at,
             "privacy": reel.privacy,
         }
@@ -170,12 +180,10 @@ class ReelService:
             .annotate(count=models.Count("id"))
         )
 
-        # Total likes across all reels
-        from .reaction import LikeService
 
         total_likes = 0
         for reel in Reel.objects.filter(user=user, is_deleted=False):
-            total_likes += LikeService.get_like_count("reel", reel.id)
+            total_likes += ReactionService.get_like_count("reel", reel.id)
 
         return {
             "total_reels": total_reels,
@@ -195,7 +203,6 @@ class ReelService:
         hours: int = 24, min_likes: int = 5, limit: int = 10
     ) -> List[Dict[str, Any]]:
         """Get trending reels (most liked within a time period)."""
-        from .reaction import LikeService
 
         time_threshold = timezone.now() - timezone.timedelta(hours=hours)
 
@@ -205,7 +212,7 @@ class ReelService:
 
         trending = []
         for reel in recent_reels:
-            like_count = LikeService.get_like_count("reel", reel.id)
+            like_count = ReactionService.get_like_count("reel", reel.id)
             if like_count >= min_likes:
                 trending.append(
                     {

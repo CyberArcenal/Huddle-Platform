@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from feed.models import Reel
 from feed.models.reaction import ReactionType
-from feed.serializers.base import ReactionCountSerializer
+from feed.serializers.base import PostStatsSerializers, ReactionCountSerializer
 from feed.serializers.comment import CommentDisplaySerializer
 from feed.services.comment import CommentService
 from feed.services.reel import ReelService
@@ -172,6 +172,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
     comments = serializers.SerializerMethodField()  # first few comments
     reaction_counts = serializers.SerializerMethodField()
     user_reaction = serializers.SerializerMethodField()
+    statistics = serializers.SerializerMethodField()
 
     class Meta:
         model = Reel
@@ -192,6 +193,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
             "comments",
             "reaction_counts",
             "user_reaction",
+            "statistics",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
 
@@ -244,3 +246,6 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         return CommentDisplaySerializer(
             comments, many=True, context=self.context
         ).data
+    def get_statistics(self, obj) -> PostStatsSerializers:
+        from feed.services.post import PostService
+        return PostService.get_post_statistics(serializer=self, obj=obj)

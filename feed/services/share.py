@@ -52,14 +52,24 @@ class ShareService:
     @staticmethod
     def get_user_shares(
         user: User,
+        requester: Optional[User] = None,
         include_deleted: bool = False,
         limit: int = 50,
         offset: int = 0
     ) -> List[Share]:
-        """Get shares created by a specific user."""
+        """Get shares created by a specific user, filtered by privacy."""
         queryset = Share.objects.filter(user=user)
         if not include_deleted:
             queryset = queryset.filter(is_deleted=False)
+
+        # Apply privacy filtering if requester is not the owner
+        if requester and requester != user:
+            # Public shares only (we could also allow followers if share privacy = 'followers')
+            queryset = queryset.filter(privacy='public')
+        elif not requester:
+            # Anonymous: only public shares
+            queryset = queryset.filter(privacy='public')
+
         return list(queryset.order_by('-created_at')[offset:offset + limit])
 
     @staticmethod

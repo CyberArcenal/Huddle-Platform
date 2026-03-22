@@ -5,7 +5,6 @@ from rest_framework import serializers
 from feed.models.post import Post
 from feed.models.reaction import ReactionType
 from feed.serializers.base import (
-    PostStatisticsSerializer,
     PostStatsSerializers,
     ReactionCountSerializer,
 )
@@ -137,6 +136,7 @@ class PostDisplaySerializer(serializers.ModelSerializer):
     liked = serializers.SerializerMethodField()
     reaction_counts = serializers.SerializerMethodField()
     user_reaction = serializers.SerializerMethodField()
+    statistics = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -158,9 +158,10 @@ class PostDisplaySerializer(serializers.ModelSerializer):
             "liked",
             "reaction_counts",
             "user_reaction",
+            "statistics",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
-    
+
     def get_shared_post(self, obj) -> PostMinimalSerializer:
         if obj.shared_post:
             return PostMinimalSerializer(obj.shared_post, context=self.context).data
@@ -194,6 +195,10 @@ class PostDisplaySerializer(serializers.ModelSerializer):
                 user=request.user, content_type=obj, object_id=obj.id
             )
         return False
+    
+    def get_statistics(self, obj) -> PostStatsSerializers:
+        from feed.services.post import PostService
+        return PostService.get_post_statistics(serializer=self, obj=obj)
 
 
 class PostDetailSerializer(PostDisplaySerializer):
@@ -204,7 +209,7 @@ class PostDetailSerializer(PostDisplaySerializer):
     class Meta(PostDisplaySerializer.Meta):
         fields = PostDisplaySerializer.Meta.fields + ["statistics"]
 
-    def get_statistics(self, obj) -> PostStatisticsSerializer:
+    def get_statistics(self, obj) -> PostStatsSerializers:
         from feed.services.post import PostService
 
         return PostService.get_post_statistics(obj)
@@ -240,30 +245,12 @@ class PostFeedSerializer(serializers.ModelSerializer):
         if obj.content:
             return obj.content[:150] + ("..." if len(obj.content) > 150 else "")
         return ""
-    
+
     def get_shared_post(self, obj) -> PostMinimalSerializer:
         if obj.shared_post:
             return PostMinimalSerializer(obj.shared_post, context=self.context).data
         return None
 
     def get_statistics(self, obj) -> PostStatsSerializers:
-        request = self.context.get("request")
-        return {
-            "comment_count": CommentService.get_comment_count(obj),
-            "like_count": ReactionService.get_like_count(obj, obj.id),
-            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
-            "comments": CommentDisplaySerializer(
-                CommentService.get_comments_for_object(obj, limit=10),
-                many=True,
-                context=self.context,
-            ).data,
-            "liked": (
-                ReactionService.has_liked(
-                    user=request.user, content_type=obj, object_id=obj.id
-                )
-                if request and request.user.is_authenticated
-                else False
-            ),
-        }
-    
-    
+        from feed.services.post import PostService
+        return PostService.get_post_statistics(serializer=self, obj=obj)

@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
+from users.serializers.user_preference import UserAchievementsView, UserCausesView, UserFavoritesView, UserHobbiesView, UserInterestsView, UserLifestyleTagsView, UserMusicView, UserSchoolsView, UserWorksView
 from users.views.activity import ActivitySummaryView, FollowingActivityView, LogActivityView, RecentActivitiesView, UserActivityListView
 from users.views.admin import AdminBulkUserActionView, AdminCleanupView, AdminCreateUserView, AdminDashboardView, AdminUserDetailView, AdminUserListView, UserExportView
 from users.views.follow import FollowStatsView, FollowStatusView, FollowUserView, FollowersListView, FollowingListView, MutualFollowsView, MutualFriendsView, PopularUsersView, SuggestedUsersView, UnfollowUserView
@@ -9,6 +10,7 @@ from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfil
 from users.views.search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
 from users.views.security import ActiveSessionsView, BulkTerminateSessionsView, ChangePasswordView, Check2FAStatusView, Disable2FAView, Enable2FAView, FailedLoginAttemptsView, SecurityLogsView, SecuritySettingsView, SuspiciousActivitiesView, TerminateAllSessionsView, TerminateSessionView
 from users.views.user import CheckEmailView, CheckUsernameView, EmailVerificationView, ResendVerificationView, UserDeactivateView, UserDetailView, UserProfileView, UserRegisterView, UserStatusUpdateView, VerifyUserView
+from users.views.user_media import UserMediaGridView
 from .login import urlpatterns as login_urlpatterns
 from .login_checkpoint import urlpatterns as checkpoint
 from .reset import urlpatterns as password_urlpatterns
@@ -77,6 +79,9 @@ urlpatterns = [
     path('media/profile-picture/<int:user_id>/', GetProfilePictureView.as_view(), name='get-profile-picture'),
     path('media/cover-photo/<int:user_id>/', GetCoverPhotoView.as_view(), name='get-cover-photo'),
     
+    path('users/<int:user_id>/media/', UserMediaGridView.as_view(), name='user-media'),
+    path('me/media/', UserMediaGridView.as_view(), name='my-media'),
+    
     # Search endpoints
     path('search/users/', UserSearchView.as_view(), name='search-users'),
     path('search/advanced/', AdvancedUserSearchView.as_view(), name='advanced-search'),
@@ -100,4 +105,18 @@ urlpatterns += [
     path("auth/", include(login_urlpatterns)),
     path("password/", include(password_urlpatterns)),
     path("auth-checkpoints/", include(checkpoint)),
+]
+
+
+urlpatterns += [
+    # Preference endpoints
+    path('preferences/hobbies/', UserHobbiesView.as_view(), name='user-hobbies'),
+    path('preferences/interests/', UserInterestsView.as_view(), name='user-interests'),
+    path('preferences/favorites/', UserFavoritesView.as_view(), name='user-favorites'),
+    path('preferences/music/', UserMusicView.as_view(), name='user-music'),
+    path('preferences/works/', UserWorksView.as_view(), name='user-works'),
+    path('preferences/schools/', UserSchoolsView.as_view(), name='user-schools'),
+    path('preferences/achievements/', UserAchievementsView.as_view(), name='user-achievements'),
+    path('preferences/causes/', UserCausesView.as_view(), name='user-causes'),
+    path('preferences/lifestyle-tags/', UserLifestyleTagsView.as_view(), name='user-lifestyle-tags'),
 ]

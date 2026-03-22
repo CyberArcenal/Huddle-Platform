@@ -71,3 +71,48 @@ class CustomPagination(PageNumberPagination):
             "data": data,
         }
         return Response(response_data)
+    
+    
+
+
+
+
+
+
+
+
+class CursorPagination:
+    """
+    Cursor-based pagination that returns a next_cursor.
+    """
+    page_size = 10
+    max_page_size = 100
+    page_size_query_param = 'limit'   # use 'limit' as param name
+
+    def __init__(self):
+        self.next_cursor = None
+        self.items = []
+
+    def paginate_queryset(self, items, next_cursor, request, view=None):
+        """
+        Store the items and next_cursor for later serialization.
+        """
+        self.items = items
+        self.next_cursor = next_cursor
+        self.request = request
+        return items
+
+    def get_paginated_response(self, data=None, message=None, status=True, response_status=200):
+        if data is None:
+            data = []
+        response_data = {
+            "status": status,
+            "message": message or "Success",
+            "pagination": {
+                "next_cursor": self.next_cursor,
+                "count": len(self.items),               # number of items in this page
+                "page_size": self.page_size,
+            },
+            "data": data,
+        }
+        return Response(response_data, status=response_status)

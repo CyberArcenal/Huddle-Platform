@@ -3,6 +3,7 @@
 from django.urls import path, include
 from feed.views import comment, feed, post, reaction, share
 from feed.views import reel
+from feed.views.user_content import UserContentFeedView
 
 urlpatterns = [
     path('feed/', feed.FeedView.as_view(), name='feed'),
@@ -15,20 +16,22 @@ urlpatterns = [
     path('posts/<int:post_id>/restore/', post.PostRestoreView.as_view(), name='post-restore'),
     path('posts/<int:post_id>/share-to-group/', post.SharePostToGroupView.as_view(), name='post-share-to-group'),
     
+    path('users/<int:user_id>/content/', UserContentFeedView.as_view(), name='user-content'),
+    path('me/content/', UserContentFeedView.as_view(), name='my-content'),
+    
     # User post statistics
     path('users/<int:user_id>/post-statistics/', post.UserPostStatisticsView.as_view(), name='user-post-statistics'),
     path('users/me/post-statistics/', post.UserPostStatisticsView.as_view(), name='my-post-statistics'),
     
-    # Comment URLs
-    path('comments/', comment.CommentListView.as_view(), name='comment-list'),
+    # Generic comment list (requires query params)
+    path('comments/object/', comment.CommentListView.as_view(), name='comment-object-list'),
+
+    # Other generic comment endpoints (no change)
+    path('comments/', comment.MyCommentListView.as_view(), name='comment-list'),
     path('comments/search/', comment.CommentSearchView.as_view(), name='comment-search'),
     path('comments/<int:comment_id>/', comment.CommentDetailView.as_view(), name='comment-detail'),
     path('comments/<int:comment_id>/replies/', comment.CommentRepliesView.as_view(), name='comment-replies'),
-    path('comments/<int:comment_id>/thread/', comment.CommentThreadView.as_view(), name='comment-thread'),
     
-    # Post-specific comment URLs
-    path('posts/<int:post_id>/comments/', comment.CommentListView.as_view(), name='post-comment-list'),
-    path('posts/<int:post_id>/comments/<int:comment_id>/replies/', comment.CommentRepliesView.as_view(), name='post-comment-replies'),
     
     # Like URLs
     path('likes/', reaction.LikeListView.as_view(), name='like-list'),

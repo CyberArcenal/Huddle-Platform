@@ -6,7 +6,10 @@ from django.db.models import Q, Count, QuerySet
 from typing import Iterable, Optional, List, Dict, Any, Tuple
 
 from feed.models.post import POST_TYPES
-from feed.serializers.base import PostStatisticsSerializer
+
+from feed.serializers.comment import CommentDisplaySerializer
+from feed.services.comment import CommentService
+from feed.services.reaction import ReactionService
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
 from users.models import User
@@ -239,26 +242,28 @@ class PostService:
             queryset = queryset.filter(post_type=post_type)
 
         return list(queryset.order_by("-created_at")[offset : offset + limit])
-
-    @staticmethod
-    def get_post_statistics(post: Post) -> PostStatisticsSerializer:
-        """Get statistics for a post"""
-        from .comment import CommentService
-        from .reaction import ReactionService
-
-        comment_count = CommentService.get_post_comment_count(post)
-        like_count = ReactionService.get_like_count("post", post.id)
-        reaction_count = ReactionService.get_reaction_counts("post", post.id)
-
+        
+    def get_post_statistics(serializer, obj):
+        request = serializer.context.get("request")
         return {
-            "post_id": post.id,
-            "comment_count": comment_count,
-            "reaction_count": reaction_count,
-            "like_count": like_count,
-            "created_at": post.created_at,
-            "updated_at": post.updated_at,
-            "privacy": post.privacy,
-            "post_type": post.post_type,
+            "comment_count": CommentService.get_comment_count(obj),
+            "like_count": ReactionService.get_like_count(obj, obj.id),
+            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
+            "comments": CommentDisplaySerializer(
+                CommentService.get_comments_for_object(obj, limit=10),
+                many=True,
+                context=serializer.context,
+            ).data,
+            "liked": (
+                ReactionService.has_liked(
+                    user=request.user, content_type=obj, object_id=obj.id
+                )
+                if request and request.user.is_authenticated
+                else False
+            ),
+            "current_reaction": ReactionService.get_user_reaction(
+                request.user, obj, obj.id
+            ),
         }
 
     @staticmethod
@@ -409,3 +414,41 @@ class PostService:
         ).select_related('user').order_by('-created_at')
 
         return list(friend_posts[offset:offset + limit])
+
+    @staticmethod
+    def get_user_posts(
+        user_id: int, 
+        requester: Optional[User] = None, 
+        limit: int = 10, 
+        offset: int = 0
+    ) -> List[Post]:
+        """
+        Return posts of a specific user, filtered by privacy rules.
+        """
+        target_user = User.objects.get(id=user_id)
+        queryset = Post.objects.filter(user=target_user, is_deleted=False)
+
+        # Apply privacy filtering
+        if requester and requester.is_authenticated:
+            # If requester is the target user, they see all their own posts
+            if requester == target_user:
+                return list(queryset.order_by('-created_at')[offset:offset+limit])
+
+            # Otherwise, apply privacy logic
+            # Public posts: always visible
+            public_posts = queryset.filter(privacy='public')
+            # Followers-only posts: visible if requester follows target_user
+            followers_posts = queryset.filter(privacy='followers')
+            if target_user.followers.filter(id=requester.id).exists():
+                followers_posts = followers_posts  # keep
+            else:
+                followers_posts = queryset.none()
+            # Secret posts: not visible to others
+            secret_posts = queryset.none()
+            # Union
+            queryset = public_posts | followers_posts
+        else:
+            # Anonymous user: only see public posts
+            queryset = queryset.filter(privacy='public')
+
+        return list(queryset.order_by('-created_at')[offset:offset+limit])

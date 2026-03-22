@@ -59,17 +59,8 @@ class PostStatsSerializers(serializers.Serializer):
     privacy = serializers.ChoiceField(choices=["public", "followers", "secret"])
     comments = CommentDisplaySerializer(many=True)
     liked = serializers.BooleanField()
-
-
-class PostStatisticsSerializer(serializers.Serializer):
-    post_id = serializers.IntegerField()
-    comment_count = serializers.IntegerField()
-    like_count = serializers.IntegerField()
-    reaction_count = ReactionCountSerializer()
-    created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-    privacy = serializers.ChoiceField(choices=["public", "followers", "secret"])
-    post_type = serializers.ChoiceField(choices=[c[0] for c in POST_TYPES])
+    current_reaction = serializers.StringRelatedField()
+    
 
 class UserPostStatisticsSerializer(serializers.Serializer):
     total_posts = serializers.IntegerField()

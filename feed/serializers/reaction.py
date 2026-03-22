@@ -149,9 +149,12 @@ class ReactionCreateSerializer(serializers.Serializer):
             reaction_type=validated_data.get('reaction_type') or None
         )
         return {
+            
+            'object_id': validated_data['object_id'],
+            'content_type': validated_data['content_type'],
             'reacted': reacted,
-            'reaction': reaction,
             'reaction_type': reaction.reaction_type if reaction else None,
+            'reaction_count': ReactionService.get_total_reactions(validated_data['content_type'], validated_data['object_id']),
             'counts': ReactionService.get_reaction_counts(
                 validated_data['content_type'], validated_data['object_id']
             )

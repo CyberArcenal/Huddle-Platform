@@ -130,24 +130,8 @@ class ShareDisplaySerializer(serializers.ModelSerializer):
         return ShareService.get_share_count(obj.content_object)
 
     def get_statistics(self, obj) -> PostStatsSerializers:
-        request = self.context.get("request")
-        return {
-            "comment_count": CommentService.get_comment_count(obj),
-            "like_count": ReactionService.get_like_count(obj, obj.id),
-            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
-            "comments": CommentDisplaySerializer(
-                CommentService.get_comments_for_object(obj, limit=5),
-                many=True,
-                context=self.context,
-            ).data,
-            "liked": (
-                ReactionService.has_liked(
-                    user=request.user, content_type=obj, object_id=obj.id
-                )
-                if request and request.user.is_authenticated
-                else False
-            ),
-        }
+        from feed.services.post import PostService
+        return PostService.get_post_statistics(serializer=self, obj=obj)
 
 
 class ShareFeedSerializer(serializers.ModelSerializer):
@@ -189,21 +173,5 @@ class ShareFeedSerializer(serializers.ModelSerializer):
 
     
     def get_statistics(self, obj) -> PostStatsSerializers:
-        request = self.context.get("request")
-        return {
-            "comment_count": CommentService.get_comment_count(obj),
-            "like_count": ReactionService.get_like_count(obj, obj.id),
-            "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
-            "comments": CommentDisplaySerializer(
-                CommentService.get_comments_for_object(obj, limit=10),
-                many=True,
-                context=self.context,
-            ).data,
-            "liked": (
-                ReactionService.has_liked(
-                    user=request.user, content_type=obj, object_id=obj.id
-                )
-                if request and request.user.is_authenticated
-                else False
-            ),
-        }
+        from feed.services.post import PostService
+        return PostService.get_post_statistics(serializer=self, obj=obj)

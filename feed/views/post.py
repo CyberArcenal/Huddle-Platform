@@ -5,7 +5,7 @@ import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
@@ -17,7 +17,7 @@ from drf_spectacular.utils import (
 )
 from django.db import transaction
 from feed.models import Post
-from feed.serializers.base import PostStatisticsSerializer, SearchSerializer, UserPostStatisticsSerializer
+from feed.serializers.base import PostStatsSerializers, SearchSerializer, UserPostStatisticsSerializer
 from feed.serializers.post import (
     PostCreateSerializer,
     PostDetailSerializer,
@@ -302,7 +302,7 @@ class PostStatisticsView(APIView):
 
     @extend_schema(
         tags=["Post's"],
-        responses={200: PostStatisticsSerializer},
+        responses={200: PostStatsSerializers},
         description="Get statistics for a post (like count, comment count).",
     )
     def get(self, request, post_id):
@@ -317,7 +317,7 @@ class PostStatisticsView(APIView):
             )
 
         statistics = PostService.get_post_statistics(post)
-        serializer = PostStatisticsSerializer(statistics)
+        serializer = PostStatsSerializers(statistics)
         return Response(serializer.data)
 
 
@@ -503,6 +503,7 @@ class PostRestoreView(APIView):
             {"error": "Post is not deleted or could not be restored"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+        
     
 
 class SharePostToGroupView(APIView):
