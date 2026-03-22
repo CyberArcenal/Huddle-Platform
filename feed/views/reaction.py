@@ -66,7 +66,7 @@ class LikeListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         parameters=[
             OpenApiParameter(
                 name="content_type",
@@ -95,7 +95,7 @@ class LikeListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         request=LikeCreateSerializer,
         responses={201: LikeDisplaySerializer},
         examples=[
@@ -125,7 +125,7 @@ class ReactionView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         request=ReactionCreateSerializer,
         responses={200: ReactionResponseSerializer},
         description="Set any reaction (like, love, haha, etc.) on an object.",
@@ -158,7 +158,7 @@ class LikeToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         request=LikeToggleSerializer,
         responses=LikeToggleResponseSerializer,
         examples=[
@@ -201,7 +201,7 @@ class LikeDetailView(APIView):
         return get_object_or_404(Reaction, id=like_id, reaction_type="like")
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         responses={200: LikeDisplaySerializer},
         description="Retrieve a specific like (only if owned by current user).",
     )
@@ -216,7 +216,7 @@ class LikeDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         responses={
             200: {"type": "object", "properties": {"message": {"type": "string"}}}
         },
@@ -249,7 +249,7 @@ class ObjectLikesView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         parameters=[
             OpenApiParameter(name="page", type=int, required=False),
             OpenApiParameter(name="page_size", type=int, required=False),
@@ -300,7 +300,7 @@ class LikeCheckView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         responses={200: LikeCheckResponseSerializer},
         description="Check if the authenticated user has liked a specific object, and get total like count.",
     )
@@ -337,7 +337,7 @@ class RecentLikersView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         parameters=[
             OpenApiParameter(name="limit", type=int, required=False),
         ],
@@ -396,7 +396,7 @@ class MostLikedContentView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         parameters=[
             OpenApiParameter(name="days", type=int, required=False),
             OpenApiParameter(name="limit", type=int, required=False),
@@ -460,7 +460,7 @@ class UserLikeStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         parameters=[
             OpenApiParameter(name="user_id", type=int, required=False),
         ],
@@ -509,7 +509,7 @@ class MutualLikesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Reaction's"],
+        tags=["Reaction's"],
         responses=MutualLikeResponse,
         description="Get mutual likes between the current user and another user.",
     )

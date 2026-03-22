@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from django.contrib.contenttypes.models import ContentType
 from typing import Optional, List, Dict, Any, Union
+from django.db.models import Q
 
 from users.models import User
 from ..models import Share
@@ -159,3 +160,28 @@ class ShareService:
             'first_share_date': Share.objects.filter(user=user)
                 .order_by('created_at').first().created_at if total_shares > 0 else None
         }
+    
+
+
+    @staticmethod
+    def get_feed_shares(user: User, limit: int = 50, offset: int = 0) -> List[Share]:
+        """
+        Return shares that should appear in the user's feed:
+        - shares from users the current user follows
+        - public shares from others (if we want discovery, not for now)
+        For simplicity, only from followed users and own shares.
+        """
+        from users.services.user_follow import UserFollowService
+
+        following = UserFollowService.get_following(user)
+        # Get shares from followed users and own shares
+        queryset = Share.objects.filter(
+            Q(user__in=following) | Q(user=user),
+            is_deleted=False
+        ).select_related('user', 'content_type').order_by('-created_at')
+
+        # Optionally filter out shares where the target object is deleted or not viewable
+        # For performance, we'll just trust that the original content is still available.
+        # A more robust implementation would check each content_object.
+
+        return list(queryset[offset : offset + limit])

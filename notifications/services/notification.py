@@ -1,104 +1,121 @@
-from notifications.models import Notification
-from users.models import User
+import json
+import logging
+from django.utils import timezone
 from django.db import transaction
-from typing import Optional
+from django.core.mail import send_mail
+from django.conf import settings
+
+from notifications.models.notification import Notification
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-    """Service for creating and managing notifications."""
+    """
+    Service for creating in-app notifications and logging notification attempts.
+    """
 
     @staticmethod
-    def create_notification(
-        user: User,
-        actor: User,
-        notification_type: str,
-        message: str,
-        related_id: Optional[int] = None,
-        related_model: Optional[str] = None
-    ) -> Notification:
-        """Create a new notification record."""
-        return Notification.objects.create(
-            user=user,
-            actor=actor,
-            notification_type=notification_type,
-            message=message,
-            related_id=related_id,
-            related_model=related_model
-        )
+    def create_notification(user, title, message, notif_type='info', metadata=None):
+        """
+        Create an in-app notification for a specific user.
 
-    @staticmethod
-    def send_report_outcome_notification(user: User, report, outcome: str):
-        """Notify a user about the outcome of a report they submitted."""
-        message = f"Your report (ID: {report.id}) has been {outcome}."
-        NotificationService.create_notification(
-            user=user,
-            actor=None,  # system notification
-            notification_type='report_outcome',
-            message=message,
-            related_id=report.id,
-            related_model='ReportedContent'
-        )
+        Args:
+            user: User instance (required).
+            title (str): Notification title.
+            message (str): Notification message.
+            notif_type (str): One of Notification.TYPE_CHOICES (default: 'info').
+            metadata (dict, optional): Additional JSON-serializable data.
 
-    @staticmethod
-    def send_status_change_notification(user: User, old_status: str, new_status: str):
-        """Notify a user that their account status has changed."""
-        message = f"Your account status changed from {old_status} to {new_status}."
-        NotificationService.create_notification(
-            user=user,
-            actor=None,
-            notification_type='account_status',
-            message=message
-        )
+        Returns:
+            Notification: The created notification instance.
+        """
+        if not user:
+            logger.warning("Attempted to create notification without user")
+            return None
 
-    @staticmethod
-    def send_verification_success_notification(user: User):
-        """Notify a user that their email/account has been verified."""
-        message = "Your account has been successfully verified!"
-        NotificationService.create_notification(
-            user=user,
-            actor=None,
-            notification_type='account_verified',
-            message=message
-        )
-
-    @staticmethod
-    def send_welcome_notification(user: User):
-        """Send a welcome notification to a new user."""
-        message = "Welcome to Huddle! We're glad to have you."
-        NotificationService.create_notification(
-            user=user,
-            actor=None,
-            notification_type='welcome',
-            message=message
-        )
-
-    @staticmethod
-    def send_post_deleted_notification(user_id: int, post):
-        """Notify a user that a post they commented on has been deleted."""
-        from users.models import User
         try:
-            user = User.objects.get(id=user_id)
-            message = f"A post you commented on (ID: {post.id}) has been deleted."
-            NotificationService.create_notification(
-                user=user,
-                actor=None,
-                notification_type='post_deleted',
-                message=message,
-                related_id=post.id,
-                related_model='Post'
-            )
-        except User.DoesNotExist:
-            pass
+            with transaction.atomic():
+                notification = Notification.objects.create(
+                    user=user,
+                    title=title,
+                    message=message,
+                    type=notif_type,
+                    metadata=metadata or {}
+                )
+            logger.info(f"Notification created for user {user.id}: {title}")
+            return notification
+        except Exception as e:
+            logger.error(f"Failed to create notification: {e}")
+            return None
 
     @staticmethod
-    def send_rsvp_change_notification(organizer: User, event, attendee: User, old_status: str, new_status: str):
-        """Notify event organizer when someone changes their RSVP."""
-        message = f"{attendee.get_full_name() or attendee.username} changed their RSVP from {old_status or 'none'} to {new_status} for event '{event.title}'."
-        NotificationService.create_notification(
-            user=organizer,
-            actor=attendee,
-            notification_type='rsvp_change',
-            message=message,
-            related_id=event.id,
-            related_model='Event'
-        )
+    def create_notification_for_staff(title, message, notif_type='info', metadata=None):
+        """
+        Create notifications for all staff users (or a subset).
+        Useful for system-wide announcements.
+
+        Args:
+            title (str): Notification title.
+            message (str): Notification message.
+            notif_type (str): Type of notification.
+            metadata (dict, optional): Additional data.
+
+        Returns:
+            list: List of created Notification instances.
+        """
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        staff_users = User.objects.filter(is_staff=True)
+        created = []
+        for user in staff_users:
+            notif = NotificationService.create_notification(
+                user=user,
+                title=title,
+                message=message,
+                notif_type=notif_type,
+                metadata=metadata
+            )
+            if notif:
+                created.append(notif)
+        return created
+
+    @staticmethod
+    def mark_as_read(notification_id, user):
+        """
+        Mark a notification as read (if it belongs to the user).
+
+        Args:
+            notification_id (int): ID of the notification.
+            user: User instance.
+
+        Returns:
+            bool: True if updated, False otherwise.
+        """
+        try:
+            with transaction.atomic():
+                notification = Notification.objects.get(pk=notification_id, user=user)
+                if not notification.is_read:
+                    notification.is_read = True
+                    notification.save(update_fields=['is_read'])
+                    logger.info(f"Notification {notification_id} marked as read")
+                return True
+        except Notification.DoesNotExist:
+            logger.warning(f"Notification {notification_id} not found for user {user.id}")
+            return False
+
+    @staticmethod
+    def mark_all_as_read(user):
+        """
+        Mark all notifications of a user as read.
+
+        Args:
+            user: User instance.
+
+        Returns:
+            int: Number of notifications updated.
+        """
+        updated = Notification.objects.filter(user=user, is_read=False).update(is_read=True)
+        logger.info(f"Marked {updated} notifications as read for user {user.id}")
+        return updated
+

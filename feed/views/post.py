@@ -56,7 +56,7 @@ class PostListView(APIView):
         return [IsAuthenticated()]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -110,7 +110,7 @@ class PostListView(APIView):
             )
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         request=PostCreateSerializer,
         responses={201: PostDisplaySerializer},
         examples=[
@@ -183,7 +183,7 @@ class PostDetailView(APIView):
         return post
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         responses={200: PostDetailSerializer},
         description="Retrieve a single post by ID.",
     )
@@ -205,7 +205,7 @@ class PostDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         request=PostCreateSerializer,
         responses={200: PostDisplaySerializer},
         examples=[
@@ -250,7 +250,7 @@ class PostDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         parameters=[
             OpenApiParameter(
                 name="hard",
@@ -301,7 +301,7 @@ class PostStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         responses={200: PostStatisticsSerializer},
         description="Get statistics for a post (like count, comment count).",
     )
@@ -327,7 +327,7 @@ class UserPostStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         parameters=[
             OpenApiParameter(
                 name="user_id",
@@ -359,7 +359,7 @@ class PostSearchView(APIView):
         return [IsAuthenticated()]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         parameters=[
             OpenApiParameter(
                 name="query", type=str, description="Search term", required=True
@@ -406,7 +406,7 @@ class TrendingPostsView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         parameters=[
             OpenApiParameter(
                 name="hours",
@@ -467,7 +467,7 @@ class PostRestoreView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         responses={
             200: inline_serializer(
                 name="PostRestoreResponse",
@@ -509,7 +509,7 @@ class SharePostToGroupView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["User Post's"],
+        tags=["Post's"],
         request=inline_serializer(
             name="ShareToGroupRequest",
             fields={

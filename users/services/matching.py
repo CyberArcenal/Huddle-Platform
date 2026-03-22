@@ -228,6 +228,7 @@ class MatchingService:
         for candidate in candidates:
             score, reasons = cls.calculate_match_score(user, candidate, **filters)
             if score > 0:
+                candidate.capability_score = score
                 results.append({"user": candidate, "score": score, "reasons": reasons})
 
         results.sort(key=lambda x: x["score"], reverse=True)

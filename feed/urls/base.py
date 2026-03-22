@@ -1,10 +1,11 @@
 # feed/urls.py
 
 from django.urls import path, include
-from feed.views import comment, post, reaction, share
+from feed.views import comment, feed, post, reaction, share
 from feed.views import reel
 
 urlpatterns = [
+    path('feed/', feed.FeedView.as_view(), name='feed'),
     # Post URLs
     path('posts/', post.PostListView.as_view(), name='post-list'),
     path('posts/search/', post.PostSearchView.as_view(), name='post-search'),

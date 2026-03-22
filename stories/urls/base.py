@@ -8,7 +8,7 @@ urlpatterns = [
     path('stories/<int:story_id>/', StoryDetailView.as_view(), name='story-detail'),
     
     # Story viewing operations
-    path('stories/<int:story_id>/view/', StoryViewCreateView.as_view(), name='story-view-create'),
+    path('stories/view/', StoryViewCreateView.as_view(), name='story-view-create'),
     path('stories/<int:story_id>/views/', StoryViewsListView.as_view(), name='story-views-list'),
     path('stories/<int:story_id>/view-count/', StoryViewCountView.as_view(), name='story-view-count'),
     path('stories/<int:story_id>/recent-viewers/', StoryRecentViewersView.as_view(), name='story-recent-viewers'),

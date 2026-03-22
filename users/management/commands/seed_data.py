@@ -27,7 +27,7 @@ from groups.models.group import Group
 from groups.models.member import GroupMember
 from messaging.models.base import Conversation, Message
 from stories.models.base import Story, StoryView
-from notifications.models.base import Notification
+from notifications.models.notification import Notification
 from search.models.base import SearchHistory
 from analytics.models.user_analytics import UserAnalytics
 from analytics.models.platform_analytics import PlatformAnalytics

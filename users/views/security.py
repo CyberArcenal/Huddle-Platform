@@ -40,7 +40,6 @@ from ..serializers.activity import (
 from ..models import UserSecuritySettings, SecurityLog, LoginSession
 from rest_framework import serializers
 from ..serializers.security import SecurityLogSerializer
-from ..serializers.activity import LoginSessionSerializer
 
 
 logger = logging.getLogger(__name__)

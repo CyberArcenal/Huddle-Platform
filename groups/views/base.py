@@ -78,7 +78,7 @@ class GroupListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         parameters=[
             OpenApiParameter(
                 name="query",
@@ -132,7 +132,7 @@ class GroupListView(APIView):
         return paginator.get_paginated_response(group_serializer.data)
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=GroupCreateSerializer,
         responses={201: GroupDisplaySerializer},
         examples=[
@@ -189,7 +189,7 @@ class GroupDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         responses={200: GroupDisplaySerializer},
         description="Retrieve details of a specific group.",
     )
@@ -204,7 +204,7 @@ class GroupDetailView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=GroupCreateSerializer,
         responses={200: GroupDisplaySerializer},
         examples=[
@@ -221,7 +221,7 @@ class GroupDetailView(APIView):
         return self._update_group(request, group_id, partial=False)
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=GroupCreateSerializer,
         responses={200: GroupDisplaySerializer},
         examples=[
@@ -260,7 +260,7 @@ class GroupDetailView(APIView):
         )
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         responses={204: None},
         description="Delete a group. Only the creator can delete.",
     )
@@ -287,7 +287,7 @@ class GroupMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -316,7 +316,7 @@ class GroupMembersView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=GroupMemberCreateSerializer,
         responses={201: GroupMemberDisplaySerializer},
         examples=[
@@ -359,7 +359,7 @@ class GroupMembersView(APIView):
         )
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=RemoveMemberInputSerializer,  # ✅ Now using proper serializer
         responses={204: None},
         examples=[
@@ -409,7 +409,7 @@ class GroupMemberRoleView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=GroupMemberUpdateSerializer,
         responses={200: GroupMemberDisplaySerializer},
         examples=[
@@ -443,7 +443,7 @@ class GroupJoinView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         responses={201: GroupMemberDisplaySerializer},
         description="Join a public group. For private groups, the user must be invited.",
     )
@@ -471,7 +471,7 @@ class GroupLeaveView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         responses={204: None},
         description="Leave a group. Creator cannot leave without transferring ownership first.",
     )
@@ -501,7 +501,7 @@ class GroupStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         responses={200: GroupStatisticsSerializer},
         description="Get statistics for a group (member count, posts count, etc.).",
     )
@@ -521,7 +521,7 @@ class GroupTransferOwnershipView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=TransferOwnershipSerializer,
         responses={
             200: {"type": "object", "properties": {"detail": {"type": "string"}}}
@@ -564,7 +564,7 @@ class GroupPrivacyView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         request=ChangePrivacyInputSerializer,  # ✅ Now using proper serializer
         responses={200: GroupDisplaySerializer},
         examples=[
@@ -600,7 +600,7 @@ class GroupPopularView(APIView):
     """View for popular groups (already limited, not paginated)"""
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         parameters=[
             OpenApiParameter(
                 name="limit", type=int, description="Number of results", required=False
@@ -640,7 +640,7 @@ class GroupSearchMembersView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Group View's"],
+        tags=["Group"],
         parameters=[
             OpenApiParameter(
                 name="query",

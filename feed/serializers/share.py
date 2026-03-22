@@ -5,7 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from feed.models import Share
-from feed.serializers.base import ReactionCountSerializer, ShareContentObjectData
+from feed.serializers.base import PostStatsSerializers, ReactionCountSerializer, ShareContentObjectData
 from feed.serializers.comment import CommentDisplaySerializer
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
@@ -13,16 +13,7 @@ from feed.services.share import ShareService
 from users.serializers.user import UserMinimalSerializer
 
 
-class ShareStatsSerializer(serializers.Serializer):
-    """Statistics for a Share object."""
 
-    comment_count = serializers.IntegerField(read_only=True)
-    like_count = serializers.IntegerField(read_only=True)
-    reaction_count = ReactionCountSerializer()
-    comments = CommentDisplaySerializer(many=True, read_only=True)
-    liked = serializers.BooleanField(read_only=True)
-    
-    
 
 class ShareMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for shares."""
@@ -138,7 +129,7 @@ class ShareDisplaySerializer(serializers.ModelSerializer):
     def get_share_count(self, obj) -> int:
         return ShareService.get_share_count(obj.content_object)
 
-    def get_statistics(self, obj) -> ShareStatsSerializer:
+    def get_statistics(self, obj) -> PostStatsSerializers:
         request = self.context.get("request")
         return {
             "comment_count": CommentService.get_comment_count(obj),
@@ -196,14 +187,15 @@ class ShareFeedSerializer(serializers.ModelSerializer):
             "representation": str(obj.content_object),
         }
 
-    def get_statistics(self, obj) -> ShareStatsSerializer:
+    
+    def get_statistics(self, obj) -> PostStatsSerializers:
         request = self.context.get("request")
         return {
             "comment_count": CommentService.get_comment_count(obj),
             "like_count": ReactionService.get_like_count(obj, obj.id),
             "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
             "comments": CommentDisplaySerializer(
-                CommentService.get_comments_for_object(obj, limit=3),
+                CommentService.get_comments_for_object(obj, limit=10),
                 many=True,
                 context=self.context,
             ).data,

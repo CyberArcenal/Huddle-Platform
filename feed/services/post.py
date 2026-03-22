@@ -316,3 +316,48 @@ class PostService:
                 return shared_post
         except IntegrityError as e:
             raise ValidationError(f"Failed to share post: {str(e)}")
+    
+    @staticmethod
+    def get_following_posts(user: User, limit: int = 20, offset: int = 0) -> List[Post]:
+        """
+        Get posts from users that the current user follows.
+        """
+        from users.services.user_follow import UserFollowService
+
+        following_users = UserFollowService.get_following(user)
+        if not following_users:
+            return []
+
+        # Get posts from followed users (personal posts only, not group posts)
+        following_posts = Post.objects.filter(
+            user__in=following_users,
+            group__isnull=True,          # personal posts only
+            is_deleted=False
+        ).select_related('user').order_by('-created_at')
+
+        return list(following_posts[offset:offset + limit])
+    
+    @staticmethod
+    def get_friend_posts(user: User, limit: int = 20, offset: int = 0) -> List[Post]:
+        """
+        Get posts from users who are mutual followers (friends) of the current user.
+        """
+        from users.models import UserFollow
+        from django.db.models import Q
+
+        # Find users that follow the current user and are followed by the current user (mutual)
+        # Equivalent to: friends = users who follow user and user follows them
+        friends = User.objects.filter(
+            Q(followers__follower=user) & Q(following__following=user)
+        ).distinct()
+
+        if not friends:
+            return []
+
+        friend_posts = Post.objects.filter(
+            user__in=friends,
+            group__isnull=True,          # personal posts only
+            is_deleted=False
+        ).select_related('user').order_by('-created_at')
+
+        return list(friend_posts[offset:offset + limit])

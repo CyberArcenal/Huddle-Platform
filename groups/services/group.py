@@ -300,18 +300,27 @@ class GroupService:
         
         return timeline
     
+    
     @staticmethod
-    def get_group_posts(group: Group, user: Optional[User] = None, limit=50, offset=0) -> List[Post]:
-        # Check if user can view group posts
-        if not GroupService.is_user_allowed_to_view(user, group):
+    def get_user_group_posts(user: User, limit: int = 20, offset: int = 0) -> List[Post]:
+        """
+        Get posts from all groups that the user is a member of.
+        """
+        from groups.services.group_member import GroupMemberService
+        from feed.models import Post
+
+        # Get groups the user is a member of
+        user_groups = GroupMemberService.get_user_groups(user)
+        if not user_groups:
             return []
 
-        posts = Post.objects.filter(group=group, is_deleted=False)
+        # Get posts from those groups (excluding deleted)
+        group_posts = Post.objects.filter(
+            group__in=user_groups,
+            is_deleted=False
+        ).select_related('user', 'group').order_by('-created_at')
 
-        # Optionally filter by privacy within group
-        # (e.g., if user is not member, only public group posts)
-
-        return list(posts.order_by('-created_at')[offset:offset+limit])
+        return list(group_posts[offset:offset + limit])
     
     @staticmethod
     def cleanup_inactive_groups(days_inactive: int = 365, min_members: int = 0) -> List[Group]:

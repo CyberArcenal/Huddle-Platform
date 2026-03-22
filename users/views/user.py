@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
+from core.settings.dev import LOGGER
 from global_utils.pagination import UsersPagination
 
 from ..services.user import UserService
@@ -16,6 +17,7 @@ from ..services.login_session import LoginSessionService
 from ..serializers.user import (
     UserCreateSerializer,
     UserProfileSchemaUpdateSerializer,
+    UserRegisterSerializer,
     UserUpdateSerializer,
     UserProfileSerializer,
     UserListSerializer,
@@ -51,86 +53,105 @@ class UserRegisterResponse(serializers.Serializer):
     user = UserProfileSerializer(read_only=True)
 
 
-class UserRegisterView(APIView):
-    """View for user registration"""
+# users/views/user.py
 
+from users.services.otp_request import OtpRequestService
+from notifications.services.notification_queue import NotificationQueueService
+
+from users.services.otp_request import OtpRequestService
+from notifications.services.notification_queue import NotificationQueueService
+
+# users/views/user.py
+
+class UserRegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
         tags=["User's"],
-        request=UserCreateSerializer,
-        responses={201: UserRegisterResponse},
-        examples=[
-            OpenApiExample(
-                "Registration request",
-                value={
-                    "username": "newuser",
-                    "email": "user@example.com",
-                    "password": "securepass123",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                },
-                request_only=True,
-            ),
-            OpenApiExample(
-                "Registration response",
-                value={
-                    "id": 1,
-                    "username": "newuser",
-                    "email": "user@example.com",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                    "bio": "",
-                    "profile_picture": None,
-                    "cover_photo": None,
-                    "date_of_birth": None,
-                    "phone_number": "",
-                    "is_verified": False,
-                    "status": "active",
-                    "created_at": "2025-03-07T12:34:56Z",
-                    "updated_at": "2025-03-07T12:34:56Z",
-                },
-                response_only=True,
-            ),
-        ],
-        description="Register a new user account.",
+        request=UserRegisterSerializer,
+        responses={201: serializers.DictField()},
+        description="Register a new user or resend verification for inactive accounts.",
     )
     @transaction.atomic
     def post(self, request):
-        serializer = UserCreateSerializer(
-            data=request.data, context={"request": request}
-        )
+        email = request.data.get('email', '').strip().lower()
+        existing_user = UserService.get_user_by_email(email)
 
+        # Handle existing inactive user (resend OTP)
+        if existing_user and not existing_user.is_active:
+            try:
+                otp_request = OtpRequestService.create_otp_request(
+                    user=existing_user,
+                    email=email,
+                    expires_in_minutes=10,
+                    otp_type="email"
+                )
+                NotificationQueueService.queue_notification(
+                    channel="email",
+                    recipient=email,
+                    subject="Email Verification",
+                    message=f"Your verification code is: {otp_request.otp_code}",
+                    metadata={"otp_code": otp_request.otp_code, "user_id": existing_user.id}
+                )
+                return Response(
+                    {
+                        "message": "Account not yet verified. A new verification email has been sent.",
+                        "user_id": existing_user.id,
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                LOGGER.exception("Failed to resend OTP for inactive user")
+                return Response(
+                    {"error": "Failed to send verification email. Please try again later."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        # If existing user is active, return error
+        if existing_user and existing_user.is_active:
+            return Response(
+                {"error": "Email already registered."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # New user: validate and create
+        serializer = UserRegisterSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             try:
                 with transaction.atomic():
                     user = serializer.save()
-
-                    SecurityLogService.create_log(
+                    otp_request = OtpRequestService.create_otp_request(
                         user=user,
-                        event_type="signup",
-                        ip_address=request.META.get("REMOTE_ADDR"),
-                        user_agent=request.META.get("HTTP_USER_AGENT"),
-                        details="User registered successfully",
+                        email=user.email,
+                        expires_in_minutes=10,
+                        otp_type="email"
                     )
-
-                    response_serializer = UserProfileSerializer(
-                        user, context={"request": request}
+                    NotificationQueueService.queue_notification(
+                        channel="email",
+                        recipient=user.email,
+                        subject="Email Verification",
+                        message=f"Your verification code is: {otp_request.otp_code}",
+                        metadata={"otp_code": otp_request.otp_code, "user_id": user.id}
                     )
                     return Response(
                         {
-                            "message": "User registered successfully",
-                            "user": response_serializer.data,
+                            "message": "Verification email sent. Please check your inbox.",
+                            "user_id": user.id,
                         },
                         status=status.HTTP_201_CREATED,
                     )
-
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
-        )
+                LOGGER.exception("Registration failed for new user")
+                return Response(
+                    {"error": "Registration failed. Please try again later."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        else:
+            # Validation errors from the serializer
+            return Response(
+                {"error": "Validation failed", "details": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class UserProfileResponse(serializers.Serializer):
@@ -592,3 +613,127 @@ class CheckEmailView(APIView):
                 ),
             }
         )
+
+
+
+
+
+class ResendVerificationView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    class ResendSerializer(serializers.Serializer):
+        email = serializers.EmailField(required=False)
+        user_id = serializers.IntegerField(required=False)
+
+        def validate(self, attrs):
+            if not attrs.get('email') and not attrs.get('user_id'):
+                raise serializers.ValidationError("Either email or user_id is required")
+            return attrs
+    
+    class ResendVerificationResponse(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.StringRelatedField(allow_null=True)
+        error = serializers.StringRelatedField(allow_null=True)
+
+
+    @extend_schema(
+        tags=["User's"],
+        request=ResendSerializer,
+        responses={200: ResendVerificationResponse},
+    )
+    @transaction.atomic
+    def post(self, request):
+        serializer = self.ResendSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data.get('email')
+        user_id = serializer.validated_data.get('user_id')
+
+        try:
+            if email:
+                user = User.objects.get(email=email)
+            else:
+                user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"status": False, "error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if user.is_active:
+            return Response({"status": False, "error": "User already active"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create new OTP request
+        otp_request = OtpRequestService.create_otp_request(
+            user=user,
+            email=user.email,
+            expires_in_minutes=10,
+            otp_type="email"
+        )
+
+        # Queue notification
+        NotificationQueueService.queue_notification(
+            channel="email",
+            recipient=user.email,
+            subject="Email Verification",
+            message=f"Your verification code is: {otp_request.otp_code}",
+            metadata={"otp_code": otp_request.otp_code, "user_id": user.id}
+        )
+
+        return Response({"status": True, "message": "Verification email sent"})
+
+
+class EmailVerificationView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    class VerifyEmailSerializer(serializers.Serializer):
+        user_id = serializers.IntegerField(required=True)
+        otp_code = serializers.CharField(max_length=6, min_length=6, required=True)
+    
+    class VerifyEmailResponse(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.StringRelatedField(allow_null=True)
+        error = serializers.StringRelatedField(allow_null=True)
+
+    @extend_schema(
+        tags=["User's"],
+        request=VerifyEmailSerializer,
+        responses={200: VerifyEmailResponse},
+        description="Verify email using OTP sent during registration.",
+    )
+    def post(self, request):
+        serializer = self.VerifyEmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"status": False, "error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_id = serializer.validated_data['user_id']
+        otp_code = serializer.validated_data['otp_code']
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"status": False, "error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # Validate OTP
+        otp_request = OtpRequestService.validate_otp(
+            otp_code=otp_code,
+            user=user,
+        )
+        if not otp_request:
+            return Response({"status": False, "error": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mark OTP as used
+        OtpRequestService.mark_otp_used(otp_request)
+
+        # Activate user
+        user.is_active = True
+        user.is_verified = True
+        user.save()
+
+        # Optionally, send welcome email
+        NotificationQueueService.queue_notification(
+            channel="email",
+            recipient=user.email,
+            subject="Welcome!",
+            message="Your account has been successfully activated.",
+        )
+
+        return Response({"status": True, "message": "Email verified successfully"})

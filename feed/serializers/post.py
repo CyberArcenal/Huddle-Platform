@@ -230,6 +230,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
             "shared_post",
             "group",
             "content",
+            "privacy",
             "post_type",
             "media",
             "preview",
@@ -252,7 +253,6 @@ class PostFeedSerializer(serializers.ModelSerializer):
         return {
             "comment_count": CommentService.get_comment_count(obj),
             "like_count": ReactionService.get_like_count(obj, obj.id),
-            "privacy": obj.privacy,
             "reaction_count": ReactionService.get_reaction_counts(obj, obj.id),
             "comments": CommentDisplaySerializer(
                 CommentService.get_comments_for_object(obj, limit=10),

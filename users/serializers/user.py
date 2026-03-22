@@ -277,7 +277,7 @@ class UserCreateSerializer(UserBaseSerializer):
 
             password = validated_data.pop("password")
 
-            # Create user through service layer
+            # Create user through service layer, passing is_active=False
             user = UserService.create_user(
                 username=validated_data.get("username"),
                 email=validated_data.get("email"),
@@ -285,7 +285,8 @@ class UserCreateSerializer(UserBaseSerializer):
                 first_name=validated_data.get("first_name", ""),
                 last_name=validated_data.get("last_name", ""),
                 phone_number=validated_data.get("phone_number", ""),
-                **validated_data,  # includes all other fields
+                is_active=False,                    # <-- new flag
+                **validated_data,
             )
 
             # Set many-to-many relationships
@@ -296,7 +297,7 @@ class UserCreateSerializer(UserBaseSerializer):
             UserActivity.objects.create(
                 user=user,
                 action="account_created",
-                description="User account created successfully",
+                description="User account created (pending verification)",
                 ip_address=(
                     self.context.get("request").META.get("REMOTE_ADDR")
                     if self.context.get("request")
@@ -446,6 +447,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     following_count = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     posts_count = serializers.SerializerMethodField()
+    capability_score = serializers.IntegerField(required=False)
+    reasons = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = User
@@ -477,6 +480,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "achievements",
             "causes",
             "lifestyle_tags",
+            "capability_score",
+            "reasons",
             # Computed fields
             "profile_picture_url",
             "cover_photo_url",
@@ -529,6 +534,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user == instance:
             data.pop("is_following", None)
+        if data.get("capability_score") is None:
+            data.pop("capability_score", None)
+        if not data.get("reasons"):
+            data.pop("reasons", None)
+
         return data
 
 
@@ -537,6 +547,8 @@ class UserListSerializer(serializers.ModelSerializer):
     profile_picture_url = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     hobbies = HobbySerializer(many=True, read_only=True)
+    capability_score = serializers.IntegerField(required=False)
+    reasons = serializers.ListField(child=serializers.CharField(), required=False)
 
     class Meta:
         model = User
@@ -551,8 +563,12 @@ class UserListSerializer(serializers.ModelSerializer):
             
             "personality_type",
             "hobbies",
+            "capability_score",
+            "reasons",
         ]
         read_only_fields = fields
+    
+    
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
         if obj.profile_picture:
@@ -567,6 +583,16 @@ class UserListSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated and request.user != obj:
             return UserFollowService.is_following(request.user, obj)
         return False
+    
+    def to_representation(self, instance):
+        """Remove capability_score if not set"""
+        data = super().to_representation(instance)
+        if data.get("capability_score") is None:
+            data.pop("capability_score", None)
+        if not data.get("reasons"):
+            data.pop("reasons", None)
+
+        return data
 
 
 class UserStatusSerializer(serializers.Serializer):
@@ -733,16 +759,26 @@ class UserMinimalSerializer(serializers.ModelSerializer):
     profile_picture_url = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
     hobbies = HobbySerializer(many=True, read_only=True)
+    capability_score = serializers.IntegerField(required=False)
+    reasons = serializers.ListField(child=serializers.CharField(), required=False)
+    is_following = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ["id", "username", "profile_picture_url", "personality_type",
-            "hobbies", "full_name", "location"]
+            "hobbies", "full_name", "location", "capability_score", "reasons", "is_following"]
         read_only_fields = fields
         extra_kwargs = {
             "id": {"required": True, "allow_null": False},
             "username": {"required": True, "allow_null": False},
         }
+    
+    
+    def get_is_following(self, obj: User) -> bool:
+        request = self.context.get("request", None)
+        if request and request.user.is_authenticated and request.user != obj:
+            return UserFollowService.is_following(request.user, obj)
+        return False
 
     def get_profile_picture_url(self, obj: User) -> Optional[str]:
         """Get profile picture URL"""
@@ -756,6 +792,17 @@ class UserMinimalSerializer(serializers.ModelSerializer):
     def get_full_name(self, obj: User) -> str:
         """Get full name of the user"""
         return f"{obj.first_name} {obj.last_name}".strip()
+    
+    def to_representation(self, instance):
+        """Remove capability_score if not set"""
+        data = super().to_representation(instance)
+        if data.get("capability_score") is None:
+            data.pop("capability_score", None)
+        if not data.get("reasons"):
+            data.pop("reasons", None)
+        return data
+
+    
 
 
 class UserProfileSchemaUpdateSerializer(serializers.Serializer):
@@ -777,3 +824,108 @@ class UserProfileSchemaUpdateSerializer(serializers.Serializer):
             "personality_type", "love_language", "relationship_goal",
             "latitude", "longitude"
         ]
+        
+        
+    
+
+
+class UserRegisterSerializer(serializers.Serializer):
+    """
+    Serializer for user registration (minimal fields).
+    """
+    username = serializers.CharField(
+        max_length=30,
+        min_length=3,
+        help_text="Username (3-30 characters, letters, numbers, underscores, dots)"
+    )
+    email = serializers.EmailField()
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        max_length=128,
+        style={"input_type": "password"},
+        help_text="Password must be at least 8 characters long",
+    )
+    confirm_password = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+        required=True,
+    )
+    first_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=30
+    )
+    last_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=30
+    )
+    phone_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=20
+    )
+
+    def validate_username(self, value: str) -> str:
+        """Validate username format and uniqueness."""
+        if not value:
+            raise serializers.ValidationError("Username cannot be empty")
+        if len(value) < 3:
+            raise serializers.ValidationError("Username must be at least 3 characters long")
+        if len(value) > 30:
+            raise serializers.ValidationError("Username cannot exceed 30 characters")
+        if not value.replace("_", "").replace(".", "").isalnum():
+            raise serializers.ValidationError(
+                "Username can only contain letters, numbers, underscores and dots"
+            )
+        # Check uniqueness (case‑insensitive)
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Username already exists")
+        return value.lower()
+
+    def validate_email(self, value: str) -> str:
+        """Validate email format and uniqueness."""
+        if not value:
+            raise serializers.ValidationError("Email cannot be empty")
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("Email already exists")
+        return value.lower()
+
+    def validate(self, attrs):
+        """Cross-field validation: passwords must match and be strong."""
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match"})
+        try:
+            validate_password(attrs["password"])
+        except DjangoValidationError as e:
+            raise serializers.ValidationError({"password": list(e.messages)})
+        # Remove confirm_password so it doesn't go to the service
+        attrs.pop("confirm_password")
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        """Create a new user with is_active=False (pending verification)."""
+        try:
+            user = UserService.create_user(
+                username=validated_data["username"],
+                email=validated_data["email"],
+                password=validated_data["password"],
+                first_name=validated_data.get("first_name", ""),
+                last_name=validated_data.get("last_name", ""),
+                phone_number=validated_data.get("phone_number", ""),
+                is_active=False,   # user must verify email
+            )
+            # Log the registration
+            UserActivity.objects.create(
+                user=user,
+                action="account_created",
+                description="User account created (pending verification)",
+                ip_address=self.context.get("request").META.get("REMOTE_ADDR"),
+                user_agent=self.context.get("request").META.get("HTTP_USER_AGENT"),
+            )
+            return user
+        except Exception as e:
+            # Re-raise as a ValidationError to be caught by the view
+            raise serializers.ValidationError(str(e))

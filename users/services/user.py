@@ -20,6 +20,7 @@ class UserService:
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         phone_number: Optional[str] = None,
+        is_active: bool = True,
         **extra_fields,
     ) -> User:
         """Create a new user with hashed password"""
@@ -31,6 +32,7 @@ class UserService:
                     first_name=first_name or "",
                     last_name=last_name or "",
                     phone_number=phone_number or "",
+                    is_active=is_active, 
                     **extra_fields,
                 )
                 user.set_password(password)
@@ -39,7 +41,6 @@ class UserService:
 
                 # Create default security settings
                 from .user_security_settings import UserSecuritySettingsService
-
                 UserSecuritySettingsService.create_default_settings(user)
 
                 return user

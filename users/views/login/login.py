@@ -24,7 +24,12 @@ from users.models import (
     UserSecuritySettings,
 )
 from users.serializers.user import UserProfileSerializer
-from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
+from drf_spectacular.utils import (
+    PolymorphicProxySerializer,
+    extend_schema,
+    OpenApiExample,
+    OpenApiTypes,
+)
 from users.serializers.auth import (
     LoginRequestSerializer,
     Verify2FARequestSerializer,
@@ -33,6 +38,7 @@ from users.serializers.auth import (
     Resend2FAResponseSerializer,
 )
 from rest_framework import serializers
+
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
@@ -67,14 +73,7 @@ class LoginView(APIView):
     @extend_schema(
         tags=["Login"],
         request=LoginRequestSerializer,
-        responses={
-            200: LoginSuccessResponseSerializer,
-            202: Login2FAResponseSerializer,  # optional, kung gusto mong ihiwalay
-            400: LoginErrorResponseSerializer,
-            401: LoginErrorResponseSerializer,
-            404: LoginErrorResponseSerializer,
-            500: LoginErrorResponseSerializer,
-        },
+        responses={200: serializers.DictField()},
         examples=[
             OpenApiExample(
                 "Login request",
@@ -153,6 +152,14 @@ class LoginView(APIView):
 
         logger.debug(f"User login request: {user}")
         if user.check_password(password):
+            if user.is_active == False:
+                return Response(
+                    {
+                        "status": False,
+                        "detail": f"Your Account has not yet activated it by going to your email.",
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             if user.status != UserStatus.ACTIVE:
                 return Response(
                     {

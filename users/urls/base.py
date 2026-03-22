@@ -8,7 +8,7 @@ from users.views.matching import UserFriendSuggestionsView, UserMatchScoresView
 from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfilePictureView, ProfilePictureUploadView, RemoveCoverPhotoView, RemoveProfilePictureView
 from users.views.search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
 from users.views.security import ActiveSessionsView, BulkTerminateSessionsView, ChangePasswordView, Check2FAStatusView, Disable2FAView, Enable2FAView, FailedLoginAttemptsView, SecurityLogsView, SecuritySettingsView, SuspiciousActivitiesView, TerminateAllSessionsView, TerminateSessionView
-from users.views.user import CheckEmailView, CheckUsernameView, UserDeactivateView, UserDetailView, UserProfileView, UserRegisterView, UserStatusUpdateView, VerifyUserView
+from users.views.user import CheckEmailView, CheckUsernameView, EmailVerificationView, ResendVerificationView, UserDeactivateView, UserDetailView, UserProfileView, UserRegisterView, UserStatusUpdateView, VerifyUserView
 from .jwt import urlpatterns as jwt_urlpatterns
 from .login import urlpatterns as login_urlpatterns
 from .login_checkpoint import urlpatterns as checkpoint
@@ -28,6 +28,8 @@ urlpatterns = [
     path('verify/', VerifyUserView.as_view(), name='user-verify'),
     path('check-username/', CheckUsernameView.as_view(), name='check-username'),
     path('check-email/', CheckEmailView.as_view(), name='check-email'),
+    path('verify-email/', EmailVerificationView.as_view(), name='verify-email'),
+    path('resend-verification/', ResendVerificationView.as_view(), name='resend-verification'),
     
     # Follow endpoints
     path('follow/', FollowUserView.as_view(), name='follow-user'),
