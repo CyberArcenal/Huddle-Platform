@@ -2,7 +2,7 @@ from typing import Optional
 
 from rest_framework import serializers
 from feed.models.comment import Comment
-from feed.models.reaction import ReactionType
+from feed.models.reaction import REACTION_TYPES, ReactionType
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
 from users.serializers.user import UserMinimalSerializer
@@ -21,6 +21,18 @@ class ReactionCountSerializer(serializers.Serializer):
     sad = serializers.IntegerField(default=0)
     angry = serializers.IntegerField(default=0)
 
+class CommentStatistics(serializers.Serializer):
+    comment_id = serializers.IntegerField()
+    reply_count = serializers.IntegerField()
+    reaction_count = serializers.IntegerField()
+    reactions = ReactionCountSerializer()
+    created_at = serializers.DateTimeField()
+    has_parent = serializers.BooleanField()
+    content_object_id = serializers.IntegerField()
+    content_type = serializers.StringRelatedField()
+    liked = serializers.BooleanField()
+    current_reaction = serializers.CharField()
+    
 
 class CommentMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for comments."""
@@ -107,13 +119,9 @@ class CommentDisplaySerializerNoReplies(serializers.ModelSerializer):
     """Detailed view for a comment without nested replies."""
 
     user = UserMinimalSerializer(read_only=True)
-
-    like_count = serializers.SerializerMethodField()
-    liked = serializers.SerializerMethodField()
-    reaction_counts = serializers.SerializerMethodField()
-    user_reaction = serializers.SerializerMethodField()
     target_type = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
+    statistics = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
@@ -125,10 +133,7 @@ class CommentDisplaySerializerNoReplies(serializers.ModelSerializer):
             "created_at",
             "target_type",
             "target_id",
-            "like_count",
-            "liked",
-            "reaction_counts",
-            "user_reaction",
+            "statistics",
         ]
         read_only_fields = ["id", "created_at", "is_deleted"]
 
@@ -138,25 +143,9 @@ class CommentDisplaySerializerNoReplies(serializers.ModelSerializer):
     def get_target_id(self, obj) -> int:
         return obj.object_id
 
-    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts(obj, obj.id)
-
-    def get_user_reaction(self, obj) -> Optional[ReactionType]:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, obj, obj.id)
-        return None
-
-    def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count(obj, obj.id)
-
-    def get_liked(self, obj) -> bool:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.has_liked(
-                user=request.user, content_type=obj, object_id=obj.id
-            )
-        return False
+    def get_statistics(self, obj) -> CommentStatistics:
+        request = self.context.get("request", None)
+        return CommentService.get_comment_statistics(obj, request.user)
 
 
 class CommentDisplaySerializer(serializers.ModelSerializer):
@@ -164,13 +153,10 @@ class CommentDisplaySerializer(serializers.ModelSerializer):
 
     user = UserMinimalSerializer(read_only=True)
     replies = serializers.SerializerMethodField()
-
-    like_count = serializers.SerializerMethodField()
-    liked = serializers.SerializerMethodField()
-    reaction_counts = serializers.SerializerMethodField()
-    user_reaction = serializers.SerializerMethodField()
     target_type = serializers.SerializerMethodField()
     target_id = serializers.SerializerMethodField()
+    statistics = serializers.SerializerMethodField()
+    
 
     class Meta:
         model = Comment
@@ -183,10 +169,7 @@ class CommentDisplaySerializer(serializers.ModelSerializer):
             "replies",
             "target_type",
             "target_id",
-            "like_count",
-            "liked",
-            "reaction_counts",
-            "user_reaction",
+            "statistics",
         ]
         read_only_fields = ["id", "created_at", "is_deleted"]
 
@@ -201,23 +184,8 @@ class CommentDisplaySerializer(serializers.ModelSerializer):
         return CommentDisplaySerializerNoReplies(
             replies, many=True, context=self.context
         ).data
+    
+    def get_statistics(self, obj) -> CommentStatistics:
+        request = self.context.get("request", None)
+        return CommentService.get_comment_statistics(obj, request.user)
 
-    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts(obj, obj.id)
-
-    def get_user_reaction(self, obj) -> Optional[ReactionType]:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, obj, obj.id)
-        return None
-
-    def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count(obj, obj.id)
-
-    def get_liked(self, obj) -> bool:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.has_liked(
-                user=request.user, content_type=obj, object_id=obj.id
-            )
-        return False

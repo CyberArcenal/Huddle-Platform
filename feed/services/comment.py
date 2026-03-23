@@ -201,16 +201,24 @@ class CommentService:
         return list(queryset.order_by("-created_at")[offset : offset + limit])
 
     @staticmethod
-    def get_comment_statistics(comment: Comment) -> Dict[str, Any]:
+    def get_comment_statistics(comment: Comment, user: User = None) -> Dict[str, Any]:
         """Get reply count and like count for a comment."""
         from .reaction import ReactionService
 
         reply_count = comment.replies.filter(is_deleted=False).count()
-        like_count = ReactionService.get_like_count("comment", comment.id)
+        reaction_count = ReactionService.get_like_count("comment", comment.id)
+        liked = ReactionService.has_liked(
+            user=user, content_type=comment, object_id=comment.id
+        ) if user else False
+        reactions = ReactionService.get_reaction_counts(comment, comment.id)
+        current_reaction = ReactionService.get_user_reaction(user, comment, comment.id) if user else None
         return {
             "comment_id": comment.id,
             "reply_count": reply_count,
-            "like_count": like_count,
+            "reactions": reactions,
+            "reaction_count": reaction_count,
+            "liked": liked,
+            "current_reaction": current_reaction,
             "created_at": comment.created_at,
             "has_parent": comment.parent_comment is not None,
             "content_object_id": comment.object_id,

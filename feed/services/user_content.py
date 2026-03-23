@@ -38,6 +38,20 @@ class UserContentService:
         return []
 
     @classmethod
+    def _get_user_images(cls, user: User, requester: Optional[User], limit: int) -> List[Dict[str, Any]]:
+        from users.services.user_image import UserImageService
+        images = UserImageService.get_visible_images(user, requester, limit)
+        result = []
+        for img in images:
+            result.append({
+                'type': 'user_image',
+                'data': img,
+                'created_at': img.created_at,
+                'id': img.id,
+            })
+        return result
+
+    @classmethod
     def get_user_content(
         cls,
         user: User,
@@ -51,6 +65,7 @@ class UserContentService:
         shares = cls._get_filtered_items('get_user_shares', user, requester, fetch_limit)
         reels = cls._get_filtered_items('get_user_reels', user, requester, fetch_limit)
         stories = cls._get_filtered_items('get_user_stories', user, requester, fetch_limit)
+        user_images = cls._get_user_images(user, requester, fetch_limit)
 
         combined = []
         for item in posts:
@@ -61,6 +76,8 @@ class UserContentService:
             combined.append({'type': 'reel', 'data': item, 'created_at': item.created_at, 'id': item.id})
         for item in stories:
             combined.append({'type': 'story', 'data': item, 'created_at': item.created_at, 'id': item.id})
+        for item in user_images:
+            combined.append(item)
 
         combined.sort(key=lambda x: (-x['created_at'].timestamp(), -x['id']))
         return combined[:max_items]

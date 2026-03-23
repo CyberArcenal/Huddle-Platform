@@ -62,6 +62,7 @@ class PostStatsSerializers(serializers.Serializer):
     current_reaction = serializers.StringRelatedField()
     
 
+
 class UserPostStatisticsSerializer(serializers.Serializer):
     total_posts = serializers.IntegerField()
     public_posts = serializers.IntegerField()

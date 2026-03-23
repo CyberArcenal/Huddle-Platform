@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 
 
 from users.enums import UserStatus
+from users.serializers.user import UserMinimalSerializer
 
 from ..models import User, UserFollow, UserActivity
 from ..services import UserService
@@ -247,7 +248,50 @@ class FollowingListSerializer(serializers.ModelSerializer):
             follower=obj.following, following=obj.follower
         ).exists()
         
-        
+
+class UserFollowSerializer(serializers.ModelSerializer):
+    """Serializer for user follow relationships"""
+    follower = UserMinimalSerializer(read_only=True)
+    following = UserMinimalSerializer(read_only=True)
+
+    class Meta:
+        model = UserFollow
+        fields = ["id", "follower", "following", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate follow relationship"""
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication required")
+
+        # Check if trying to follow self
+        if request.user == attrs.get("following"):
+            raise serializers.ValidationError("Cannot follow yourself")
+
+        # Check if already following
+        if UserFollow.objects.filter(
+            follower=request.user, following=attrs.get("following")
+        ).exists():
+            raise serializers.ValidationError("Already following this user")
+
+        return attrs
+
+    def create(self, validated_data: Dict[str, Any]) -> UserFollow:
+        """Create follow relationship"""
+        with transaction.atomic():
+            follow = UserFollow.objects.create(**validated_data)
+
+            # Log follow activity
+            UserActivity.objects.create(
+                user=validated_data["follower"],
+                action="follow_user",
+                description=f"Started following {validated_data['following'].username}",
+                metadata={"following_id": validated_data["following"].id},
+            )
+
+            return follow
         
         
 # ===== Response serializers for drf-spectacular =====

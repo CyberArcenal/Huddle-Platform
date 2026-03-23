@@ -7,9 +7,10 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.shortcuts import get_object_or_404
 from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
-from users.serializers.user_media import UserMediaItemSerializer
-from users.services.user_media import UserMediaService
 from rest_framework import serializers
+
+from users.serializers.user_image import UserMediaItemSerializer
+from users.services.user_image import UserImageService
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +61,7 @@ class UserMediaGridView(APIView):
             page_size = paginator.page_size
 
         # Fetch media
-        items, total = UserMediaService.get_user_media(
+        items, total = UserImageService.get_user_media(
             user=target_user,
             page=page_num,
             page_size=page_size,

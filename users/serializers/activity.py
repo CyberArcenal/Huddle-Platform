@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from typing import Dict, Any, List, Optional
 
-from users.serializers.user import UserListSerializer
+from users.serializers.user import UserListSerializer, UserMinimalSerializer
 
 from ..models import UserActivity, SecurityLog, LoginSession
 
@@ -12,7 +12,7 @@ from ..models import UserActivity, SecurityLog, LoginSession
 class UserActivitySerializer(serializers.ModelSerializer):
     """Serializer for user activity logs"""
 
-    user = UserListSerializer(read_only=True)
+    user = UserMinimalSerializer(read_only=True)
     action_display = serializers.CharField(source="get_action_display", read_only=True)
     formatted_time = serializers.SerializerMethodField()
     time_ago = serializers.SerializerMethodField()
@@ -81,6 +81,7 @@ class ActivitySummarySerializer(serializers.Serializer):
             "this_week": instance.get("activities_this_week", 0),
         }
 
+        
 
 # ===== Response serializers for drf-spectacular =====
 

@@ -3,6 +3,7 @@ from feed.serializers.post import PostFeedSerializer
 from feed.serializers.share import ShareFeedSerializer
 from feed.serializers.reel import ReelDisplaySerializer
 from stories.serializers.base import StorySerializer
+from users.serializers.user_image import UserImageDisplaySerializer
 
 
 class UnifiedContentItemSerializer(serializers.Serializer):
@@ -20,4 +21,6 @@ class UnifiedContentItemSerializer(serializers.Serializer):
             return ReelDisplaySerializer(data_obj, context=self.context).data
         elif content_type == 'story':
             return StorySerializer(data_obj, context=self.context).data
+        elif content_type == 'user_image':
+            return UserImageDisplaySerializer(data_obj, context=self.context).data
         return None

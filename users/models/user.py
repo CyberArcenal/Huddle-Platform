@@ -2,9 +2,19 @@ from enum import Enum
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from feed.models.post import POST_PRIVACY_TYPES
 from users.enums import UserStatus
 from users.models.utilities import USER_STATUS_CHOICES
 
+
+class ProfileImageTypeEnum(str, Enum):
+    PROFILE = "profile"
+    COVER = "cover"
+
+PROFILE_IMAGE_TYPE_CHOICES = [
+        ('profile', "Profile Picture"),
+        ('cover', "Cover Photo"),
+    ]
 
 class Hobby(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -75,8 +85,6 @@ class User(AbstractUser):
         help_text="Account status",
     )
     bio = models.TextField(max_length=500, blank=True)
-    profile_picture = models.ImageField(upload_to="profile_pics/", blank=True, null=True)
-    cover_photo = models.ImageField(upload_to="covers/", blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     phone_number = models.CharField(max_length=15, blank=True)
     is_verified = models.BooleanField(default=False)
@@ -125,3 +133,20 @@ class User(AbstractUser):
 
     class Meta:
         db_table = "users"
+        
+
+class UserImage(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to="user_images/")
+    privacy = models.CharField(
+        max_length=10, choices=POST_PRIVACY_TYPES, default="followers"
+    )
+    image_type = models.CharField(max_length=20, choices=PROFILE_IMAGE_TYPE_CHOICES)
+    caption = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "user_images"
+        unique_together = ("user", "image_type")

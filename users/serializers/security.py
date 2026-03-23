@@ -297,6 +297,41 @@ class SecurityLogSerializer(serializers.ModelSerializer):
         return obj.created_at.strftime('%Y-%m-%d %H:%M:%S')
     
 
+class UserSecuritySettingsSerializer(serializers.ModelSerializer):
+    """Serializer for user security settings"""
+    class Meta:
+        model = UserSecuritySettings
+        fields = [
+            "two_factor_enabled",
+            "recovery_email",
+            "recovery_phone",
+            "alert_on_new_device",
+            "alert_on_password_change",
+            "alert_on_failed_login",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["created_at", "updated_at"]
+
+    def validate_recovery_email(self, value: str) -> Optional[str]:
+        """Validate recovery email"""
+        if value:
+            # Check if recovery email is different from primary email
+            user = self.context.get("user")
+            if user and value.lower() == user.email.lower():
+                raise serializers.ValidationError(
+                    "Recovery email must be different from primary email"
+                )
+
+            # Check if recovery email belongs to another user
+            if User.objects.filter(email__iexact=value).exists():
+                raise serializers.ValidationError(
+                    "Recovery email is already registered to another account"
+                )
+
+        return value.lower() if value else None
+    
+
 
 
 
