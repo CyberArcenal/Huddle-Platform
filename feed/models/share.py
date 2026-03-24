@@ -3,6 +3,8 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
+from groups.models.group import Group
+
 
 
 class Share(models.Model):
@@ -10,9 +12,13 @@ class Share(models.Model):
     Represents a share action performed by a user on any content object.
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shares')
-    
-    
-    
+    group = models.ForeignKey(
+        Group,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name='shares'
+    )
     # Generic relation to the shared object
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()

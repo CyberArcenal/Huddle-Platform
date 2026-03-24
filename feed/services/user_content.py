@@ -45,7 +45,7 @@ class UserContentService:
         for img in images:
             result.append({
                 'type': 'user_image',
-                'data': img,
+                'item': img,
                 'created_at': img.created_at,
                 'id': img.id,
             })
@@ -69,13 +69,13 @@ class UserContentService:
 
         combined = []
         for item in posts:
-            combined.append({'type': 'post', 'data': item, 'created_at': item.created_at, 'id': item.id})
+            combined.append({'type': 'post', 'item': item, 'created_at': item.created_at, 'id': item.id})
         for item in shares:
-            combined.append({'type': 'share', 'data': item, 'created_at': item.created_at, 'id': item.id})
+            combined.append({'type': 'share', 'item': item, 'created_at': item.created_at, 'id': item.id})
         for item in reels:
-            combined.append({'type': 'reel', 'data': item, 'created_at': item.created_at, 'id': item.id})
+            combined.append({'type': 'reel', 'item': item, 'created_at': item.created_at, 'id': item.id})
         for item in stories:
-            combined.append({'type': 'story', 'data': item, 'created_at': item.created_at, 'id': item.id})
+            combined.append({'type': 'story', 'item': item, 'created_at': item.created_at, 'id': item.id})
         for item in user_images:
             combined.append(item)
 

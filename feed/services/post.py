@@ -10,6 +10,7 @@ from feed.models.post import POST_TYPES
 from feed.serializers.comment import CommentDisplaySerializer
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
+from groups.models.group import Group
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
 from users.models import User
@@ -28,6 +29,7 @@ class PostService:
         post_type: str = "text",
         media_files: Optional[List] = None,  # list of uploaded files
         privacy: str = "followers",
+        group: Group = None,
         **extra_fields,
     ) -> Post:
         """Create a new post with optional media files"""
@@ -35,6 +37,12 @@ class PostService:
         valid_types = [choice[0] for choice in POST_TYPES]
         if post_type not in valid_types:
             raise ValidationError(f"Post type must be one of {valid_types}")
+        
+        if group and not isinstance(group, Group):
+            raise ValidationError(f"Group: {group} is not an instance")
+        
+        if not isinstance(user, User):
+            raise ValidationError(f"User: {user} is not and intance")
 
         # Validate based on post type
         if post_type == "text" and not content.strip():
@@ -51,6 +59,7 @@ class PostService:
                     content=content,
                     post_type=post_type,
                     privacy=privacy,
+                    group=group,
                     **extra_fields,
                 )
                 if media_files:

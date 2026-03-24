@@ -5,12 +5,31 @@ from rest_framework import serializers
 from events.serializers.event import EventListSerializer
 from feed.models import Post, Reel, Share
 from feed.serializers.post import PostFeedSerializer
-from feed.serializers.reel import ReelMinimalSerializer
+from feed.serializers.reel import ReelDisplaySerializer, ReelMinimalSerializer
 from feed.serializers.share import ShareFeedSerializer
 from groups.serializers.group import GroupMinimalSerializer
-from stories.serializers.base import StoryFeedSerializer
+from stories.serializers.base import StoryFeedSerializer, StorySerializer
 from users.serializers.user import UserMinimalSerializer
+from users.serializers.user_image import UserImageDisplaySerializer
 
+FEED_DATA_TYPES = [
+            "posts",
+            "reels",
+            "stories",
+            "suggested_users",
+            "match_users",
+            "recommended_groups",
+            "shares",
+            "events",
+            "post",
+            "share",
+            "reel",
+            "story",
+            "user_image",
+            "ad",
+            "ads",
+            "other",
+        ]
 
 class StoryItemSerializer(serializers.Serializer):
     user = UserMinimalSerializer()
@@ -37,61 +56,73 @@ class RecommendedGroupItemSerializer(serializers.Serializer):
     reason = serializers.CharField(allow_null=True, required=False)
 
 
-class PostItemSerializer(PostFeedSerializer):
-    """Wrapper for posts row items"""
-    pass
-
-
-class ReelItemSerializer(ReelMinimalSerializer):
-    """Wrapper for reels row items"""
-    pass
-
-
-class ShareItemSerializer(ShareFeedSerializer):
-    """Wrapper for shares row items"""
-    pass
-
-
-class EventItemSerializer(EventListSerializer):
-    """Wrapper for events row items"""
-    pass
-
 
 # Mapping from row_type to the serializer class for items
 ROW_TYPE_SERIALIZER = {
-    "posts": PostItemSerializer,
-    "reels": ReelItemSerializer,
+    "posts": PostFeedSerializer,
+    "reels": ReelMinimalSerializer,
     "stories": StoryItemSerializer,
     "suggested_users": SuggestedUserItemSerializer,
     "match_users": MatchUserItemSerializer,
     "recommended_groups": RecommendedGroupItemSerializer,
-    "shares": ShareItemSerializer,
-    "events": EventItemSerializer,
+    "shares": ShareFeedSerializer,
+    "events": EventListSerializer,
+}
+
+SINGLE_ITEM_SERIALIZER = {
+    "post": PostFeedSerializer,
+    "share": ShareFeedSerializer,
+    "reel": ReelDisplaySerializer,
+    "story": StorySerializer,
+    "user_image": UserImageDisplaySerializer,
 }
 
 
-class FeedRowSerializer(serializers.Serializer):
-    row_type = serializers.ChoiceField(
-        choices=[
-            "posts",
-            "reels",
-            "stories",
-            "suggested_users",
-            "match_users",
-            "recommended_groups",
-            "shares",
-            "events",
-            "other",
-        ]
-    )
-    title = serializers.CharField()
+class UnifiedContentItemSerializer(serializers.Serializer):
+    type = serializers.ChoiceField(choices=FEED_DATA_TYPES)
+    title = serializers.CharField(required=False, allow_blank=True)
     items = serializers.SerializerMethodField()
+    item = serializers.SerializerMethodField()
 
-    def get_items(self, row) -> list[Dict[str, Any]]:
-        row_type = row.get("row_type")
-        items = row.get("items", [])
-        serializer_class = ROW_TYPE_SERIALIZER.get(row_type)
-        if serializer_class:
-            return serializer_class(items, many=True, context=self.context).data
-        # Fallback for unknown row types
-        return items
+    def get_items(self, obj) -> list[Dict[str, Any]]:
+        # Rows have 'row_type' and 'items'
+        if 'row_type' in obj and 'items' in obj:
+            row_type = obj['row_type']
+            items = obj['items']
+            serializer_class = ROW_TYPE_SERIALIZER.get(row_type)
+            if serializer_class:
+                return serializer_class(items, many=True, context=self.context).data
+        return []
+
+    def get_item(self, obj) -> Dict[str, Any]:
+        # Single items have 'type' and 'data'
+        if 'type' in obj and 'item' in obj:
+            content_type = obj['type']
+            data_obj = obj['item']
+            serializer_class = SINGLE_ITEM_SERIALIZER.get(content_type)
+            if serializer_class:
+                return serializer_class(data_obj, context=self.context).data
+        return None
+
+    def to_representation(self, instance):
+        # Determine type and title based on input structure
+        if 'row_type' in instance and 'items' in instance:
+            type_val = instance.get('row_type')
+            title = instance.get('title', '')
+        elif 'type' in instance and 'item' in instance:
+            type_val = instance.get('type')
+            title = ''   # no title for single items
+        else:
+            type_val = 'other'
+            title = ''
+
+        # Use the methods to get the actual data
+        items = self.get_items(instance)
+        item = self.get_item(instance)
+
+        return {
+            'type': type_val,
+            'title': title,
+            'items': items,
+            'item': item,
+        }

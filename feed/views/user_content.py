@@ -9,8 +9,9 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.shortcuts import get_object_or_404
 
+from feed.serializers.feed import UnifiedContentItemSerializer
 from feed.services.user_content import UserContentService
-from feed.serializers.user_content import UnifiedContentItemSerializer
+from feed.views.feed import FeedResponseSerializer
 from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
 from rest_framework import serializers
@@ -20,16 +21,6 @@ logger = logging.getLogger(__name__)
 
 class UserContentFeedView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
-
-    class UserContentFeedResponse(serializers.Serializer):
-        page = serializers.IntegerField()
-        hasNext = serializers.BooleanField()
-        hasPrev = serializers.BooleanField()
-        count = serializers.IntegerField()
-        next = serializers.URLField(allow_null=True)
-        previous = serializers.URLField(allow_null=True)
-        results = UnifiedContentItemSerializer(many=True)
-
     @extend_schema(
         tags=["User Content"],
         parameters=[
@@ -46,7 +37,7 @@ class UserContentFeedView(APIView):
                 required=False,
             ),
         ],
-        responses={200: UserContentFeedResponse},
+        responses={200: FeedResponseSerializer},
         description="Get a user's activity feed (posts, shares, reels, stories) in chronological order.",
     )
     def get(self, request, user_id=None):
@@ -67,18 +58,16 @@ class UserContentFeedView(APIView):
         try:
             page = int(page)
             page_size = int(page_size)
-            page_size = min(page_size, 100)  # cap at 100
+            page_size = min(page_size, 100)
         except ValueError:
             page = 1
             page_size = 20
 
-        # Fetch all content up to a reasonable limit (e.g., 500 items)
-        # We'll use cursor None and a high limit to get all items up to 500.
-        # The service will merge and return a list.
-        all_items, _ = UserContentService.get_user_content(
+        # FIX: Remove the unpacking – get_user_content returns a list, not a tuple
+        all_items = UserContentService.get_user_content(
             user=target_user,
             requester=request.user if request.user.is_authenticated else None,
-            limit=500,             # fetch up to 500 items from each type (or total)
+            max_items=500,
         )
 
         # Paginate the list
@@ -86,20 +75,19 @@ class UserContentFeedView(APIView):
         try:
             page_obj = paginator.page(page)
         except (EmptyPage, PageNotAnInteger):
-            # Return empty page if page out of range
             page_obj = paginator.page(1) if page < 1 else paginator.page(paginator.num_pages)
 
         # Serialize
         serializer = UnifiedContentItemSerializer(page_obj.object_list, many=True, context={'request': request})
 
-        # Build response using the existing pagination structure
+        # Build response
         pagination_data = {
+            "feed_type": 'profile',
             "page": page_obj.number,
+            "page_size": page_size,
             "hasNext": page_obj.has_next(),
             "hasPrev": page_obj.has_previous(),
-            "count": paginator.count,
-            "next": None,  # we don't generate full URLs here
-            "previous": None,
             "results": serializer.data,
         }
+        # logger.debug(pagination_data)
         return Response(pagination_data)

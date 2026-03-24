@@ -4,6 +4,7 @@ from django.urls import path, include
 from feed.views import comment, feed, post, reaction, share
 from feed.views import reel
 from feed.views.user_content import UserContentFeedView
+from feed.views.user_liked_items import UserLikedItemsView
 
 urlpatterns = [
     path('feed/', feed.FeedView.as_view(), name='feed'),
@@ -49,6 +50,9 @@ urlpatterns = [
     path('likes/statistics/<int:user_id>/', reaction.UserLikeStatisticsView.as_view(), name='user-like-statistics'),
     path('likes/mutual/<int:user_id>/', reaction.MutualLikesView.as_view(), name='mutual-likes'),
     path('reactions/', reaction.ReactionView.as_view(), name='reaction-set'),
+    
+    path('me/liked/', UserLikedItemsView.as_view(), name='my-liked-items'),
+    path('users/<int:user_id>/liked/', UserLikedItemsView.as_view(), name='user-liked-items'),
     
 
     # ==================== Reels ====================

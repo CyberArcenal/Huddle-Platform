@@ -41,7 +41,7 @@ class MutualReactionsSerializer(serializers.Serializer):
     
 
 
-class ShareContentObjectData(serializers.Serializer):
+class ShareContentObjectDetail(serializers.Serializer):
     type = serializers.CharField()
     id = serializers.IntegerField()
     representation = serializers.StringRelatedField()

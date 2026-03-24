@@ -1,10 +1,7 @@
-from typing import Optional
 
 from rest_framework import serializers
 from feed.models.comment import Comment
-from feed.models.reaction import REACTION_TYPES, ReactionType
 from feed.services.comment import CommentService
-from feed.services.reaction import ReactionService
 from users.serializers.user import UserMinimalSerializer
 from django.contrib.contenttypes.models import ContentType
 from feed.services.comment import CommentService

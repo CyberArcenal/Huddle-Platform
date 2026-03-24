@@ -106,6 +106,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
                 post_type=validated_data.get("post_type", "text"),
                 media_files=validated_data.get("media_files", []),
                 privacy=validated_data.get("privacy", "followers"),
+                group = validated_data.get("group", None),
             )
             return post
         except ValidationError as e:

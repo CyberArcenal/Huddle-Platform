@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -261,8 +262,9 @@ class FollowersListView(APIView):
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            logger.debug(e)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            traceback.print_exc()
+            return paginator.get_paginated_error([])
+            # return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FollowingListView(APIView):
@@ -314,7 +316,9 @@ class FollowingListView(APIView):
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            traceback.print_exc()
+            return paginator.get_paginated_error([])
+            # return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class MutualFollowsView(APIView):
@@ -362,7 +366,9 @@ class MutualFollowsView(APIView):
                 {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            traceback.print_exc()
+            return paginator.get_paginated_error([])
+            # return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # users/views/follow.py (updated part)
@@ -397,19 +403,22 @@ class SuggestedUsersView(APIView):
         description="Get suggested users based on friends of friends (mutual connections).",
     )
     def get(self, request):
-        min_mutual = int(request.query_params.get("min_mutual", 1))
+        try:
+            min_mutual = int(request.query_params.get("min_mutual", 1))
 
-        suggestions = MatchingService.get_suggested_users(
-            user=request.user,
-            limit=100,
-            min_mutual=min_mutual
-        )
+            suggestions = MatchingService.get_suggested_users(
+                user=request.user,
+                limit=100,
+                min_mutual=min_mutual
+            )
 
-        paginator = StandardResultsSetPagination()
-        results = paginator.paginate_queryset(suggestions, request, view=self)
-        serializer = UserMutualCountSerializer(results, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
-
+            paginator = StandardResultsSetPagination()
+            results = paginator.paginate_queryset(suggestions, request, view=self)
+            serializer = UserMutualCountSerializer(results, many=True, context={"request": request})
+            return paginator.get_paginated_response(serializer.data)
+        except Exception as e:
+            traceback.print_exc()
+            return paginator.get_paginated_error([])
 
 
 class MutualFriendsView(APIView):
@@ -449,8 +458,9 @@ class MutualFriendsView(APIView):
             return paginator.get_paginated_response(serializer.data)
 
         except Exception as e:
-            logger.error(e)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            traceback.print_exc()
+            return paginator.get_paginated_error([])
+            # return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PopularUsersView(APIView):
@@ -489,5 +499,6 @@ class PopularUsersView(APIView):
             return paginator.get_paginated_response(serializer.data)
 
         except Exception as e:
-            logger.error(e)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            traceback.print_exc()
+            return paginator.get_paginated_error([])
+            # return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

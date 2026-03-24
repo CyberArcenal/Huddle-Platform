@@ -1,6 +1,7 @@
 from django.urls import path
 
 from stories.views.base import FollowingStoriesView, MutualStoryViewsView, PopularStoriesView, StoriesByTypeView, StoryCleanupView, StoryDeactivateView, StoryDetailView, StoryExtendView, StoryFeedView, StoryHighlightsView, StoryListView, StoryRecentViewersView, StoryRecommendationsView, StoryStatsView, StoryViewCountView, StoryViewCreateView, StoryViewStatsView, StoryViewsListView, UserStoriesView
+from stories.views.highlight import StoryHighlightAddStoriesView, StoryHighlightDetailView, StoryHighlightListView, StoryHighlightRemoveStoriesView, StoryHighlightSetCoverView
 
 urlpatterns = [
     # Story CRUD operations
@@ -38,4 +39,12 @@ urlpatterns = [
     
     # Admin operations
     path('admin/stories/cleanup/', StoryCleanupView.as_view(), name='story-cleanup'),
+    
+    
+    
+    path("highlights/", StoryHighlightListView.as_view(), name="highlights-list"),
+    path("highlights/<int:id>/", StoryHighlightDetailView.as_view(), name="highlights-detail"),
+    path("highlights/<int:id>/add-stories/", StoryHighlightAddStoriesView.as_view(), name="highlights-add-stories"),
+    path("highlights/<int:id>/remove-stories/", StoryHighlightRemoveStoriesView.as_view(), name="highlights-remove-stories"),
+    path("highlights/<int:id>/set-cover/", StoryHighlightSetCoverView.as_view(), name="highlights-set-cover"),
 ]

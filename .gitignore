@@ -1,3 +1,4 @@
 .env
 *.pyc
 *.sqlite3
+/core/settings/media

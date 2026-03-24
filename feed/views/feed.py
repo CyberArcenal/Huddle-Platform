@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from core.settings.dev import LOGGER
-from feed.serializers.feed import FeedRowSerializer
+from feed.serializers.feed import UnifiedContentItemSerializer
 from feed.services.feed import FeedService
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class FeedResponseSerializer(serializers.Serializer):
     feed_type = serializers.CharField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
-    results = FeedRowSerializer(many=True)
+    results = UnifiedContentItemSerializer(many=True)
 
 
 class FeedView(APIView):
@@ -137,15 +137,20 @@ class FeedView(APIView):
             )
             return Response({"detail": "Failed to build feed"}, status=500)
 
-        serializer = FeedRowSerializer(
+        serializer = UnifiedContentItemSerializer(
             feed_rows, many=True, context={"request": request}
         )
 
         # Compute hasNext/hasPrev
         hasPrev = page > 1
-        hasNext = (
-            len(feed_rows) == page_size
-        )  # heuristic: if we filled the page, assume may next
+        hasNext = (len(feed_rows) == page_size) or any(
+            (
+                row.get("pagination", {}).get("has_more", False)
+                if row.get("pagination") is not None
+                else False
+            )
+            for row in feed_rows
+        )
 
         response = {
             "page": page,
@@ -155,7 +160,7 @@ class FeedView(APIView):
             "hasPrev": hasPrev,
             "results": serializer.data,
         }
-        
-        logger.debug(response)
+
+        # logger.debug(response)
 
         return Response(response)

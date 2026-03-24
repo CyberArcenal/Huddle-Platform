@@ -37,6 +37,9 @@ class PostMediaDisplaySerializer(serializers.ModelSerializer):
 
     def get_file_url(self, obj) -> str:
         request = self.context.get('request')
-        if request:
-            return request.build_absolute_uri(obj.file.url)
-        return obj.file.url if obj.file else None
+        try:
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url if obj.file else None
+        except:
+            return None

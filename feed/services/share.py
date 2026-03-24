@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from typing import Optional, List, Dict, Any, Union
 from django.db.models import Q
 
+from groups.models.group import Group
 from users.models import User
 from ..models import Share
 
@@ -16,13 +17,20 @@ class ShareService:
         user: User,
         content_object,
         caption: str = '',
-        privacy: str = 'public'
+        privacy: str = 'public',
+        group: Group = None
     ) -> Share:
         """
         Create a new share for any content object.
         """
         if not user or not content_object:
             raise ValidationError("User and content object are required.")
+        
+        if group and not isinstance(group, Group):
+            raise ValidationError(f"Group: {group} is not an instance")
+        
+        if not isinstance(user, User):
+            raise ValidationError(f"User: {user} is not and intance")
 
         # Validate privacy
         valid_privacy = [choice[0] for choice in Share._meta.get_field('privacy').choices]

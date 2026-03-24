@@ -48,10 +48,8 @@ class UserMediaGridView(APIView):
         else:
             target_user = get_object_or_404(User, id=user_id)
 
-        # Pagination parameters
+        # Get pagination parameters from request
         paginator = StandardResultsSetPagination()
-        page = paginator.paginate_queryset(None, request)  # We'll paginate manually
-
         try:
             page_num = int(request.query_params.get("page", 1))
             page_size = int(request.query_params.get("page_size", paginator.page_size))
@@ -60,20 +58,21 @@ class UserMediaGridView(APIView):
             page_num = 1
             page_size = paginator.page_size
 
-        # Fetch media
+        # Fetch media (service does offset/limit internally)
         items, total = UserImageService.get_user_media(
             user=target_user,
+            requester=request.user if request.user.is_authenticated else None,
             page=page_num,
             page_size=page_size,
         )
 
-        # Build paginated response manually (to match BasePagination structure)
+        # Build paginated response
         response = {
             "count": total,
             "page": page_num,
             "hasNext": (page_num * page_size) < total,
             "hasPrev": page_num > 1,
-            "next": None,  # could generate URL
+            "next": None,
             "previous": None,
             "results": UserMediaItemSerializer(items, many=True).data,
         }

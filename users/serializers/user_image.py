@@ -2,17 +2,38 @@
 import os
 
 from rest_framework import serializers
+
 from feed.models.post import POST_PRIVACY_TYPES
+
+
 from users.models import UserImage
-from feed.serializers.base import PostStatsSerializers, ReactionCountSerializer
-from feed.services.reaction import ReactionService
-from feed.services.comment import CommentService
 from users.models.user import PROFILE_IMAGE_TYPE_CHOICES
 from users.serializers.user import UserMinimalSerializer
 from users.services.user_image import UserImageService
 
+
+class ReactionCountSerializer(serializers.Serializer):
+    # dynamic fields per reaction type
+    like = serializers.IntegerField(default=0)
+    love = serializers.IntegerField(default=0)
+    care = serializers.IntegerField(default=0)
+    haha = serializers.IntegerField(default=0)
+    wow = serializers.IntegerField(default=0)
+    sad = serializers.IntegerField(default=0)
+    angry = serializers.IntegerField(default=0)
+
+
+class PostStatsSerializers(serializers.Serializer):
+    comment_count = serializers.IntegerField()
+    like_count = serializers.IntegerField()
+    reaction_count = ReactionCountSerializer()
+    privacy = serializers.ChoiceField(choices=["public", "followers", "secret"])
+    comments = serializers.DictField()
+    liked = serializers.BooleanField()
+    current_reaction = serializers.StringRelatedField()
+
+
 class NormalizedImageField(serializers.ImageField):
-    
     """
     ImageField that ensures uploaded file has a sensible filename extension
     (detects format with Pillow and appends extension if missing) BEFORE
@@ -30,6 +51,7 @@ class NormalizedImageField(serializers.ImageField):
 
     def _ensure_name_has_extension(self, uploaded_file):
         from PIL import Image
+
         # If name already has extension, nothing to do
         name = getattr(uploaded_file, "name", "") or ""
         base, ext = os.path.splitext(name)
@@ -61,31 +83,67 @@ class NormalizedImageField(serializers.ImageField):
 
         return super().to_internal_value(data)
 
+
+# ==============================================================================================
+
+
+class UserMediaItemSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    url = serializers.URLField(allow_null=True)
+    thumbnail = serializers.URLField(allow_null=True, required=False)
+    created_at = serializers.DateTimeField()
+    content_id = serializers.IntegerField()
+    content_type = serializers.CharField()
+    media_order = serializers.IntegerField(allow_null=True)
+
+
 class UserImageMinimalSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    statistics = serializers.SerializerMethodField()
 
     class Meta:
         model = UserImage
-        fields = ['id', 'image_url', 'caption', 'image_type', 'is_active', 'created_at']
+        fields = ["id", "image_url", "caption", "image_type", "is_active", "created_at", "statistics"]
 
     def get_image_url(self, obj):
         if obj.image:
-            return self.context['request'].build_absolute_uri(obj.image.url)
+            return self.context["request"].build_absolute_uri(obj.image.url)
         return None
+    
+    def get_statistics(
+        self, obj
+    ) -> PostStatsSerializers:  # dont remove it, its use to detailed openapi schema
+        from feed.services.post import PostService
+
+        return PostService.get_post_statistics(serializer=self, obj=obj)
 
 
 class UserImageCreateSerializer(serializers.ModelSerializer):
+
     image_type = serializers.ChoiceField(choices=PROFILE_IMAGE_TYPE_CHOICES)
-    privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES, default='followers')
-    image = NormalizedImageField(required=True, allow_empty_file=False)   # use the same field for validation
+    privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES, default="followers")
+    image = NormalizedImageField(
+        required=True, allow_empty_file=False
+    )  # use the same field for validation
     crop_x = serializers.IntegerField(required=False, min_value=0, default=0)
     crop_y = serializers.IntegerField(required=False, min_value=0, default=0)
     crop_width = serializers.IntegerField(required=False, min_value=50, allow_null=True)
-    crop_height = serializers.IntegerField(required=False, min_value=50, allow_null=True)
+    crop_height = serializers.IntegerField(
+        required=False, min_value=50, allow_null=True
+    )
 
     class Meta:
         model = UserImage
-        fields = ['image', 'caption', 'image_type', 'privacy', 'crop_x', 'crop_y', 'crop_width', 'crop_height']
+        fields = [
+            "image",
+            "caption",
+            "image_type",
+            "privacy",
+            "crop_x",
+            "crop_y",
+            "crop_width",
+            "crop_height",
+        ]
 
     def validate(self, attrs):
         # Additional validation for image dimensions etc.
@@ -93,16 +151,16 @@ class UserImageCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        request = self.context.get('request')
+        request = self.context.get("request")
         user = request.user
-        image_type = validated_data.pop('image_type')
-        image_file = validated_data.pop('image')
-        caption = validated_data.pop('caption', '')
-        privacy = validated_data.pop('privacy', 'followers')
-        crop_x = validated_data.pop('crop_x', 0)
-        crop_y = validated_data.pop('crop_y', 0)
-        crop_width = validated_data.pop('crop_width', None)
-        crop_height = validated_data.pop('crop_height', None)
+        image_type = validated_data.pop("image_type")
+        image_file = validated_data.pop("image")
+        caption = validated_data.pop("caption", "")
+        privacy = validated_data.pop("privacy", "followers")
+        crop_x = validated_data.pop("crop_x", 0)
+        crop_y = validated_data.pop("crop_y", 0)
+        crop_width = validated_data.pop("crop_width", None)
+        crop_height = validated_data.pop("crop_height", None)
 
         # Use the service with optional crop parameters
         return UserImageService.set_active_image(
@@ -120,44 +178,32 @@ class UserImageCreateSerializer(serializers.ModelSerializer):
 
 class UserImageDisplaySerializer(serializers.ModelSerializer):
     """Detailed view for a user image with interaction statistics."""
+
     image_url = serializers.SerializerMethodField()
-    user = UserMinimalSerializer(read_only=True)
+    user = UserMinimalSerializer()
     statistics = serializers.SerializerMethodField()
 
     class Meta:
         model = UserImage
         fields = [
-            'id', 'user', 'image_url', 'caption', 'image_type', 'is_active',
-            'created_at', 'statistics'
+            "id",
+            "user",
+            "image_url",
+            "caption",
+            "image_type",
+            "is_active",
+            "created_at",
+            "statistics",
         ]
 
     def get_image_url(self, obj):
         if obj.image:
-            return self.context['request'].build_absolute_uri(obj.image.url)
+            return self.context["request"].build_absolute_uri(obj.image.url)
         return None
 
-    def get_user(self, obj):
-        from users.serializers.user import UserMinimalSerializer
-        return UserMinimalSerializer(obj.user, context=self.context).data
-
-    def get_statistics(self, obj) -> PostStatsSerializers:#dont remove it, its use to detailed openapi schema
+    def get_statistics(
+        self, obj
+    ) -> PostStatsSerializers:  # dont remove it, its use to detailed openapi schema
         from feed.services.post import PostService
-        return PostService.get_post_statistics(serializer=self, obj=obj)
-        
-        
-        
-        
-        
-        
-        
-        
-# ==============================================================================================
 
-class UserMediaItemSerializer(serializers.Serializer):
-    type = serializers.CharField()
-    url = serializers.URLField(allow_null=True)
-    thumbnail = serializers.URLField(allow_null=True, required=False)
-    created_at = serializers.DateTimeField()
-    content_id = serializers.IntegerField()
-    content_type = serializers.CharField()
-    media_order = serializers.IntegerField(allow_null=True)
+        return PostService.get_post_statistics(serializer=self, obj=obj)
