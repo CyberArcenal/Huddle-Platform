@@ -2,11 +2,17 @@
 from django.conf import settings
 from django.db import models
 from feed.models.post import POST_PRIVACY_TYPES
+from django.contrib.contenttypes.fields import GenericRelation
+
+from feed.models.media import Media
+
+
+
 
 class Reel(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reels')
     caption = models.TextField(blank=True)
-    video = models.FileField(upload_to='reels/videos/')          # main video
+    media = GenericRelation(Media, related_query_name='reel')        # main video
     thumbnail = models.ImageField(upload_to='reels/thumbnails/', blank=True, null=True)
     audio = models.FileField(upload_to='reels/audio/', blank=True, null=True)  # optional custom audio
     duration = models.FloatField(help_text='Duration in seconds', blank=True, null=True)

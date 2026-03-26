@@ -16,8 +16,8 @@ from groups.serializers.group import GroupMinimalSerializer
 from users.serializers.user import UserMinimalSerializer, UserMinimalSerializer
 
 from .comment import CommentDisplaySerializer
-from .post_media import PostMediaDisplaySerializer, PostMediaCreateSerializer
-
+from .media import MediaDisplaySerializer, MediaCreateSerializer
+from users.models import User
 logger = logging.getLogger(__name__)
 
 
@@ -50,10 +50,10 @@ class PostMinimalSerializer(serializers.ModelSerializer):
             else ""
         )
 
-    def get_media_preview(self, obj) -> PostMediaDisplaySerializer:
+    def get_media_preview(self, obj) -> MediaDisplaySerializer:
         first_media = obj.media.first()
         if first_media:
-            return PostMediaDisplaySerializer(first_media, context=self.context).data
+            return MediaDisplaySerializer(first_media, context=self.context).data
         return None
 
 
@@ -61,30 +61,33 @@ class PostCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating a new post."""
 
     content = serializers.CharField(required=False, allow_blank=True)
-    media_files = serializers.ListField(
+    media = serializers.ListField(
         child=serializers.FileField(), write_only=True, required=False, allow_empty=True
     )
     group = serializers.PrimaryKeyRelatedField(
         queryset=Group.objects.all(), required=False, allow_null=True
     )
+    tag_users = serializers.PrimaryKeyRelatedField(
+        queryset = User.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Post
-        fields = ["content", "group", "post_type", "privacy", "media_files"]
+        fields = ["content", "group", "post_type", "privacy", "media", "tag_users"]
 
     def validate(self, data):
         post_type = data.get("post_type", "text")
-        media_files = data.get("media_files", [])
+        media = data.get("media", [])
 
-        if post_type in ["image", "video"] and not media_files:
+        if post_type in ["image", "video"] and not media:
             raise serializers.ValidationError(
                 {
-                    "media_files": f"{post_type.capitalize()} posts require at least one media file."
+                    "media": f"{post_type.capitalize()} posts require at least one media file."
                 }
             )
-        if post_type == "text" and media_files:
+        if post_type == "text" and media:
             raise serializers.ValidationError(
-                {"media_files": "Text posts cannot have media."}
+                {"media": "Text posts cannot have media."}
             )
         if post_type == "text" and not data.get("content", "").strip():
             raise serializers.ValidationError(
@@ -104,7 +107,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
                 user=request.user,
                 content=validated_data.get("content", ""),
                 post_type=validated_data.get("post_type", "text"),
-                media_files=validated_data.get("media_files", []),
+                media=validated_data.get("media", []),
                 privacy=validated_data.get("privacy", "followers"),
                 group = validated_data.get("group", None),
             )
@@ -130,7 +133,7 @@ class PostDisplaySerializer(serializers.ModelSerializer):
     user = UserMinimalSerializer(read_only=True)
     group = GroupMinimalSerializer(read_only=True, allow_null=True)
     shared_post = serializers.SerializerMethodField()
-    media = PostMediaDisplaySerializer(many=True, read_only=True)
+    media = MediaDisplaySerializer(many=True, read_only=True)
     comments = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
@@ -202,20 +205,6 @@ class PostDisplaySerializer(serializers.ModelSerializer):
         return PostService.get_post_statistics(serializer=self, obj=obj)
 
 
-class PostDetailSerializer(PostDisplaySerializer):
-    """Extended view with additional statistics."""
-
-    statistics = serializers.SerializerMethodField()
-
-    class Meta(PostDisplaySerializer.Meta):
-        fields = PostDisplaySerializer.Meta.fields + ["statistics"]
-
-    def get_statistics(self, obj) -> PostStatsSerializers:
-        from feed.services.post import PostService
-
-        return PostService.get_post_statistics(obj)
-
-
 class PostFeedSerializer(serializers.ModelSerializer):
     """Optimized for feed listings."""
 
@@ -224,7 +213,7 @@ class PostFeedSerializer(serializers.ModelSerializer):
     shared_post = serializers.SerializerMethodField()
     preview = serializers.SerializerMethodField()
     statistics = serializers.SerializerMethodField()
-    media = PostMediaDisplaySerializer(many=True, read_only=True)
+    media = MediaDisplaySerializer(many=True, read_only=True)
 
     class Meta:
         model = Post

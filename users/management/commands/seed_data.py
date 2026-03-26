@@ -17,7 +17,7 @@ from events.models.event_analytics import EventAnalytics
 from events.models.event_attendance import EventAttendance
 from feed.models.comment import Comment
 from feed.models.post import Post, POST_TYPES, POST_PRIVACY_TYPES
-from feed.models.post_media import PostMedia
+from feed.models.media import PostMedia
 from feed.models.reaction import Reaction, REACTION_TYPES
 from feed.models.reel import Reel
 from feed.models.share import Share

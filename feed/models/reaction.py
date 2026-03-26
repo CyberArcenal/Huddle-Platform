@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 
 class ReactionType(models.TextChoices):
     LIKE = "like", "Like"
+    DISLIKE = "dislike", "Dislike"
     LOVE = "love", "Love"
     CARE = "care", "Care"
     HAHA = "haha", "Haha"

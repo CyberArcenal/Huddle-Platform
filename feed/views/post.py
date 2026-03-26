@@ -20,7 +20,6 @@ from feed.models import Post
 from feed.serializers.base import PostStatsSerializers, SearchSerializer, UserPostStatisticsSerializer
 from feed.serializers.post import (
     PostCreateSerializer,
-    PostDetailSerializer,
     PostDisplaySerializer,
     PostFeedSerializer,
 )
@@ -184,7 +183,7 @@ class PostDetailView(APIView):
 
     @extend_schema(
         tags=["Post's"],
-        responses={200: PostDetailSerializer},
+        responses={200: PostDisplaySerializer},
         description="Retrieve a single post by ID.",
     )
     def get(self, request, post_id):
@@ -201,7 +200,7 @@ class PostDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = PostDetailSerializer(post, context={"request": request})
+        serializer = PostDisplaySerializer(post, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(

@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q, Count, QuerySet
 from typing import Iterable, Optional, List, Dict, Any, Tuple
-
+from django.contrib.contenttypes.models import ContentType
 from admin_pannel.services.reported_content import ReportedContentService
 from analytics.services.trend_score import TrendScoreService
 from feed.models.post import POST_TYPES
@@ -20,7 +20,7 @@ from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
 from users.models import User
 from users.services.user_follow import UserFollowService
-from ..models import Post, PostMedia
+from ..models import Post, Media
 import uuid
 MAX_FEED_LIMIT = getattr(settings, "MAX_FEED_LIMIT", 100)
 
@@ -35,6 +35,7 @@ class PostService:
         media_files: Optional[List] = None,  # list of uploaded files
         privacy: str = "followers",
         group: Group = None,
+        tag_users: Optional[List[User]] = None,
         **extra_fields,
     ) -> Post:
         """Create a new post with optional media files"""
@@ -47,7 +48,7 @@ class PostService:
             raise ValidationError(f"Group: {group} is not an instance")
         
         if not isinstance(user, User):
-            raise ValidationError(f"User: {user} is not and intance")
+            raise ValidationError(f"User: {user} is not an intance")
 
         # Validate based on post type
         if post_type == "text" and not content.strip():
@@ -68,8 +69,17 @@ class PostService:
                     **extra_fields,
                 )
                 if media_files:
+                    post_ct = ContentType.objects.get_for_model(post)
                     for order, file in enumerate(media_files):
-                        PostMedia.objects.create(post=post, file=file, order=order)
+                        Media.objects.create(
+                            content_type=post_ct,
+                            object_id=post.id,
+                            file=file,
+                            order=order
+                        )
+                # handle tagged users
+                if tag_users:
+                    post.tag_users.set(tag_users)
                 return post
         except IntegrityError as e:
             raise ValidationError(f"Failed to create post: {str(e)}")

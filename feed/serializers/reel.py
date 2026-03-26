@@ -46,8 +46,8 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
 
     def get_video_url(self, obj) -> str:
         request = self.context.get("request")
-        if obj.video and request:
-            return request.build_absolute_uri(obj.video.url)
+        if obj.media and request:
+            return request.build_absolute_uri(obj.media.url)
         return ""
 
     def get_thumbnail_url(self, obj) -> str:
@@ -63,7 +63,7 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
 class ReelCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reel
-        fields = ["caption", "video", "thumbnail", "audio", "duration", "privacy"]
+        fields = ["caption", "media", "thumbnail", "audio", "duration", "privacy"]
 
     def validate_video(self, value):
         # File size limit
@@ -104,14 +104,14 @@ class ReelCreateSerializer(serializers.ModelSerializer):
 
         except subprocess.CalledProcessError as e:
             raise serializers.ValidationError(
-                f"Failed to read video duration. Ensure ffprobe is installed. Error: {e.stderr}"
+                f"Failed to read media duration. Ensure ffprobe is installed. Error: {e.stderr}"
             )
         except FileNotFoundError:
             raise serializers.ValidationError(
                 "ffprobe not found. Please install ffmpeg and add it to your PATH."
             )
         except Exception as e:
-            raise serializers.ValidationError(f"Error processing video: {str(e)}")
+            raise serializers.ValidationError(f"Error processing media: {str(e)}")
 
         return value
 
@@ -127,7 +127,7 @@ class ReelCreateSerializer(serializers.ModelSerializer):
         try:
             return ReelService.create_reel(
                 user=user,
-                video=validated_data.get("video"),
+                media=validated_data.get("media"),
                 caption=validated_data.get("caption", ""),
                 thumbnail=validated_data.get("thumbnail"),
                 audio=validated_data.get("audio"),
@@ -199,8 +199,8 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
 
     def get_video_url(self, obj) -> str:
         request = self.context.get("request")
-        if obj.video and request:
-            return request.build_absolute_uri(obj.video.url)
+        if obj.media and request:
+            return request.build_absolute_uri(obj.media.url)
         return ""
 
     def get_thumbnail_url(self, obj) -> str:

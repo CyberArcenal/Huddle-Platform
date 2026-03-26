@@ -18,11 +18,10 @@ from .post import (
     PostMinimalSerializer,
     PostCreateSerializer,
     PostDisplaySerializer,
-    PostDetailSerializer,
     PostFeedSerializer,
 )
-from .post_media import (
-    PostMediaMinimalSerializer,
-    PostMediaCreateSerializer,
-    PostMediaDisplaySerializer,
+from .media import (
+    MediaMinimalSerializer,
+    MediaCreateSerializer,
+    MediaDisplaySerializer,
 )

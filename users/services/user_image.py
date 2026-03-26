@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Tuple
 from django.db import models
 from django.db.models import Q
 from users.models import User
-from feed.models import PostMedia, Reel
+from feed.models import Media, Reel
 from stories.models import Story
 from django.db import transaction
 from typing import Optional
@@ -75,7 +75,7 @@ class UserImageService:
         # Fetch all media items from all sources (up to max_items)
         # 1. Post media
         post_media_qs = (
-            PostMedia.objects.filter(post__user=user, post__is_deleted=False)
+            Media.objects.filter(post__user=user, post__is_deleted=False)
             .select_related("post")
             .order_by("-post__created_at", "order")
         )

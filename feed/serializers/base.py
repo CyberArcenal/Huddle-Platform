@@ -7,6 +7,7 @@ from users.serializers.user import UserMinimalSerializer
 class ReactionCountSerializer(serializers.Serializer):
     # dynamic fields per reaction type
     like = serializers.IntegerField(default=0)
+    dislike = serializers.IntegerField(default=0)
     love = serializers.IntegerField(default=0)
     care = serializers.IntegerField(default=0)
     haha = serializers.IntegerField(default=0)
