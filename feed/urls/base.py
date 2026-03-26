@@ -3,6 +3,7 @@
 from django.urls import path, include
 from feed.views import bookmark, comment, feed, post, reaction, share, view
 from feed.views import reel
+from feed.views.media import MediaCreateView, MediaDetailView, MediaListView
 from feed.views.user_content import UserContentFeedView
 from feed.views.user_liked_items import UserLikedItemsView
 
@@ -90,6 +91,12 @@ urlpatterns = [
     path('views/statistics/', view.ViewStatisticsView.as_view(), name='view-statistics'),
     path('views/history/', view.ViewHistoryView.as_view(), name='view-history'),
     path('views/top/', view.TopViewedView.as_view(), name='view-top'),
+    
+    
+    
+    path('media/', MediaListView.as_view(), name='media-list'),
+    path('media/create/', MediaCreateView.as_view(), name='media-create'),
+    path('media/<int:media_id>/', MediaDetailView.as_view(), name='media-detail'),
 ]
 
 app_name = 'feed'

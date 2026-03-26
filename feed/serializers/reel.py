@@ -13,6 +13,7 @@ from feed.serializers.comment import CommentDisplaySerializer
 from feed.services.comment import CommentService
 from feed.services.reel import ReelService
 from feed.services.reaction import ReactionService
+from feed.utils.media import extract_thumbnail
 from users.serializers.user import UserMinimalSerializer, UserMinimalSerializer
 import os
 import tempfile
@@ -90,6 +91,10 @@ class ReelCreateSerializer(serializers.ModelSerializer):
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
             duration = float(data['format']['duration'])
+            
+            thumbnail_file, thumbnail_path = extract_thumbnail(value)
+            self.context['thumbnail_file'] = thumbnail_file
+            self.context['thumbnail_path'] = thumbnail_path
 
             # Clean up
             os.unlink(tmp_path)
@@ -116,8 +121,9 @@ class ReelCreateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # Use validated duration
         validated_data['duration'] = self.context.get('video_duration')
+        thumbnail_file = self.context.get('thumbnail_file')
+        # Clean up temp file later if needed
 
         request = self.context.get("request")
         if not request:
@@ -127,15 +133,22 @@ class ReelCreateSerializer(serializers.ModelSerializer):
         try:
             return ReelService.create_reel(
                 user=user,
-                media=validated_data.get("media"),
+                video=validated_data.get("video"),
                 caption=validated_data.get("caption", ""),
-                thumbnail=validated_data.get("thumbnail"),
+                thumbnail=validated_data.get("thumbnail") or thumbnail_file,  # use generated if not provided
                 audio=validated_data.get("audio"),
                 duration=validated_data.get("duration"),
                 privacy=validated_data.get("privacy", "public"),
             )
         except ValidationError as e:
             raise serializers.ValidationError(str(e))
+        finally:
+            # Clean up the temporary thumbnail file
+            if 'thumbnail_path' in self.context:
+                try:
+                    os.unlink(self.context['thumbnail_path'])
+                except OSError:
+                    pass
 
 
 class ReelUpdateSerializer(serializers.ModelSerializer):

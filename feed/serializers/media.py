@@ -26,7 +26,11 @@ class MediaCreateSerializer(serializers.ModelSerializer):
         model = Media
         fields = ['file', 'order']
 
-
+class MediaUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Media
+        fields = ['order', 'metadata']
+        
 class MediaDisplaySerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
     variants = serializers.SerializerMethodField()

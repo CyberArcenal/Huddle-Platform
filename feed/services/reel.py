@@ -4,10 +4,11 @@ from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
 from django.db import models
+from feed.models.media import Media
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
 from users.models import User
-
+from django.contrib.contenttypes.models import ContentType
 from ..models import Reel
 
 
@@ -25,7 +26,7 @@ class ReelService:
         privacy: str = "public",
         **extra_fields,
     ) -> Reel:
-        """Create a new reel with video file."""
+        """Create a new reel with video file and optional thumbnail."""
         if not video:
             raise ValidationError("Video file is required for a reel.")
 
@@ -34,13 +35,25 @@ class ReelService:
                 reel = Reel.objects.create(
                     user=user,
                     caption=caption,
-                    video=video,
-                    thumbnail=thumbnail,
+                    thumbnail=thumbnail,  # This will be saved
                     audio=audio,
                     duration=duration,
                     privacy=privacy,
                     **extra_fields,
                 )
+                # Create media for the video
+                video_ct = ContentType.objects.get_for_model(reel)
+                video_media = Media.objects.create(
+                    content_type=video_ct,
+                    object_id=reel.id,
+                    file=video,
+                    order=0,
+                    created_by=user,
+                )
+                # If a thumbnail was saved, we can add its path to the video media metadata
+                if reel.thumbnail:
+                    video_media.metadata["thumbnail_path"] = reel.thumbnail.name
+                    video_media.save(update_fields=["metadata"])
                 return reel
         except IntegrityError as e:
             raise ValidationError(f"Failed to create reel: {str(e)}")
@@ -59,7 +72,7 @@ class ReelService:
         requester: Optional[User] = None,
         include_deleted: bool = False,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Reel]:
         """Get reels by a specific user with privacy filtering."""
         queryset = Reel.objects.filter(user=user)
@@ -68,10 +81,10 @@ class ReelService:
 
         if requester and requester != user:
             # Public reels only (or followers if we implement that)
-            queryset = queryset.filter(privacy='public')
+            queryset = queryset.filter(privacy="public")
         elif not requester:
-            queryset = queryset.filter(privacy='public')
-        return list(queryset.order_by('-created_at')[offset:offset + limit])
+            queryset = queryset.filter(privacy="public")
+        return list(queryset.order_by("-created_at")[offset : offset + limit])
 
     @staticmethod
     def get_public_reels(
@@ -179,7 +192,6 @@ class ReelService:
             .values("privacy")
             .annotate(count=models.Count("id"))
         )
-
 
         total_likes = 0
         for reel in Reel.objects.filter(user=user, is_deleted=False):

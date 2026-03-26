@@ -1,3 +1,5 @@
+import threading
+
 from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -12,9 +14,11 @@ from feed.models.post import POST_TYPES
 from feed.serializers.comment import CommentDisplaySerializer
 from feed.services.bookmark import BookmarkService
 from feed.services.comment import CommentService
+from feed.services.media import MediaProcessingService
 from feed.services.reaction import ReactionService
 from feed.services.share import ShareService
 from feed.services.view import ViewService
+from feed.tasks.media import process_media_task
 from groups.models.group import Group
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
@@ -71,12 +75,14 @@ class PostService:
                 if media_files:
                     post_ct = ContentType.objects.get_for_model(post)
                     for order, file in enumerate(media_files):
-                        Media.objects.create(
+                        media = Media.objects.create(
                             content_type=post_ct,
                             object_id=post.id,
                             file=file,
                             order=order
                         )
+                        threading.Thread(target=MediaProcessingService.process_media, args=(media,)).start()
+                        process_media_task.delay(media.id)
                 # handle tagged users
                 if tag_users:
                     post.tag_users.set(tag_users)

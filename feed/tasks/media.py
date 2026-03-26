@@ -4,8 +4,19 @@ from PIL import Image
 from django.core.files import File
 import os
 
+from feed.services.media import MediaProcessingService
+
 @shared_task
-def generate_media_variants(media_id):
+def process_media_task(media_id:int) -> None:
+    from feed.models import Media
+    try:
+        media = Media.objects.get(id=media_id)
+        MediaProcessingService.process_media(media)
+    except Media.DoesNotExist:
+        pass
+
+@shared_task
+def generate_media_variants(media_id) -> None:
     from feed.models import Media
     media = Media.objects.get(id=media_id)
 
