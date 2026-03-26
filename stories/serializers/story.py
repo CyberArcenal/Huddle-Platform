@@ -2,14 +2,10 @@ from rest_framework import serializers
 from django.utils import timezone
 from typing import Dict, Any, Optional
 
-from feed.models.reaction import ReactionType
-from feed.serializers.base import ReactionCountSerializer
-from feed.serializers.comment import CommentDisplaySerializer
-from feed.services.comment import CommentService
-from feed.services.reaction import ReactionService
-from stories.models import Story, StoryView
+from feed.serializers.base import PostStatsSerializers
+from feed.services.view import ViewService
+from stories.models import Story
 from stories.services.story import StoryService
-from stories.services.story_view import StoryViewService
 from users.models import User
 from users.serializers.user import UserMinimalSerializer
 
@@ -25,19 +21,11 @@ class StorySerializer(serializers.ModelSerializer):
     """Main Story serializer with read-only view count"""
 
     user = UserMinimalSerializer(read_only=True)
-    view_count = serializers.SerializerMethodField()
     has_viewed = serializers.SerializerMethodField()
     remaining_time = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
-
-    comments = serializers.SerializerMethodField()
-    comment_count = serializers.SerializerMethodField()
-
-    like_count = serializers.SerializerMethodField()
-    liked = serializers.SerializerMethodField()
-    reaction_counts = serializers.SerializerMethodField()
-    user_reaction = serializers.SerializerMethodField()
+    statistics = serializers.SerializerMethodField()
 
     class Meta:
         model = Story
@@ -50,35 +38,28 @@ class StorySerializer(serializers.ModelSerializer):
             "expires_at",
             "is_active",
             "created_at",
-            "view_count",
             "has_viewed",
             "remaining_time",
             "is_expired",
-            "comments",
-            "comment_count",
-            "like_count",
-            "liked",
-            "reaction_counts",
-            "user_reaction",
+            "statistics",
         ]
         read_only_fields = ["id", "user", "expires_at", "created_at", "is_active"]
 
-    def get_media_url(self, obj) -> str:
+    def get_media_url(self, obj) -> Optional[str]:
         request = self.context.get("request", None)
-        if request:
-            return request.build_absolute_uri(obj.media_url.url)
-        else:
-            return obj.media_url.url
-
-    def get_view_count(self, obj) -> int:
-        """Get story view count using service"""
-        return StoryViewService.get_story_view_count(obj)
+        try:
+            if request:
+                return request.build_absolute_uri(obj.media_url.url)
+            else:
+                return obj.media_url.url
+        except Exception as e:
+            return None
 
     def get_has_viewed(self, obj) -> bool:
         """Check if requesting user has viewed this story"""
         request = self.context.get("request")
         if request and request.user.is_authenticated:
-            return StoryViewService.has_viewed(obj, request.user)
+            return ViewService.has_viewed(obj, request.user)
         return False
 
     def get_remaining_time(self, obj) -> Optional[str]:
@@ -94,34 +75,9 @@ class StorySerializer(serializers.ModelSerializer):
         """Check if story is expired"""
         return not obj.is_active or obj.expires_at <= timezone.now()
 
-    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts(obj, obj.id)
-
-    def get_user_reaction(self, obj) -> Optional[ReactionType]:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, obj, obj.id)
-        return None
-
-    def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count(obj, obj.id)
-
-    def get_liked(self, obj) -> bool:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.has_liked(
-                user=request.user, content_type=obj, object_id=obj.id
-            )
-        return False
-
-    def get_comments(self, obj) -> CommentDisplaySerializer(many=True):  # type: ignore
-        comments = CommentService.get_comments_for_object(
-            content_object=obj, include_replies=False, limit=10
-        )
-        return CommentDisplaySerializer(comments, many=True, context=self.context).data
-
-    def get_comment_count(self, obj) -> int:
-        return CommentService.get_comment_count(obj)
+    def get_statistics(self, obj) -> PostStatsSerializers:
+        from feed.services.post import PostService
+        return PostService.get_post_statistics(serializer=self, obj=obj)
 
 
 class StoryCreateSerializer(serializers.Serializer):
@@ -175,48 +131,6 @@ class StoryUpdateSerializer(serializers.Serializer):
     def update(self, story: Story, validated_data: Dict[str, Any]) -> Story:
         """Update story using StoryService"""
         return StoryService.update_story(story, validated_data)
-
-
-class StoryViewSerializer(serializers.ModelSerializer):
-    """Story View serializer"""
-
-    user = UserMinimalSerializer(read_only=True)
-
-    class Meta:
-        model = StoryView
-        fields = ["id", "story", "user", "viewed_at"]
-        read_only_fields = ["id", "user", "viewed_at"]
-
-
-class StoryViewCreateSerializer(serializers.Serializer):
-    """Serializer for recording story views using StoryViewService"""
-
-    story_id = serializers.IntegerField()
-
-    def validate_story_id(self, value: int) -> int:
-        """Validate story exists and is viewable"""
-        story = StoryService.get_story_by_id(value)
-        if not story:
-            raise serializers.ValidationError("Story not found")
-
-        if not story.is_active:
-            raise serializers.ValidationError("Story is not active")
-
-        if story.expires_at <= timezone.now():
-            raise serializers.ValidationError("Story has expired")
-
-        return value
-
-    def create(self, validated_data: Dict[str, Any]) -> StoryView:
-        """Record story view using StoryViewService"""
-        request = self.context.get("request")
-        user = request.user
-        story = StoryService.get_story_by_id(validated_data["story_id"])
-
-        return StoryViewService.record_view(story, user)
-
-
-
 
 
 class StoryFeedSerializer(serializers.Serializer):

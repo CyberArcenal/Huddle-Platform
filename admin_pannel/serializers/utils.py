@@ -5,11 +5,6 @@ from admin_pannel.services.reported_content import ReportedContentService
 
 
 # ---------- Input Serializers for Reporting ----------
-class ReportContentInputSerializer(serializers.Serializer):
-    content_type = serializers.ChoiceField(choices=ReportedContent.CONTENT_TYPES)
-    object_id = serializers.IntegerField()
-    reason = serializers.CharField(max_length=500)
-
 
 class ReportStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=ReportedContentService.STATUS_CHOICES)
@@ -56,7 +51,7 @@ class AdminLogFilterSerializer(serializers.Serializer):
 
 class ReportFilterSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=ReportedContentService.STATUS_CHOICES, required=False)
-    content_type = serializers.ChoiceField(choices=ReportedContent.CONTENT_TYPES, required=False)
+    content_type = serializers.StringRelatedField()
     reporter_id = serializers.IntegerField(required=False)
     start_date = serializers.DateTimeField(required=False)
     end_date = serializers.DateTimeField(required=False)

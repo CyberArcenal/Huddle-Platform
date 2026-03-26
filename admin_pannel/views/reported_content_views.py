@@ -9,12 +9,13 @@ from django.utils import timezone
 import datetime
 from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-from admin_pannel.serializers.reported_content import ReportedContentDisplaySerializer
+from admin_pannel.serializers.reported_content import ReportedContentCreateSerializer, ReportedContentDisplaySerializer
 from global_utils.pagination import AdminPanelPagination
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from ..services.reported_content import ReportedContentService
-from ..serializers.base import (
-    ReportContentInputSerializer,
+from ..serializers.utils import (
     ReportFilterSerializer,
     ReportStatusUpdateSerializer,
     ResolveReportInputSerializer,
@@ -47,53 +48,38 @@ class ReportCreateView(APIView):
 
     @extend_schema(
         tags=["Report's"],
-        request=ReportContentInputSerializer,
+        request=ReportedContentCreateSerializer,
         responses={201: ReportedContentDisplaySerializer},
-        examples=[
-            OpenApiExample(
-                "Report request",
-                value={
-                    "content_type": "post",
-                    "object_id": 123,
-                    "reason": "Harassment",
-                },
-                request_only=True,
-            ),
-            OpenApiExample(
-                "Report response",
-                value={
-                    "id": 1,
-                    "reporter": 5,
-                    "content_type": "post",
-                    "object_id": 123,
-                    "reason": "Harassment",
-                    "status": "pending",
-                    "created_at": "2025-03-07T12:34:56Z",
-                    "resolved_at": None,
-                },
-                response_only=True,
-            ),
-        ],
         description="Submit a new report for a piece of content.",
     )
     @transaction.atomic
     def post(self, request):
-        serializer = ReportContentInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ReportedContentCreateSerializer(
+            data=request.data, context={"request": request}
+        )
 
-        data = serializer.validated_data
+        # Let DRF handle validation errors consistently
         try:
-            report = ReportedContentService.report_content(
-                reporter=request.user,
-                content_type=data["content_type"],
-                object_id=data["object_id"],
-                reason=data["reason"],
-            )
-            output_serializer = ReportedContentDisplaySerializer(report)
+            serializer.is_valid(raise_exception=True)
+        except DRFValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # creation is handled inside the serializer (delegates to service)
+            report = serializer.save()
+            output_serializer = ReportedContentDisplaySerializer(report, context={"request": request})
             return Response(output_serializer.data, status=status.HTTP_201_CREATED)
-        except ValidationError as e:
+
+        except DjangoValidationError as e:
+            # service layer validation errors
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception:
+            # unexpected errors
+            return Response(
+                {"error": "An unexpected error occurred."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ReportListView(APIView):

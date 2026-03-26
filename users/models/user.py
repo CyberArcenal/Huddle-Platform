@@ -11,34 +11,44 @@ class ProfileImageTypeEnum(str, Enum):
     PROFILE = "profile"
     COVER = "cover"
 
+
 PROFILE_IMAGE_TYPE_CHOICES = [
-        ('profile', "Profile Picture"),
-        ('cover', "Cover Photo"),
-    ]
+    ("profile", "Profile Picture"),
+    ("cover", "Cover Photo"),
+]
+
 
 class Hobby(models.Model):
     name = models.CharField(max_length=100, unique=True)
 
+
 class Interest(models.Model):
     name = models.CharField(max_length=100, unique=True)
+
 
 class Favorite(models.Model):
     name = models.CharField(max_length=100, unique=True)
 
+
 class Music(models.Model):
     name = models.CharField(max_length=100, unique=True)
+
 
 class Work(models.Model):
     name = models.CharField(max_length=150, unique=True)
 
+
 class School(models.Model):
     name = models.CharField(max_length=150, unique=True)
-    
+
+
 class Achievement(models.Model):
     name = models.CharField(max_length=150, unique=True)
 
+
 class SocialCause(models.Model):
     name = models.CharField(max_length=150, unique=True)
+
 
 class LifestyleTag(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -69,12 +79,48 @@ class LoveLanguage(models.TextChoices):
     TIME = "Time", "Quality Time"
     GIFTS = "Gifts", "Receiving Gifts"
     TOUCH = "Touch", "Physical Touch"
-    
+
+
 class RelationshipGoal(models.TextChoices):
     FRIENDSHIP = "Friendship", "Friendship"
     DATING = "Dating", "Dating"
     LONG_TERM = "LongTerm", "Long-term Relationship"
     MARRIAGE = "Marriage", "Marriage"
+
+
+class UserQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(status=UserStatus.ACTIVE.value)
+
+    def not_suspended(self):
+        return self.exclude(
+            status__in=[
+                UserStatus.SUSPENDED.value,
+                UserStatus.RESTRICTED.value,
+                UserStatus.DELETED.value,
+            ]
+        )
+
+    def suspended(self):
+        return self.filter(status=UserStatus.SUSPENDED.value)
+
+    def restricted(self):
+        return self.filter(status=UserStatus.RESTRICTED.value)
+
+    def deleted(self):
+        return self.filter(status=UserStatus.DELETED.value)
+
+
+class ActiveUserManager(models.Manager):
+    def get_queryset(self):
+        return UserQuerySet(self.model, using=self._db).active()
+
+    def active(self):
+        return self.get_queryset()
+
+    # expose other helpers from the queryset if needed
+    def not_suspended(self):
+        return UserQuerySet(self.model, using=self._db).not_suspended()
 
 
 class User(AbstractUser):
@@ -96,9 +142,18 @@ class User(AbstractUser):
     favorite_music = models.ManyToManyField("Music", blank=True, related_name="users")
     works = models.ManyToManyField("Work", blank=True, related_name="users")
     schools = models.ManyToManyField("School", blank=True, related_name="users")
-    achievements = models.ManyToManyField("Achievement", blank=True, related_name="users")
+    achievements = models.ManyToManyField(
+        "Achievement", blank=True, related_name="users"
+    )
     causes = models.ManyToManyField("SocialCause", blank=True, related_name="users")
-    lifestyle_tags = models.ManyToManyField("LifestyleTag", blank=True, related_name="users")
+    lifestyle_tags = models.ManyToManyField(
+        "LifestyleTag", blank=True, related_name="users"
+    )
+    
+    # Keep default manager for admin/migrations
+    objects = models.Manager()
+    # Add active_objects for convenience (returns only active users)
+    active_objects = ActiveUserManager()
 
     # Personality & relationship fields
     personality_type = models.CharField(
@@ -106,21 +161,21 @@ class User(AbstractUser):
         choices=MBTIType.choices,
         null=True,
         blank=True,
-        help_text="User personality type (MBTI)"
+        help_text="User personality type (MBTI)",
     )
     love_language = models.CharField(
         max_length=20,
         choices=LoveLanguage.choices,
         null=True,
         blank=True,
-        help_text="Primary love language"
+        help_text="Primary love language",
     )
     relationship_goal = models.CharField(
         max_length=50,
         choices=RelationshipGoal.choices,
         null=True,
         blank=True,
-        help_text="User's relationship goal"
+        help_text="User's relationship goal",
     )
 
     # Location auto-fetched from Android app
@@ -133,7 +188,7 @@ class User(AbstractUser):
 
     class Meta:
         db_table = "users"
-        
+
 
 class UserImage(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="images")

@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.shortcuts import get_list_or_404
 
 from stories.models import StoryHighlight, Story
-from stories.serializers.base import StorySerializer
+from stories.serializers.story import StorySerializer
 from users.serializers.user import UserMinimalSerializer
 
 

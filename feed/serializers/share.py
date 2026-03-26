@@ -23,7 +23,7 @@ from feed.services.share import ShareService
 from groups.models.group import Group
 from groups.serializers.group import GroupMinimalSerializer
 from stories.models.story import Story
-from stories.serializers.base import StorySerializer
+from stories.serializers.story import StorySerializer
 from users.models.user import UserImage
 from users.serializers.user import UserMinimalSerializer
 from users.serializers.user_image import UserImageDisplaySerializer

@@ -17,25 +17,25 @@ from rest_framework import serializers
 
 
 # ---------- Nested serializers for many-to-many fields (read-only) ----------
-class ReactionCountSerializer(serializers.Serializer):
-    # dynamic fields per reaction type
-    like = serializers.IntegerField(default=0)
-    love = serializers.IntegerField(default=0)
-    care = serializers.IntegerField(default=0)
-    haha = serializers.IntegerField(default=0)
-    wow = serializers.IntegerField(default=0)
-    sad = serializers.IntegerField(default=0)
-    angry = serializers.IntegerField(default=0)
-
-
 class PostStatsSerializers(serializers.Serializer):
     comment_count = serializers.IntegerField()
     like_count = serializers.IntegerField()
-    reaction_count = ReactionCountSerializer()
-    privacy = serializers.ChoiceField(choices=["public", "followers", "secret"])
+    reaction_count = serializers.DictField()
+    privacy = serializers.ChoiceField(choices=feed.models.post.POST_PRIVACY_TYPES)
     comments = serializers.DictField()
     liked = serializers.BooleanField()
     current_reaction = serializers.StringRelatedField()
+    share_count = serializers.IntegerField()
+    
+    view_count = serializers.IntegerField()
+    moots_who_reacted = serializers.ListField()
+    unique_viewers = serializers.IntegerField()
+    bookmark_count = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+    is_author = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    trending_score = serializers.FloatField()
 
 class InterestSerializer(rest_framework.serializers.ModelSerializer):
     class Meta:

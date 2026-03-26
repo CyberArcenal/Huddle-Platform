@@ -142,7 +142,7 @@ class NotificationMarkReadView(APIView):
     @extend_schema(
         tags=["Notification's"],
         request=NotificationMarkReadSerializer,
-        responses={200: NotificationSerializer, 200: {"type": "object"}},
+        responses={200: NotificationSerializer},
         examples=[
             OpenApiExample(
                 "Mark single notification", value={"id": 42}, request_only=True

@@ -4,8 +4,9 @@ from django.db import transaction, IntegrityError
 from django.db.models import Count, Model
 from django.contrib.contenttypes.models import ContentType
 from typing import Optional, List, Dict, Any, Tuple, Type, Union
-
+from django.db.models import Q
 from users.models import User
+from users.models.user_follow import UserFollow
 from ..models import Reaction, Post, Comment
 from feed.models.reaction import REACTION_TYPES  # keeps the list of valid reaction types
 
@@ -295,6 +296,67 @@ class ReactionService:
             except model_class.DoesNotExist:
                 continue
         return results
+    
+    @staticmethod
+    def get_friends_who_reacted_to_post(
+        user: User,
+        post_id: int,
+        content_type: str = "post",
+        reaction_type: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Return mutual-follow friends who reacted to a given post.
+        - Friends are users who both follow and are followed by `user`.
+        - Returns list of dicts: {'user': User, 'reaction_type': str, 'created_at': datetime}
+        - Ordered by reaction created_at (most recent first).
+        """
+        # Resolve content type
+        ct = ReactionService._get_content_type(content_type)
+
+        # Get ids the user follows and ids who follow the user
+        following_ids = set(UserFollow.objects.filter(follower=user).values_list("following_id", flat=True))
+        follower_ids = set(UserFollow.objects.filter(following=user).values_list("follower_id", flat=True))
+
+        # Mutual follows = friends
+        friend_ids = list(following_ids & follower_ids)
+        if not friend_ids:
+            return []
+
+        # Query reactions by those friends
+        reaction_qs = Reaction.objects.filter(
+            content_type=ct,
+            object_id=post_id,
+            user_id__in=friend_ids,
+        )
+        if reaction_type:
+            ReactionService._validate_reaction_type(reaction_type)
+            reaction_qs = reaction_qs.filter(reaction_type=reaction_type)
+
+        reactions = reaction_qs.select_related("user").order_by("-created_at")[offset: offset + limit]
+
+        # Build result with metadata
+        result: List[Dict[str, Any]] = []
+        for r in reactions:
+            result.append({
+                "user": r.user,
+                "reaction_type": r.reaction_type,
+                "created_at": r.created_at,
+            })
+
+        return result
+    
+    @staticmethod
+    def get_user_reactions_queryset(user: User, content_type: Optional[str] = None):
+        """
+        Returns a queryset of reactions made by a user, optionally filtered by content type.
+        """
+        queryset = Reaction.objects.filter(user=user)
+        if content_type:
+            ct = ReactionService._get_content_type(content_type)
+            queryset = queryset.filter(content_type=ct)
+        return queryset
 
     @staticmethod
     def get_user_reaction_statistics(user: User) -> Dict[str, Any]:

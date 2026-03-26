@@ -16,7 +16,7 @@ from feed.models import Reaction, Post, Comment
 from feed.models.reaction import REACTION_TYPES
 from feed.serializers.base import ReactionCountSerializer
 from feed.serializers.reaction import (
-    LikeDisplaySerializer,
+    ReactionDisplaySerializer,
     LikeCreateSerializer,
     LikeToggleSerializer,
     ReactionCreateSerializer,
@@ -38,7 +38,7 @@ class PaginatedLikeSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = LikeDisplaySerializer(many=True)
+    results = ReactionDisplaySerializer(many=True)
 
 
 class LikeCheckResponseSerializer(serializers.Serializer):
@@ -92,7 +92,7 @@ class LikeListView(APIView):
         )
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(likes, request)
-        serializer = LikeDisplaySerializer(
+        serializer = ReactionDisplaySerializer(
             page, many=True, context={"request": request}
         )
         return paginator.get_paginated_response(serializer.data)
@@ -100,7 +100,7 @@ class LikeListView(APIView):
     @extend_schema(
         tags=["Reaction's"],
         request=LikeCreateSerializer,
-        responses={201: LikeDisplaySerializer},
+        responses={201: ReactionDisplaySerializer},
         examples=[
             OpenApiExample(
                 "Like a post",
@@ -118,7 +118,7 @@ class LikeListView(APIView):
         if serializer.is_valid():
             like = serializer.save()
             return Response(
-                LikeDisplaySerializer(like, context={"request": request}).data,
+                ReactionDisplaySerializer(like, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -203,7 +203,7 @@ class LikeDetailView(APIView):
 
     @extend_schema(
         tags=["Reaction's"],
-        responses={200: LikeDisplaySerializer},
+        responses={200: ReactionDisplaySerializer},
         description="Retrieve a specific like (only if owned by current user).",
     )
     def get(self, request, like_id):
@@ -213,7 +213,7 @@ class LikeDetailView(APIView):
                 {"error": "You do not have permission to view this like"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = LikeDisplaySerializer(like, context={"request": request})
+        serializer = ReactionDisplaySerializer(like, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
@@ -273,7 +273,7 @@ class ObjectLikesView(APIView):
         )
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(likes, request)
-        serializer = LikeDisplaySerializer(
+        serializer = ReactionDisplaySerializer(
             page, many=True, context={"request": request}
         )
         return paginator.get_paginated_response(serializer.data)

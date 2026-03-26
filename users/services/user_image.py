@@ -57,6 +57,7 @@ class UserImageService:
     def get_user_media(
         cls,
         user: User,
+        request = None,
         requester: Optional[User] = None,
         page: int = 1,
         page_size: int = 20,
@@ -67,6 +68,8 @@ class UserImageService:
         sorted by created_at descending, along with the total count.
         Uses simple page-based pagination.
         """
+        if not request:
+            raise Exception("Request Not Provided For Build Uri")
         offset = (page - 1) * page_size
 
         # Fetch all media items from all sources (up to max_items)
@@ -114,7 +117,7 @@ class UserImageService:
             combined.append(
                 {
                     "type": "post_media",
-                    "url": media.file.url if media.file else None,
+                    "url": request.build_absolute_uri(media.file.url) if media.file else None,
                     "thumbnail": None,  # posts may not have separate thumbnails
                     "created_at": media.post.created_at,
                     "content_id": media.post.id,
@@ -128,8 +131,8 @@ class UserImageService:
             combined.append(
                 {
                     "type": "reel",
-                    "url": reel.video.url if reel.video else None,
-                    "thumbnail": reel.thumbnail.url if reel.thumbnail else None,
+                    "url": request.build_absolute_uri(reel.video.url) if reel.video else None,
+                    "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
                     "created_at": reel.created_at,
                     "content_id": reel.id,
                     "content_type": "reel",
@@ -141,7 +144,7 @@ class UserImageService:
             combined.append(
                 {
                     "type": "story_media",
-                    "url": story.media_url.url if story.media_url else None,
+                    "url": request.build_absolute_uri(story.media_url.url) if story.media_url else None,
                     "thumbnail": None,
                     "created_at": story.created_at,
                     "content_id": story.id,
@@ -154,7 +157,7 @@ class UserImageService:
             combined.append(
                 {
                     "type": "user_image",
-                    "url": user_image.image.url if user_image.image else None,
+                    "url": request.build_absolute_uri(user_image.image.url) if user_image.image else None,
                     "thumbnail": None,
                     "created_at": user_image.created_at,
                     "content_id": user_image.id,
@@ -286,6 +289,14 @@ class UserImageService:
     @staticmethod
     def get_active_image(user: User, image_type: str) -> Optional[UserImage]:
         return user.images.filter(image_type=image_type, is_active=True).first()
+    
+    @staticmethod
+    def get_active_image_url(image_type: str, build_url:bool=False, request=None) -> Optional[str]:
+        
+        user_image:UserImage = UserImage.objects.filter(image_type=image_type, is_active=True).first()
+        if user_image and request and build_url:
+            return request.build_absolute_uri(user_image.image.url)
+        return user_image
 
     @staticmethod
     def remove_active_image(user: User, image_type: str) -> bool:

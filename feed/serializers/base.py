@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from feed.models.post import POST_TYPES
+from feed.models.post import POST_PRIVACY_TYPES, POST_TYPES
 from feed.models.reaction import REACTION_TYPES
 from feed.serializers.comment import CommentDisplaySerializer
+from users.serializers.user import UserMinimalSerializer
 
 class ReactionCountSerializer(serializers.Serializer):
     # dynamic fields per reaction type
@@ -50,16 +51,31 @@ class ContentObject(serializers.Serializer):
     type = serializers.ChoiceField(choices=[c[0] for c in REACTION_TYPES])
     id = serializers.IntegerField()
     content_preview = serializers.StringRelatedField()
-    
+
+class ReactedUserSerializer(serializers.Serializer):
+    user = UserMinimalSerializer(read_only=True)
+    reaction_type = serializers.ChoiceField(choices=REACTION_TYPES)
+    created_at = serializers.DateTimeField()
     
 class PostStatsSerializers(serializers.Serializer):
     comment_count = serializers.IntegerField()
     like_count = serializers.IntegerField()
     reaction_count = ReactionCountSerializer()
-    privacy = serializers.ChoiceField(choices=["public", "followers", "secret"])
+    privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES)
     comments = CommentDisplaySerializer(many=True)
     liked = serializers.BooleanField()
     current_reaction = serializers.StringRelatedField()
+    share_count = serializers.IntegerField()
+    
+    view_count = serializers.IntegerField()
+    moots_who_reacted = ReactedUserSerializer(many=True)
+    unique_viewers = serializers.IntegerField()
+    bookmark_count = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+    is_author = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    trending_score = serializers.FloatField()
     
 
 

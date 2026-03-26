@@ -62,6 +62,7 @@ class UserMediaGridView(APIView):
         items, total = UserImageService.get_user_media(
             user=target_user,
             requester=request.user if request.user.is_authenticated else None,
+            request=request,
             page=page_num,
             page_size=page_size,
         )

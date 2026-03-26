@@ -5,11 +5,16 @@ from django.db import transaction, IntegrityError
 from django.db.models import Q, Count, QuerySet
 from typing import Iterable, Optional, List, Dict, Any, Tuple
 
+from admin_pannel.services.reported_content import ReportedContentService
+from analytics.services.trend_score import TrendScoreService
 from feed.models.post import POST_TYPES
 
 from feed.serializers.comment import CommentDisplaySerializer
+from feed.services.bookmark import BookmarkService
 from feed.services.comment import CommentService
 from feed.services.reaction import ReactionService
+from feed.services.share import ShareService
+from feed.services.view import ViewService
 from groups.models.group import Group
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
@@ -252,8 +257,22 @@ class PostService:
 
         return list(queryset.order_by("-created_at")[offset : offset + limit])
         
-    def get_post_statistics(serializer, obj):
+    def get_post_statistics(serializer, obj) -> Dict[str, Any]:
         request = serializer.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+        is_author = False
+        created_at = None
+        updated_at = None
+        try:
+            created_at = obj.created_at
+        except:pass
+        try:
+            updated_at = obj.updated_at
+        except:pass
+        try:
+            is_author = user.id == obj.user.id if user else False
+        except:pass
+
         return {
             "comment_count": CommentService.get_comment_count(obj),
             "like_count": ReactionService.get_like_count(obj, obj.id),
@@ -263,17 +282,23 @@ class PostService:
                 many=True,
                 context=serializer.context,
             ).data,
-            "liked": (
-                ReactionService.has_liked(
-                    user=request.user, content_type=obj, object_id=obj.id
-                )
-                if request and request.user.is_authenticated
-                else False
-            ),
-            "current_reaction": ReactionService.get_user_reaction(
-                request.user, obj, obj.id
-            ),
+            "liked": ReactionService.has_liked(user=user, content_type=obj, object_id=obj.id) if user else False,
+            "current_reaction": ReactionService.get_user_reaction(user, obj, obj.id) if user else None,
+            "share_count": ShareService.get_share_count(obj),
+
+ 
+            "view_count": ViewService.get_view_count(obj),
+            "moots_who_reacted": ReactionService.get_friends_who_reacted_to_post(user, post_id=obj.id, content_type=obj, limit=10),
+            "unique_viewers": ViewService.get_unique_viewers(obj),
+            "bookmark_count": BookmarkService.get_bookmark_count(obj),
+            "report_count": ReportedContentService.get_report_count(obj, object_id=obj.id),
+            
+            "trending_score": TrendScoreService.get_score(obj),
+            "is_author": is_author,
+            "created_at": created_at,
+            "updated_at": updated_at,
         }
+
 
     @staticmethod
     def get_user_post_statistics(user: User) -> Dict[str, Any]:

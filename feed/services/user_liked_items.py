@@ -1,4 +1,4 @@
-# feed/services/user_liked_items.py
+# feed/services/user_liked_items.py (updated)
 
 from typing import List, Dict, Any, Tuple
 from django.contrib.contenttypes.models import ContentType
@@ -43,18 +43,10 @@ class UserLikedItemsService:
         page_size = max(int(page_size) if page_size else 20, 1)
         offset = (page - 1) * page_size
 
-        # 1) Try to get a queryset from ReactionService for efficient DB pagination
-        try:
-            reactions_qs = ReactionService.get_user_reactions_queryset(user=target_user)
-        except AttributeError:
-            # Fallback: ReactionService only returns list
-            reactions = ReactionService.get_user_reactions(user=target_user, limit=None, offset=0)
-            reactions = sorted(reactions, key=lambda r: r.created_at, reverse=True)
-            total = len(reactions)
-            page_reactions = reactions[offset:offset + page_size]
-        else:
-            total = reactions_qs.count()
-            page_reactions = list(reactions_qs.order_by('-created_at')[offset:offset + page_size])
+        # 1) Get queryset from ReactionService (the method exists now)
+        reactions_qs = ReactionService.get_user_reactions_queryset(user=target_user)
+        total = reactions_qs.count()
+        page_reactions = list(reactions_qs.order_by('-created_at')[offset:offset + page_size])
 
         if not page_reactions:
             return [], total
@@ -79,16 +71,17 @@ class UserLikedItemsService:
             object_ids = [r.object_id for r in reactions_list]
             qs = model_class.objects.filter(id__in=object_ids)
 
-            # Prefetch/select related to reduce N+1 in serializers.
-            # Adjust these to match your actual relations.
+            # Select related 'user' if the model has that field (common for most content models)
             try:
                 qs = qs.select_related('user')
             except Exception:
+                # Field doesn't exist, ignore
                 pass
-            try:
-                qs = qs.prefetch_related('media')
-            except Exception:
-                pass
+
+            # No prefetch_related to avoid errors; let the view/serializer handle prefetching if needed
+            # If you need to prefetch for specific models, do it conditionally, e.g.:
+            # if model_class.__name__ == 'Post':
+            #     qs = qs.prefetch_related('media')
 
             for obj in qs:
                 objects_map[(ct_id, obj.id)] = obj

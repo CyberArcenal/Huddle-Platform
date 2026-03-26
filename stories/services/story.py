@@ -2,6 +2,8 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
+
+from feed.models.view import ObjectView
 from ..models import Story
 import uuid
 
@@ -54,6 +56,21 @@ class StoryService:
             return Story.objects.get(id=story_id)
         except Story.DoesNotExist:
             return None
+    
+    @staticmethod
+    def get_story_by_ids(user, story_ids):
+        """
+        Return a list of stories that the user is allowed to view,
+        filtered from the given IDs.
+        """
+        from stories.models import Story
+
+        stories = Story.objects.filter(id__in=story_ids, is_active=True)
+        accessible = []
+        for story in stories:
+            # if can_view_story(user, story):
+            accessible.append(story)
+        return accessible
     
     @staticmethod
     def get_active_stories(
@@ -238,3 +255,35 @@ class StoryService:
             )
         
         return list(queryset.order_by('-created_at')[:limit])
+    
+    @staticmethod
+    def get_popular_stories(
+        hours: int = 24,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Get most viewed stories within a time period"""
+        from django.db.models import Count
+        
+        time_threshold = timezone.now() - timezone.timedelta(hours=hours)
+        
+        # Get stories with view counts
+        stories = Story.objects.filter(
+            is_active=True,
+            expires_at__gt=timezone.now(),
+            views__viewed_at__gte=time_threshold
+        ).annotate(
+            view_count=Count('views')
+        ).filter(
+            view_count__gt=0
+        ).order_by('-view_count', '-created_at')[:limit]
+        
+        return [
+            {
+                'story': story,
+                'view_count': story.view_count,
+                'user': story.user
+            }
+            for story in stories
+        ]
+    
+    

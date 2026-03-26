@@ -1,30 +1,46 @@
 from django.utils import timezone
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
-from django.db.models import Q, Count
-from typing import Optional, List, Dict, Any, Tuple
+from django.db.models import Q, Count, Model
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth import get_user_model
+from typing import Optional, List, Dict, Any, Tuple, Type, Union
 
 from admin_pannel.models.admin_log import AdminLog
 from core.settings import logger
+
 from users.models.user import User
 from ..models import ReportedContent
 import datetime
 
 
 class ReportedContentService:
-    """Service for ReportedContent model operations"""
+    """Service for ReportedContent model operations using generic relations."""
 
     STATUS_CHOICES = ["pending", "reviewed", "resolved", "dismissed"]
 
     @staticmethod
     def report_content(
-        reporter: User, content_type: str, object_id: int, reason: str, **extra_fields
+        reporter: User,
+        content_object: object,
+        reason: str,
+        **extra_fields,
     ) -> ReportedContent:
-        """Report content (post, comment, user, group)"""
-        # Validate content type
-        valid_types = [choice[0] for choice in ReportedContent.CONTENT_TYPES]
-        if content_type not in valid_types:
-            raise ValidationError(f"Content type must be one of {valid_types}")
+        """
+        Report any content object (post, comment, user, group, etc.).
+
+        :param reporter: User who reports.
+        :param content_object: Any Django model instance (will be used to get content_type and object_id).
+        :param reason: Reason for reporting.
+        :param extra_fields: Additional fields to pass to ReportedContent creation.
+        :return: Created ReportedContent instance.
+        :raises ValidationError: If a recent report exists or creation fails.
+        """
+        if not content_object or not hasattr(content_object, 'pk'):
+            raise ValidationError("Invalid content object provided.")
+
+        content_type = ContentType.objects.get_for_model(content_object)
+        object_id = content_object.pk
 
         # Check if same content was already reported by this user recently
         one_hour_ago = timezone.now() - datetime.timedelta(hours=1)
@@ -53,7 +69,7 @@ class ReportedContentService:
 
     @staticmethod
     def get_report_by_id(report_id: int) -> Optional[ReportedContent]:
-        """Retrieve report by ID"""
+        """Retrieve report by ID."""
         try:
             return ReportedContent.objects.get(id=report_id)
         except ReportedContent.DoesNotExist:
@@ -62,7 +78,7 @@ class ReportedContentService:
     @staticmethod
     def get_reports(
         status: Optional[str] = None,
-        content_type: Optional[str] = None,
+        content_type_model: Optional[Union[str, ContentType]] = None,
         reporter: Optional[User] = None,
         start_date: Optional[datetime.datetime] = None,
         end_date: Optional[datetime.datetime] = None,
@@ -70,16 +86,32 @@ class ReportedContentService:
         limit: int = 100,
         offset: int = 0,
     ) -> List[ReportedContent]:
-        """Get reported content with filtering options"""
-        queryset = ReportedContent.objects.select_related("reporter")
+        """
+        Get reported content with filtering options.
+
+        :param status: Filter by status (pending, reviewed, resolved, dismissed).
+        :param content_type_model: Either a ContentType instance or a model name string (e.g., 'post').
+        :param reporter: Filter by reporter user.
+        :param start_date: Filter reports created after this date.
+        :param end_date: Filter reports created before this date.
+        :param unresolved_only: If True, exclude resolved/dismissed reports (ignored if status is given).
+        :param limit: Maximum number of reports to return.
+        :param offset: Number of reports to skip.
+        :return: List of ReportedContent instances.
+        """
+        queryset = ReportedContent.objects.select_related("reporter", "content_type")
 
         if status:
             queryset = queryset.filter(status=status)
         elif unresolved_only:
             queryset = queryset.exclude(status__in=["resolved", "dismissed"])
 
-        if content_type:
-            queryset = queryset.filter(content_type=content_type)
+        if content_type_model:
+            if isinstance(content_type_model, ContentType):
+                queryset = queryset.filter(content_type=content_type_model)
+            else:
+                # Assume it's a model name string (like 'post', 'comment')
+                queryset = queryset.filter(content_type__model=content_type_model)
 
         if reporter:
             queryset = queryset.filter(reporter=reporter)
@@ -94,26 +126,34 @@ class ReportedContentService:
 
     @staticmethod
     def get_pending_reports(
-        content_type: Optional[str] = None, limit: int = 50
+        content_type_model: Optional[Union[str, ContentType]] = None,
+        limit: int = 50,
     ) -> List[ReportedContent]:
-        """Get pending reports that need review"""
+        """Get pending reports that need review."""
         queryset = ReportedContent.objects.filter(status="pending").select_related(
-            "reporter"
+            "reporter", "content_type"
         )
 
-        if content_type:
-            queryset = queryset.filter(content_type=content_type)
+        if content_type_model:
+            if isinstance(content_type_model, ContentType):
+                queryset = queryset.filter(content_type=content_type_model)
+            else:
+                queryset = queryset.filter(content_type__model=content_type_model)
 
         return list(queryset.order_by("created_at")[:limit])
 
     @staticmethod
     def get_reports_for_content(
-        content_type: str, object_id: int, include_resolved: bool = False
+        content_object: object,
+        include_resolved: bool = False,
     ) -> List[ReportedContent]:
-        """Get all reports for a specific piece of content"""
+        """Get all reports for a specific piece of content."""
+        content_type = ContentType.objects.get_for_model(content_object)
+        object_id = content_object.pk
+
         queryset = ReportedContent.objects.filter(
             content_type=content_type, object_id=object_id
-        ).select_related("reporter")
+        ).select_related("reporter", "content_type")
 
         if not include_resolved:
             queryset = queryset.exclude(status__in=["resolved", "dismissed"])
@@ -127,13 +167,12 @@ class ReportedContentService:
         resolved_by: Optional[User] = None,
         resolution_notes: Optional[str] = None,
     ) -> ReportedContent:
-        """Update report status"""
+        """Update report status."""
         if new_status not in ReportedContentService.STATUS_CHOICES:
             raise ValidationError(
                 f"Status must be one of {ReportedContentService.STATUS_CHOICES}"
             )
 
-        # Check if already resolved
         if report.status in ["resolved", "dismissed"]:
             raise ValidationError(f"Report is already {report.status}")
 
@@ -143,8 +182,7 @@ class ReportedContentService:
             report.resolved_at = timezone.now()
 
         if resolution_notes:
-            # You might want to add a field for resolution notes
-            # For now, we'll append to reason
+            # Append resolution notes to reason (or use a dedicated field if added)
             report.reason = f"{report.reason}\n\nResolution: {resolution_notes}"
 
         report.save()
@@ -157,8 +195,7 @@ class ReportedContentService:
         resolved_by: User,
         resolution_details: Optional[str] = None,
     ) -> Tuple[ReportedContent, Dict[str, Any]]:
-        """Resolve a report with specific action"""
-        # Update report status
+        """Resolve a report with a specific action."""
         report = ReportedContentService.update_report_status(
             report=report,
             new_status="resolved",
@@ -166,7 +203,6 @@ class ReportedContentService:
             resolution_notes=f"Action: {action_taken}. {resolution_details or ''}",
         )
 
-        # Take action based on report type
         action_result = ReportedContentService._take_content_action(
             report=report, action=action_taken, resolved_by=resolved_by
         )
@@ -177,12 +213,12 @@ class ReportedContentService:
     def _take_content_action(
         report: ReportedContent, action: str, resolved_by: User
     ) -> Dict[str, Any]:
-        """Take action on reported content"""
+        """Take action on reported content based on its type."""
         from admin_pannel.services import AdminLogService
 
         action_result = {
             "report_id": report.id,
-            "content_type": report.content_type,
+            "content_type": report.content_type.model,  # store model name for logging
             "object_id": report.object_id,
             "action_taken": action,
             "resolved_by": resolved_by.username,
@@ -190,10 +226,13 @@ class ReportedContentService:
             "success": False,
         }
 
+        content_type = report.content_type
+        model_name = content_type.model
+
         try:
             if action == "remove_content":
-                if report.content_type == "post":
-                    # Remove post
+                # Determine which model and call appropriate admin service
+                if model_name == "post":
                     admin_log, result = AdminLogService.remove_content(
                         admin_user=resolved_by,
                         content_type="post",
@@ -202,9 +241,7 @@ class ReportedContentService:
                     )
                     action_result["success"] = True
                     action_result["details"] = result
-
-                elif report.content_type == "group":
-                    # Remove group
+                elif model_name == "group":
                     admin_log, result = AdminLogService.remove_content(
                         admin_user=resolved_by,
                         content_type="group",
@@ -213,14 +250,14 @@ class ReportedContentService:
                     )
                     action_result["success"] = True
                     action_result["details"] = result
+                else:
+                    # For other content types, you might need to implement removal
+                    action_result["error"] = f"Removal not implemented for {model_name}"
 
             elif action == "warn_user":
-                if report.content_type == "user":
-                    # Get target user from object_id
-                    from users.models import User
-
-                    try:
-                        target_user = User.objects.get(id=report.object_id)
+                if model_name == "user":
+                    target_user = User.objects.filter(id=report.object_id).first()
+                    if target_user:
                         admin_log, result = AdminLogService.warn_user(
                             admin_user=resolved_by,
                             target_user=target_user,
@@ -228,17 +265,15 @@ class ReportedContentService:
                         )
                         action_result["success"] = True
                         action_result["details"] = result
-                    except User.DoesNotExist:
-                        action_result["error"] = (
-                            f"User with ID {report.object_id} not found"
-                        )
+                    else:
+                        action_result["error"] = f"User with ID {report.object_id} not found"
+                else:
+                    action_result["error"] = f"Warn action only valid for user reports"
 
             elif action == "ban_user":
-                if report.content_type == "user":
-                    from users.models import User
-
-                    try:
-                        target_user = User.objects.get(id=report.object_id)
+                if model_name == "user":
+                    target_user = User.objects.filter(id=report.object_id).first()
+                    if target_user:
                         admin_log, result = AdminLogService.ban_user(
                             admin_user=resolved_by,
                             target_user=target_user,
@@ -246,22 +281,19 @@ class ReportedContentService:
                         )
                         action_result["success"] = True
                         action_result["details"] = result
-                    except User.DoesNotExist:
-                        action_result["error"] = (
-                            f"User with ID {report.object_id} not found"
-                        )
+                    else:
+                        action_result["error"] = f"User with ID {report.object_id} not found"
+                else:
+                    action_result["error"] = f"Ban action only valid for user reports"
 
             elif action == "dismiss_report":
                 action_result["success"] = True
-                action_result["details"] = {
-                    "action": "Report dismissed, no action taken"
-                }
+                action_result["details"] = {"action": "Report dismissed, no action taken"}
 
             else:
                 action_result["error"] = f"Unknown action: {action}"
 
         except Exception as e:
-            logger.debug(e)
             logger.debug(e)
             action_result["error"] = str(e)
 
@@ -269,9 +301,11 @@ class ReportedContentService:
 
     @staticmethod
     def dismiss_report(
-        report: ReportedContent, dismissed_by: User, reason: str = "Report dismissed"
+        report: ReportedContent,
+        dismissed_by: User,
+        reason: str = "Report dismissed",
     ) -> ReportedContent:
-        """Dismiss a report as invalid or not requiring action"""
+        """Dismiss a report as invalid or not requiring action."""
         return ReportedContentService.update_report_status(
             report=report,
             new_status="dismissed",
@@ -281,19 +315,23 @@ class ReportedContentService:
 
     @staticmethod
     def get_report_statistics(
-        days: int = 30, content_type: Optional[str] = None
+        days: int = 30,
+        content_type_model: Optional[Union[str, ContentType]] = None,
     ) -> Dict[str, Any]:
-        """Get statistics about reported content"""
+        """Get statistics about reported content in the last `days`."""
         time_threshold = timezone.now() - datetime.timedelta(days=days)
 
         queryset = ReportedContent.objects.filter(created_at__gte=time_threshold)
 
-        if content_type:
-            queryset = queryset.filter(content_type=content_type)
+        if content_type_model:
+            if isinstance(content_type_model, ContentType):
+                queryset = queryset.filter(content_type=content_type_model)
+            else:
+                queryset = queryset.filter(content_type__model=content_type_model)
 
-        # Count by content type
+        # Count by content type (using model name)
         type_counts = (
-            queryset.values("content_type")
+            queryset.values("content_type__model")
             .annotate(count=Count("id"))
             .order_by("-count")
         )
@@ -311,19 +349,18 @@ class ReportedContentService:
         )
 
         # Resolution time for resolved reports
-        resolved_reports = queryset.filter(status="resolved")
+        resolved_reports = queryset.filter(status="resolved", resolved_at__isnull=False)
         avg_resolution_hours = None
         if resolved_reports.exists():
             total_hours = sum(
                 (report.resolved_at - report.created_at).total_seconds() / 3600
                 for report in resolved_reports
-                if report.resolved_at
             )
             avg_resolution_hours = total_hours / resolved_reports.count()
 
-        # Most reported objects
+        # Most reported objects (group by content_type__model and object_id)
         most_reported = (
-            queryset.values("content_type", "object_id")
+            queryset.values("content_type__model", "object_id")
             .annotate(count=Count("id"))
             .order_by("-count")[:10]
         )
@@ -348,39 +385,63 @@ class ReportedContentService:
     def get_user_report_history(
         user: User,
         as_reporter: bool = True,
-        as_content_owner: bool = False,  # This would need additional logic
+        as_content_owner: bool = False,
         limit: int = 50,
     ) -> List[ReportedContent]:
-        """Get report history for a user"""
-        queryset = ReportedContent.objects.select_related("reporter")
+        """
+        Get report history for a user.
 
+        :param user: The user in question.
+        :param as_reporter: Include reports made by this user.
+        :param as_content_owner: Include reports where the user is the owner of the reported content.
+        :param limit: Maximum number of reports to return.
+        :return: List of ReportedContent instances.
+        """
+        queryset = ReportedContent.objects.select_related("reporter", "content_type")
         filters = Q()
+
         if as_reporter:
             filters |= Q(reporter=user)
 
-        # Note: To get reports where user is the content owner,
-        # you'd need to query based on content_type and object_id
-        # This is more complex and depends on your content models
+        # For as_content_owner: we need to query reports where the content_object belongs to the user.
+        # This is complex because the content could be of different types (Post, Comment, etc.).
+        # This implementation assumes you have a way to determine ownership per model.
+        # Here we simply raise a not implemented error, but you can extend it.
+        if as_content_owner:
+            # Example: If you have a generic method on models to get owner, you could use it.
+            # For simplicity, we'll not implement it fully here.
+            raise NotImplementedError(
+                "Reporting as content owner is not implemented generically; extend as needed."
+            )
 
         return list(queryset.filter(filters).order_by("-created_at")[:limit])
 
     @staticmethod
     def is_content_reported(
-        content_type: str, object_id: int, threshold: int = 3
+        content_object: object,
+        threshold: int = 3,
     ) -> Tuple[bool, int]:
-        """Check if content has been reported multiple times"""
+        """Check if content has been reported multiple times (pending reports)."""
+        content_type = ContentType.objects.get_for_model(content_object)
+        object_id = content_object.pk
+
         report_count = ReportedContent.objects.filter(
-            content_type=content_type, object_id=object_id, status="pending"
+            content_type=content_type,
+            object_id=object_id,
+            status="pending",
         ).count()
 
         return report_count >= threshold, report_count
 
     @staticmethod
     def get_urgent_reports(threshold: int = 5, hours: int = 24) -> List[Dict[str, Any]]:
-        """Get urgent reports (multiple reports on same content recently)"""
+        """
+        Get urgent reports: content with multiple recent pending reports.
+        Returns a list of dictionaries containing content info and its reports.
+        """
         time_threshold = timezone.now() - datetime.timedelta(hours=hours)
 
-        # Find content with multiple recent reports
+        # Find content with multiple recent pending reports
         urgent_content = (
             ReportedContent.objects.filter(
                 created_at__gte=time_threshold, status="pending"
@@ -393,20 +454,19 @@ class ReportedContentService:
 
         result = []
         for item in urgent_content:
-            # Get all reports for this content
+            # Get all pending reports for this content within the time window
             reports = ReportedContent.objects.filter(
-                content_type=item["content_type"],
+                content_type_id=item["content_type"],
                 object_id=item["object_id"],
                 created_at__gte=time_threshold,
                 status="pending",
             ).select_related("reporter")
 
-            # Get unique reporters
             unique_reporters = set(report.reporter for report in reports)
 
             result.append(
                 {
-                    "content_type": item["content_type"],
+                    "content_type": ContentType.objects.get_for_id(item["content_type"]).model,
                     "object_id": item["object_id"],
                     "report_count": item["report_count"],
                     "reports": list(reports),
@@ -420,15 +480,15 @@ class ReportedContentService:
 
     @staticmethod
     def cleanup_old_reports(days_to_keep: int = 180) -> int:
-        """Delete resolved/dismissed reports older than specified days"""
+        """Delete resolved/dismissed reports older than specified days."""
         cutoff_date = timezone.now() - datetime.timedelta(days=days_to_keep)
 
         old_reports = ReportedContent.objects.filter(
-            status__in=["resolved", "dismissed"], resolved_at__lt=cutoff_date
+            status__in=["resolved", "dismissed"],
+            resolved_at__lt=cutoff_date,
         )
         count = old_reports.count()
         old_reports.delete()
-
         return count
 
     @staticmethod
@@ -437,7 +497,7 @@ class ReportedContentService:
         search_in: List[str] = ["reason", "reporter_username"],
         limit: int = 50,
     ) -> List[ReportedContent]:
-        """Search reported content"""
+        """Search reported content by reason text or reporter username."""
         filters = Q()
 
         if "reason" in search_in:
@@ -448,7 +508,7 @@ class ReportedContentService:
 
         return list(
             ReportedContent.objects.filter(filters)
-            .select_related("reporter")
+            .select_related("reporter", "content_type")
             .order_by("-created_at")[:limit]
         )
 
@@ -457,61 +517,49 @@ class ReportedContentService:
         start_date: Optional[datetime.datetime] = None,
         end_date: Optional[datetime.datetime] = None,
     ) -> Dict[str, Any]:
-        """Generate moderation report for a time period"""
+        """Generate moderation report for a time period."""
         if not start_date:
             start_date = timezone.now() - datetime.timedelta(days=30)
         if not end_date:
             end_date = timezone.now()
 
-        # Get reports in period
         reports = ReportedContent.objects.filter(
             created_at__gte=start_date, created_at__lte=end_date
         )
 
-        # Get admin logs in period
         from admin_pannel.services import AdminLogService
-
         admin_logs = AdminLog.objects.filter(
             created_at__gte=start_date, created_at__lte=end_date
         )
 
-        # Calculate statistics
         total_reports = reports.count()
         resolved_reports = reports.filter(status="resolved").count()
         pending_reports = reports.filter(status="pending").count()
 
-        # Action breakdown
         action_breakdown = (
             admin_logs.values("action").annotate(count=Count("id")).order_by("-count")
         )
 
-        # Top moderators
         top_moderators = (
             admin_logs.values("admin_user__username")
             .annotate(count=Count("id"))
             .order_by("-count")[:10]
         )
 
-        # Resolution time analysis
-        resolved_with_time = reports.filter(
-            status="resolved", resolved_at__isnull=False
-        )
+        resolved_with_time = reports.filter(status="resolved", resolved_at__isnull=False)
+        resolution_times = [
+            (report.resolved_at - report.created_at).total_seconds() / 3600
+            for report in resolved_with_time
+            if report.resolved_at
+        ]
+        avg_resolution_time = sum(resolution_times) / len(resolution_times) if resolution_times else 0
 
-        resolution_times = []
-        for report in resolved_with_time:
-            if report.resolved_at:
-                hours = (report.resolved_at - report.created_at).total_seconds() / 3600
-                resolution_times.append(hours)
-
-        avg_resolution_time = (
-            sum(resolution_times) / len(resolution_times) if resolution_times else 0
-        )
-
+        days = (end_date - start_date).days
         return {
             "period": {
                 "start": start_date,
                 "end": end_date,
-                "days": (end_date - start_date).days,
+                "days": days,
             },
             "report_statistics": {
                 "total_reports": total_reports,
@@ -528,9 +576,17 @@ class ReportedContentService:
                 "top_moderators": list(top_moderators),
             },
             "trends": {
-                "reports_per_day": total_reports / max(1, (end_date - start_date).days),
-                "actions_per_day": admin_logs.count()
-                / max(1, (end_date - start_date).days),
+                "reports_per_day": total_reports / max(1, days),
+                "actions_per_day": admin_logs.count() / max(1, days),
             },
             "generated_at": timezone.now(),
         }
+    @staticmethod
+    def get_report_count(content_type: Any, object_id: int, status: Optional[str] = None) -> int:
+        from feed.services.reaction import ReactionService
+        """Return the number of reports for a given object."""
+        ct = ReactionService._get_content_type(content_type)
+        qs = ReportedContent.objects.filter(content_type=ct, object_id=object_id)
+        if status:
+            qs = qs.filter(status=status)
+        return qs.count()

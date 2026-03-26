@@ -5,6 +5,7 @@ from rest_framework import serializers
 from users.models import User
 from groups.models import Group
 from events.models import Event
+from users.services.user_image import UserImageService
 
 
 class UserSearchSerializer(serializers.ModelSerializer):
@@ -15,10 +16,8 @@ class UserSearchSerializer(serializers.ModelSerializer):
         
     def get_profile_picture(self, obj: User) -> Optional[str]:
         """Get profile picture URL"""
-        if obj.profile_picture:
-            request = self.context.get("request")
-            if request:
-                return request.build_absolute_uri(obj.profile_picture.url)
-            return obj.profile_picture.url
-        return None
+        request = self.context.get("request", None)
+        if request:
+            return UserImageService.get_active_image_url(image_type="profile", build_url=True, request=request)
+        
 

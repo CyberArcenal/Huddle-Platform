@@ -5,6 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
 from feed.models import Reaction, Post, Comment
+from feed.models.reaction import REACTION_TYPES
 from feed.services.reaction import ReactionService
 from users.serializers.user import UserMinimalSerializer
 
@@ -13,39 +14,6 @@ class ReactionDisplayContentData(serializers.Serializer):
     id = serializers.IntegerField()
     content_preview = serializers.StringRelatedField()
 
-class LikeDisplaySerializer(serializers.ModelSerializer):
-    """Serializer for like objects (based on Reaction model, filtered to 'like')."""
-    user = UserMinimalSerializer(read_only=True)
-    content_object = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Reaction
-        fields = ['id', 'user', 'content_type', 'object_id', 'content_object', 'created_at']
-        read_only_fields = fields
-
-    def get_content_object(self, obj) -> ReactionDisplayContentData:
-        """
-        Returns a simplified representation of the liked object.
-        Uses the generic foreign key to fetch the related object.
-        """
-        if obj.content_object is None:
-            return None
-
-        # You can customize the output based on the actual model type
-        # Here we provide a basic structure with id and a preview if available.
-        model_name = obj.content_type.model
-        result = {
-            'type': model_name,
-            'id': obj.object_id,
-        }
-
-        # Add a content preview for post and comment (optional)
-        if model_name == 'post' and hasattr(obj.content_object, 'content'):
-            result['content_preview'] = obj.content_object.content[:100]
-        elif model_name == 'comment' and hasattr(obj.content_object, 'content'):
-            result['content_preview'] = obj.content_object.content[:100]
-
-        return result
 
 
 class LikeCreateSerializer(serializers.Serializer):
@@ -94,14 +62,7 @@ class LikeCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(e))
 
 
-class ReactionMinimalSerializer(serializers.ModelSerializer):
-    """Lightweight list view for reactions."""
-    user = UserMinimalSerializer(read_only=True)
 
-    class Meta:
-        model = Reaction
-        fields = ['id', 'user', 'reaction_type', 'created_at']
-        read_only_fields = fields
 
 
 class ReactionCreateSerializer(serializers.Serializer):
@@ -109,7 +70,7 @@ class ReactionCreateSerializer(serializers.Serializer):
     content_type = serializers.CharField()
     object_id = serializers.IntegerField()
     reaction_type = serializers.ChoiceField(
-        choices=ReactionService.SERVICE_REACTION_TYPES,
+        choices=REACTION_TYPES,
         required=False,
         allow_blank=True,
         help_text="Send empty string or null to remove reaction"
@@ -161,12 +122,25 @@ class ReactionCreateSerializer(serializers.Serializer):
         }
 
 
+class ReactionMinimalSerializer(serializers.ModelSerializer):
+    """Lightweight list view for reactions."""
+    user = UserMinimalSerializer(read_only=True)
+    reaction_type = serializers.ChoiceField(
+        choices=REACTION_TYPES
+    )
 
+    class Meta:
+        model = Reaction
+        fields = ['id', 'user', 'content_type', 'object_id', 'reaction_type', 'created_at']
+        read_only_fields = fields
 
 class ReactionDisplaySerializer(serializers.ModelSerializer):
     """Detailed view for a reaction, including user and content preview."""
     user = UserMinimalSerializer(read_only=True)
     content_object = serializers.SerializerMethodField()
+    reaction_type = serializers.ChoiceField(
+        choices=REACTION_TYPES
+    )
 
     class Meta:
         model = Reaction

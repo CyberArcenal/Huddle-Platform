@@ -100,7 +100,7 @@ class LoginView(APIView):
                     },
                     "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...",
                     "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQxNTk2MDAwLCJqdGkiOiI0NTZkZWYiLCJ1c2VyX2lkIjoxfQ...",
-                    "expiresIn": 900,
+                    "accessExpiresIn": 900,
                     "message": "Login successful",
                 },
                 response_only=True,
@@ -145,7 +145,7 @@ class LoginView(APIView):
             return Response(
                 {
                     "status": False,
-                    "detail": "No Account found.",
+                    "message": "No Account found.",
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
@@ -156,7 +156,7 @@ class LoginView(APIView):
                 return Response(
                     {
                         "status": False,
-                        "detail": f"Your Account has not yet activated it by going to your email.",
+                        "message": f"Your Account has not yet activated it by going to your email.",
                     },
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
@@ -164,7 +164,7 @@ class LoginView(APIView):
                 return Response(
                     {
                         "status": False,
-                        "detail": f"Account status: {user.status}. Please contact administrator.",
+                        "message": f"Account status: {user.status}. Please contact administrator.",
                     },
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
@@ -183,7 +183,7 @@ class LoginView(APIView):
                 )
         else:
             return Response(
-                {"status": False, "detail": "Invalid credentials"},
+                {"status": False, "message": "Invalid credentials"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -210,10 +210,10 @@ class LoginView(APIView):
             return Response(
                 {
                     "status": True,
-                    "requires_2fa": True,
-                    "checkpoint_token": str(checkpoint_token),
+                    "requires2fa": True,
+                    "checkpointToken": str(checkpoint_token),
                     "message": "Two-factor authentication required. Please check your email for the verification code.",
-                    "expires_in": 300,
+                    "expiresIn": 300,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -222,7 +222,7 @@ class LoginView(APIView):
             return Response(
                 {
                     "status": False,
-                    "detail": "Error initiating two-factor authentication",
+                    "message": "Error initiating two-factor authentication",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
@@ -275,14 +275,15 @@ class LoginView(APIView):
                     "user": user_data,
                     "refreshToken": str(refresh),
                     "accessToken": str(access_token),
-                    "expiresIn": access_exp,
+                    "accessExpiresIn": access_exp,
+                    "repExpiresIn": refresh_exp,
                     "message": "Login successful",
                 }
             )
         except Exception as e:
             logger.error(f"Error completing login for user {user.id}: {str(e)}")
             return Response(
-                {"status": False, "detail": "Error completing login"},
+                {"status": False, "message": "Error completing login"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -328,7 +329,7 @@ class Verify2FALoginView(APIView):
                     },
                     "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0MTU5NjAwMCwianRpIjoiMTIzYWJjIiwidXNlcl9pZCI6MX0...",
                     "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQxNTk2MDAwLCJqdGkiOiI0NTZkZWYiLCJ1c2VyX2lkIjoxfQ...",
-                    "expiresIn": 900,
+                    "accessExpiresIn": 900,
                     "message": "Login successful with two-factor authentication",
                 },
                 response_only=True,
@@ -356,7 +357,7 @@ class Verify2FALoginView(APIView):
 
             if not checkpoint:
                 return Response(
-                    {"status": False, "detail": "Invalid or expired checkpoint token"},
+                    {"status": False, "message": "Invalid or expired checkpoint token"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -372,7 +373,7 @@ class Verify2FALoginView(APIView):
 
             if not otp:
                 return Response(
-                    {"status": False, "detail": "Invalid or expired OTP code"},
+                    {"status": False, "message": "Invalid or expired OTP code"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -425,7 +426,7 @@ class Verify2FALoginView(APIView):
                     "user": user_data,
                     "refreshToken": str(refresh),
                     "accessToken": str(access_token),
-                    "expiresIn": access_exp,
+                    "accessExpiresIn": access_exp,
                     "message": "Login successful with two-factor authentication",
                 }
             )
@@ -434,7 +435,7 @@ class Verify2FALoginView(APIView):
             return Response(
                 {
                     "status": False,
-                    "detail": "Error verifying two-factor authentication",
+                    "message": "Error verifying two-factor authentication",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
@@ -485,7 +486,7 @@ class Resend2FAOTPView(APIView):
 
             if not checkpoint:
                 return Response(
-                    {"status": False, "detail": "Invalid or expired checkpoint token"},
+                    {"status": False, "message": "Invalid or expired checkpoint token"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -513,6 +514,6 @@ class Resend2FAOTPView(APIView):
         except Exception as e:
             logger.error(f"Error resending 2FA OTP: {str(e)}")
             return Response(
-                {"status": False, "detail": "Error resending verification code"},
+                {"status": False, "message": "Error resending verification code"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

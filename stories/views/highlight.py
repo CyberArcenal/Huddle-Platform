@@ -205,3 +205,7 @@ class StoryHighlightSetCoverView(APIView):
 
         out = StoryHighlightSerializer(updated, context={"request": request})
         return Response(out.data, status=status.HTTP_200_OK)
+
+
+
+

@@ -1,6 +1,7 @@
 from django.urls import path
 
-from stories.views.base import FollowingStoriesView, MutualStoryViewsView, PopularStoriesView, StoriesByTypeView, StoryCleanupView, StoryDeactivateView, StoryDetailView, StoryExtendView, StoryFeedView, StoryHighlightsView, StoryListView, StoryRecentViewersView, StoryRecommendationsView, StoryStatsView, StoryViewCountView, StoryViewCreateView, StoryViewStatsView, StoryViewsListView, UserStoriesView
+from stories.views.story import FollowingStoriesView,PopularStoriesView, StoriesByTypeView, StoryCleanupView, StoryDeactivateView, StoryDetailView, StoryExtendView, StoryFeedView, StoryHighlightsView, StoryListView, StoryRecommendationsView, StoryStatsView, StoryViewCountView, UserStoriesView
+
 from stories.views.highlight import StoryHighlightAddStoriesView, StoryHighlightDetailView, StoryHighlightListView, StoryHighlightRemoveStoriesView, StoryHighlightSetCoverView
 
 urlpatterns = [
@@ -9,11 +10,8 @@ urlpatterns = [
     path('stories/<int:story_id>/', StoryDetailView.as_view(), name='story-detail'),
     
     # Story viewing operations
-    path('stories/view/', StoryViewCreateView.as_view(), name='story-view-create'),
-    path('stories/<int:story_id>/views/', StoryViewsListView.as_view(), name='story-views-list'),
     path('stories/<int:story_id>/view-count/', StoryViewCountView.as_view(), name='story-view-count'),
-    path('stories/<int:story_id>/recent-viewers/', StoryRecentViewersView.as_view(), name='story-recent-viewers'),
-    
+
     # Story actions
     path('stories/<int:story_id>/deactivate/', StoryDeactivateView.as_view(), name='story-deactivate'),
     path('stories/<int:story_id>/extend/', StoryExtendView.as_view(), name='story-extend'),
@@ -34,8 +32,6 @@ urlpatterns = [
     
     # Statistics
     path('stories/stats/', StoryStatsView.as_view(), name='story-stats'),
-    path('stories/view-stats/', StoryViewStatsView.as_view(), name='story-view-stats'),
-    path('users/<int:other_user_id>/mutual-views/', MutualStoryViewsView.as_view(), name='mutual-story-views'),
     
     # Admin operations
     path('admin/stories/cleanup/', StoryCleanupView.as_view(), name='story-cleanup'),

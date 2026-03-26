@@ -10,6 +10,9 @@ from faker import Faker
 # Import models from your apps
 from admin_pannel.models.admin_log import AdminLog
 from admin_pannel.models.reported_content import ReportedContent
+from analytics.models.platform_analytics import PlatformAnalytics
+from analytics.models.user_analytics import UserAnalytics
+from events.models import Event
 from events.models.event_analytics import EventAnalytics
 from events.models.event_attendance import EventAttendance
 from feed.models.comment import Comment
@@ -21,14 +24,10 @@ from feed.models.share import Share
 from groups.models.group import Group, GROUP_PRIVACY_CHOICES, GROUP_TYPE_CHOICES
 from groups.models.member import GroupMember, GROUP_ROLE_CHOICES
 from messaging.models.conversation import Conversation
+from messaging.models.message import Message
 from notifications.models.notification import Notification
-from analytics.models.user_analytics import UserAnalytics
-from analytics.models.platform_analytics import PlatformAnalytics
 from search.models.search_history import SearchHistory
-from events.models import Event
 from stories.models.story import Story
-from stories.models.view import StoryView
-from messaging.models import Message
 from users.models import (
     UserFollow,
     BlacklistedAccessToken,
@@ -52,6 +51,31 @@ from users.models import (
 )
 from users.models.utilities import ACTION_TYPES, USER_STATUS_CHOICES
 
+# New models (may be added recently)
+try:
+    from feed.models.bookmark import ObjectBookmark
+except ImportError:
+    ObjectBookmark = None
+try:
+    from analytics.models.trend_score import ObjectTrendScore
+except ImportError:
+    ObjectTrendScore = None
+try:
+    from feed.models.view import ObjectView
+except ImportError:
+    ObjectView = None
+try:
+    from notifications.models.email_template import EmailTemplate
+except ImportError:
+    EmailTemplate = None
+try:
+    from notifications.models.notify_log import NotifyLog
+except ImportError:
+    NotifyLog = None
+try:
+    from stories.models.highlight import StoryHighlight
+except ImportError:
+    StoryHighlight = None
 
 User = get_user_model()
 fake = Faker()
@@ -94,7 +118,6 @@ class Command(BaseCommand):
                         SearchHistory,
                         EventAttendance,
                         Event,
-                        StoryView,
                         Story,
                         Message,
                         Conversation,
@@ -112,7 +135,14 @@ class Command(BaseCommand):
                         BlacklistedAccessToken,
                         AdminLog,
                         ReportedContent,
-                        # Optional base models (will be re-created)
+                        # New models if they exist
+                        ObjectBookmark,
+                        ObjectTrendScore,
+                        ObjectView,
+                        EmailTemplate,
+                        NotifyLog,
+                        StoryHighlight,
+                        # Base models (will be re-created)
                         Hobby,
                         Interest,
                         Favorite,
@@ -124,7 +154,7 @@ class Command(BaseCommand):
                         LifestyleTag,
                         User,
                     ]
-                    # Filter out None models (e.g., ReelComment if missing)
+                    # Filter out None models
                     models_to_delete = [m for m in models_to_delete if m is not None]
                     for model in models_to_delete:
                         model.objects.all().delete()
@@ -135,16 +165,15 @@ class Command(BaseCommand):
                 self.seed_users()
                 self.seed_follows()
                 self.seed_groups()
-                self.seed_posts()
+                self.seed_posts(count=500)           # increased from 100
                 self.seed_post_media()
                 self.seed_comments()
                 self.seed_reactions()
                 self.seed_reels()
-                self.seed_shares()
+                self.seed_shares(count=300)           # increased from 80
                 self.seed_conversations()
                 self.seed_messages()
                 self.seed_stories()
-                self.seed_story_views()
                 self.seed_events()
                 self.seed_event_attendances()
                 self.seed_admin_logs()
@@ -153,6 +182,13 @@ class Command(BaseCommand):
                 self.seed_search_history()
                 self.seed_user_activity()
                 self.seed_analytics()
+                # New seeds
+                self.seed_object_bookmarks()
+                self.seed_object_trend_scores()
+                self.seed_object_views()
+                self.seed_email_templates()
+                self.seed_notify_logs()
+                self.seed_story_highlights()
                 self.stdout.write(self.style.SUCCESS("Database seeded successfully!"))
         except Exception as e:
             self.stdout.write(
@@ -217,8 +253,6 @@ class Command(BaseCommand):
                 latitude=random.uniform(-90, 90) if random.random() > 0.5 else None,
                 longitude=random.uniform(-180, 180) if random.random() > 0.5 else None,
                 location=fake.city() if random.random() > 0.5 else None,
-                profile_picture=None,
-                cover_photo=None,
                 last_login=last_login,
                 date_joined=date_joined,
             )
@@ -245,7 +279,6 @@ class Command(BaseCommand):
         # Assign many-to-many fields to some users
         all_users = list(User.objects.all())
 
-        # Mapping from model to the actual field name on User
         model_to_attr = {
             Hobby: "hobbies",
             Interest: "interests",
@@ -361,11 +394,15 @@ class Command(BaseCommand):
             group.save()
         self.stdout.write(f"Created {len(groups)} groups with members.")
 
-    def seed_posts(self, count=100):
+    def seed_posts(self, count=500):
         self.stdout.write("Creating posts...")
         users = list(User.objects.all())
         groups = list(Group.objects.all())
-        posts = []
+        
+        # Separate posts into normal (non-share) and share posts
+        normal_posts = []
+        share_posts = []
+        
         for _ in range(count):
             user = random.choice(users)
             group = random.choice([None] + groups) if groups else None
@@ -376,9 +413,11 @@ class Command(BaseCommand):
             updated = make_aware(
                 fake.date_time_between(start_date=created, end_date="now")
             )
+            
             post = Post(
                 user=user,
                 group=group,
+                shared_post=None,  # will be set later for share posts
                 content=fake.paragraph(nb_sentences=5),
                 post_type=post_type,
                 privacy=random.choice([choice[0] for choice in POST_PRIVACY_TYPES]),
@@ -386,9 +425,29 @@ class Command(BaseCommand):
                 created_at=created,
                 updated_at=updated,
             )
-            posts.append(post)
-        Post.objects.bulk_create(posts)
-        self.stdout.write(f"Created {len(posts)} posts.")
+            
+            if post_type == "share":
+                share_posts.append(post)
+            else:
+                normal_posts.append(post)
+        
+        # Bulk create normal posts
+        self.stdout.write(f"Creating {len(normal_posts)} normal posts...")
+        Post.objects.bulk_create(normal_posts)
+        
+        # Get IDs of all saved posts (including newly created normal posts)
+        saved_post_ids = list(Post.objects.values_list('id', flat=True))
+        
+        # If there are share posts, assign shared_post and bulk create
+        if share_posts:
+            self.stdout.write(f"Creating {len(share_posts)} share posts...")
+            for share_post in share_posts:
+                # Assign a random existing post as shared_post
+                if saved_post_ids:
+                    share_post.shared_post_id = random.choice(saved_post_ids)
+            Post.objects.bulk_create(share_posts)
+        
+        self.stdout.write(f"Created {len(normal_posts) + len(share_posts)} posts.")
 
     def seed_post_media(self, count=150):
         self.stdout.write("Creating post media...")
@@ -566,10 +625,11 @@ class Command(BaseCommand):
         Reel.objects.bulk_create(reels)
         self.stdout.write(f"Created {len(reels)} reels.")
 
-    def seed_shares(self, count=80):
+    def seed_shares(self, count=300):
         """Create shares using generic relations."""
         self.stdout.write("Creating shares...")
         users = list(User.objects.all())
+        groups = list(Group.objects.all())
         models = [Post, Comment, Reel, Story]
         content_types = []
         for model in models:
@@ -594,8 +654,10 @@ class Command(BaseCommand):
             created = make_aware(
                 fake.date_time_between(start_date="-30d", end_date="now")
             )
+            group = random.choice(groups) if groups and random.random() > 0.7 else None
             share = Share(
                 user=user,
+                group=group,
                 content_type=ct,
                 object_id=object_id,
                 caption=fake.sentence() if random.random() < 0.7 else "",
@@ -692,22 +754,6 @@ class Command(BaseCommand):
             stories.append(story)
         Story.objects.bulk_create(stories)
         self.stdout.write(f"Created {len(stories)} stories.")
-
-    def seed_story_views(self, count=200):
-        self.stdout.write("Creating story views...")
-        users = list(User.objects.all())
-        stories = list(Story.objects.all())
-        views = []
-        for _ in range(count):
-            user = random.choice(users)
-            story = random.choice(stories)
-            if user != story.user:
-                viewed = make_aware(
-                    fake.date_time_between(start_date=story.created_at, end_date="now")
-                )
-                views.append(StoryView(story=story, user=user, viewed_at=viewed))
-        StoryView.objects.bulk_create(views, ignore_conflicts=True)
-        self.stdout.write(f"Created {len(views)} story views.")
 
     def seed_events(self, count=20):
         self.stdout.write("Creating events...")
@@ -807,11 +853,31 @@ class Command(BaseCommand):
     def seed_reported_content(self, count=40):
         self.stdout.write("Creating reported content...")
         users = list(User.objects.all())
+        if not users:
+            self.stdout.write(self.style.WARNING("No users found, skipping reported content."))
+            return
+
+        # Models that can be reported, along with their queryset
+        reportable_models = [
+            (Post, Post.objects.all()),
+            (Comment, Comment.objects.all()),
+            (User, User.objects.all()),
+            (Group, Group.objects.all()),
+            # Add Reel, Story if needed
+        ]
+        # Filter out models with no objects
+        reportable_models = [(model, qs) for model, qs in reportable_models if qs.exists()]
+        if not reportable_models:
+            self.stdout.write(self.style.WARNING("No reportable objects found, skipping reported content."))
+            return
+
         reports = []
         statuses = ["pending", "reviewed", "resolved", "dismissed"]
         for _ in range(count):
             reporter = random.choice(users)
-            content_type = random.choice(["post", "comment", "user", "group"])
+            model, qs = random.choice(reportable_models)
+            content_type = ContentType.objects.get_for_model(model)
+            obj = random.choice(qs)
             created = make_aware(
                 fake.date_time_between(start_date="-60d", end_date="now")
             )
@@ -823,7 +889,7 @@ class Command(BaseCommand):
             report = ReportedContent(
                 reporter=reporter,
                 content_type=content_type,
-                object_id=random.randint(1, 1000),
+                object_id=obj.id,
                 reason=fake.sentence(),
                 status=random.choice(statuses),
                 created_at=created,
@@ -977,3 +1043,224 @@ class Command(BaseCommand):
                     event_analytics.append(ea)
         EventAnalytics.objects.bulk_create(event_analytics, ignore_conflicts=True)
         self.stdout.write("Analytics created.")
+
+    # ----- New seeding methods for added models -----
+    def seed_object_bookmarks(self, count=150):
+        if ObjectBookmark is None:
+            self.stdout.write("ObjectBookmark model not found, skipping.")
+            return
+        self.stdout.write("Creating object bookmarks...")
+        users = list(User.objects.all())
+        # Models that can be bookmarked: Post, Reel, Story, etc.
+        models = [Post, Reel, Story]
+        content_types = []
+        for model in models:
+            if model.objects.exists():
+                content_types.append(ContentType.objects.get_for_model(model))
+
+        if not content_types:
+            self.stdout.write("No bookmarkable objects found.")
+            return
+
+        bookmarks = []
+        seen = set()
+        for _ in range(count):
+            user = random.choice(users)
+            ct = random.choice(content_types)
+            model_class = ct.model_class()
+            obj_ids = list(model_class.objects.values_list("id", flat=True))
+            if not obj_ids:
+                continue
+            object_id = random.choice(obj_ids)
+            key = (user.id, ct.id, object_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            created = make_aware(
+                fake.date_time_between(start_date="-60d", end_date="now")
+            )
+            bookmarks.append(
+                ObjectBookmark(
+                    user=user,
+                    content_type=ct,
+                    object_id=object_id,
+                    created_at=created,
+                )
+            )
+        ObjectBookmark.objects.bulk_create(bookmarks, ignore_conflicts=True)
+        self.stdout.write(f"Created {len(bookmarks)} bookmarks.")
+
+    def seed_object_trend_scores(self, count=200):
+        if ObjectTrendScore is None:
+            self.stdout.write("ObjectTrendScore model not found, skipping.")
+            return
+        self.stdout.write("Creating object trend scores...")
+        # Models that can have trend scores: Post, Reel, Comment, etc.
+        models = [Post, Reel, Comment]
+        content_types = []
+        for model in models:
+            if model.objects.exists():
+                content_types.append(ContentType.objects.get_for_model(model))
+
+        if not content_types:
+            self.stdout.write("No objects for trend scores found.")
+            return
+
+        scores = []
+        for ct in content_types:
+            model_class = ct.model_class()
+            for obj in model_class.objects.all():
+                if random.random() > 0.5:  # Not all objects need a score
+                    continue
+                score_val = random.uniform(0, 100)
+                calculated = make_aware(
+                    fake.date_time_between(start_date="-30d", end_date="now")
+                )
+                scores.append(
+                    ObjectTrendScore(
+                        content_type=ct,
+                        object_id=obj.id,
+                        score=score_val,
+                        calculated_at=calculated,
+                    )
+                )
+        ObjectTrendScore.objects.bulk_create(scores, ignore_conflicts=True)
+        self.stdout.write(f"Created {len(scores)} trend scores.")
+
+    def seed_object_views(self, count=500):
+        if ObjectView is None:
+            self.stdout.write("ObjectView model not found, skipping.")
+            return
+        self.stdout.write("Creating object views...")
+        users = list(User.objects.all()) + [None]  # allow anonymous views
+        models = [Post, Reel, Story]
+        content_types = []
+        for model in models:
+            if model.objects.exists():
+                content_types.append(ContentType.objects.get_for_model(model))
+
+        if not content_types:
+            self.stdout.write("No viewable objects found.")
+            return
+
+        views = []
+        seen = set()
+        for _ in range(count):
+            user = random.choice(users) if random.random() < 0.8 else None
+            ct = random.choice(content_types)
+            model_class = ct.model_class()
+            obj_ids = list(model_class.objects.values_list("id", flat=True))
+            if not obj_ids:
+                continue
+            object_id = random.choice(obj_ids)
+            if user:
+                key = (user.id, ct.id, object_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+            viewed_at = make_aware(
+                fake.date_time_between(start_date="-60d", end_date="now")
+            )
+            duration = random.randint(0, 300)  # seconds
+            views.append(
+                ObjectView(
+                    user=user,
+                    content_type=ct,
+                    object_id=object_id,
+                    viewed_at=viewed_at,
+                    duration_seconds=duration,
+                )
+            )
+        ObjectView.objects.bulk_create(views, ignore_conflicts=True)
+        self.stdout.write(f"Created {len(views)} object views.")
+
+    def seed_email_templates(self):
+        if EmailTemplate is None:
+            self.stdout.write("EmailTemplate model not found, skipping.")
+            return
+        self.stdout.write("Creating email templates...")
+        templates = [
+            ("profile_update", "Your profile was updated", "Hello {{ subscriber.email }}, your profile has been updated."),
+            ("new_message", "You have a new message", "Hello {{ subscriber.email }}, you have a new message."),
+            ("new_like", "Someone liked your post", "Hello {{ subscriber.email }}, your post got a like."),
+            ("friend_request", "New friend request", "Hello {{ subscriber.email }}, you have a new friend request."),
+            ("login_alert", "New login detected", "Hello {{ subscriber.email }}, a new login was detected."),
+        ]
+        for name, subject, content in templates:
+            EmailTemplate.objects.get_or_create(
+                name=name,
+                defaults={"subject": subject, "content": content}
+            )
+        self.stdout.write("Email templates seeded.")
+
+    def seed_notify_logs(self, count=100):
+        if NotifyLog is None:
+            self.stdout.write("NotifyLog model not found, skipping.")
+            return
+        self.stdout.write("Creating notify logs...")
+        users = list(User.objects.all())
+        statuses = ["queued", "sent", "failed", "resend"]
+        logs = []
+        for _ in range(count):
+            recipient = random.choice(users).email if users else fake.email()
+            subject = fake.sentence(nb_words=5)
+            payload = fake.paragraph()
+            log_type = random.choice(["profile_update", "new_message", "new_like", "friend_request"])
+            status = random.choice(statuses)
+            sent_at = make_aware(
+                fake.date_time_between(start_date="-30d", end_date="now")
+            ) if status == "sent" else None
+            logs.append(
+                NotifyLog(
+                    recipient_email=recipient,
+                    subject=subject,
+                    payload=payload,
+                    type=log_type,
+                    status=status,
+                    channel="email",
+                    priority="normal",
+                    sent_at=sent_at,
+                    created_at=timezone.now() - timedelta(days=random.randint(0, 30)),
+                )
+            )
+        NotifyLog.objects.bulk_create(logs)
+        self.stdout.write(f"Created {len(logs)} notify logs.")
+
+    def seed_story_highlights(self, count=30):
+        if StoryHighlight is None:
+            self.stdout.write("StoryHighlight model not found, skipping.")
+            return
+        self.stdout.write("Creating story highlights...")
+        users = list(User.objects.all())
+        stories = list(Story.objects.all())
+        if not stories:
+            self.stdout.write("No stories available for highlights.")
+            return
+        highlights = []
+        for _ in range(count):
+            user = random.choice(users)
+            # Get some stories belonging to this user
+            user_stories = Story.objects.filter(user=user)
+            if not user_stories:
+                continue
+            # Choose a random number of stories for this highlight
+            num_stories = random.randint(1, min(5, user_stories.count()))
+            selected_stories = random.sample(list(user_stories), num_stories)
+            title = fake.word().capitalize()
+            # Cover can be one of the selected stories
+            cover = random.choice(selected_stories) if selected_stories else None
+            highlight = StoryHighlight(
+                user=user,
+                title=title,
+                cover=cover,
+            )
+            highlights.append(highlight)
+        StoryHighlight.objects.bulk_create(highlights, ignore_conflicts=True)
+
+        # Add stories to highlights via ManyToMany
+        for highlight in StoryHighlight.objects.all():
+            user_stories = Story.objects.filter(user=highlight.user)
+            if user_stories:
+                selected = random.sample(list(user_stories), min(3, user_stories.count()))
+                highlight.stories.set(selected)
+        self.stdout.write(f"Created {len(highlights)} story highlights.")

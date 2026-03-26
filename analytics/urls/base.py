@@ -1,5 +1,5 @@
 from django.urls import path
-from analytics.views import platform_analytics_views as platform_views
+from analytics.views import platform_analytics_views as platform_views, trend_score
 from analytics.views import user_analytics_views as user_views
 
 urlpatterns = [
@@ -29,6 +29,13 @@ urlpatterns = [
     path('user/top-days/<int:user_id>/', user_views.UserAnalyticsTopDaysView.as_view(), name='user-top-days-specific'),
     path('user/compare/', user_views.UserAnalyticsCompareView.as_view(), name='user-compare'),
     path('user/cleanup/', user_views.UserAnalyticsCleanupView.as_view(), name='user-cleanup'),
+    
+    
+    # Inside urlpatterns add:
+    path('trend-score/object/', trend_score.TrendScoreObjectView.as_view(), name='trend-score-object'),
+    path('trend-score/top/', trend_score.TrendScoreTopView.as_view(), name='trend-score-top'),
+    path('trend-score/statistics/', trend_score.TrendScoreStatisticsView.as_view(), name='trend-score-statistics'),
+    path('trend-score/cleanup/', trend_score.TrendScoreCleanupView.as_view(), name='trend-score-cleanup'),
 ]
 
 app_name = 'analytics'

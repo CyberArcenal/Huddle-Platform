@@ -1,37 +1,11 @@
 # users/serializers/user_image.py
 import os
-
 from rest_framework import serializers
-
 from feed.models.post import POST_PRIVACY_TYPES
-
-
 from users.models import UserImage
 from users.models.user import PROFILE_IMAGE_TYPE_CHOICES
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user import PostStatsSerializers, UserMinimalSerializer
 from users.services.user_image import UserImageService
-
-
-class ReactionCountSerializer(serializers.Serializer):
-    # dynamic fields per reaction type
-    like = serializers.IntegerField(default=0)
-    love = serializers.IntegerField(default=0)
-    care = serializers.IntegerField(default=0)
-    haha = serializers.IntegerField(default=0)
-    wow = serializers.IntegerField(default=0)
-    sad = serializers.IntegerField(default=0)
-    angry = serializers.IntegerField(default=0)
-
-
-class PostStatsSerializers(serializers.Serializer):
-    comment_count = serializers.IntegerField()
-    like_count = serializers.IntegerField()
-    reaction_count = ReactionCountSerializer()
-    privacy = serializers.ChoiceField(choices=["public", "followers", "secret"])
-    comments = serializers.DictField()
-    liked = serializers.BooleanField()
-    current_reaction = serializers.StringRelatedField()
-
 
 class NormalizedImageField(serializers.ImageField):
     """

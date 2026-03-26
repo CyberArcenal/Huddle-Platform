@@ -5,6 +5,8 @@ from .reaction import Reaction
 from .post_media import PostMedia
 from .reel import Reel    
 from .share import Share
+from .view import ObjectView
+from .bookmark import ObjectBookmark
 
 __all__ = [
     'Post',
@@ -13,5 +15,7 @@ __all__ = [
     'PostMedia',
     'Reel',
     'ReelComment',
-    'Share'
+    'Share',
+    'ObjectView',
+    'ObjectBookmark',
 ]

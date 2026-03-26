@@ -15,6 +15,7 @@ class Story(models.Model):
     expires_at = models.DateTimeField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at= models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'stories'

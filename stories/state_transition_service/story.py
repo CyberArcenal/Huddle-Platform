@@ -1,4 +1,6 @@
-from stories.services.story_view import StoryViewService
+from feed.services.view import ViewService
+from stories.models.story import Story
+from stories.services.story import StoryService
 from stories.services.story_feed import StoryFeedService
 from analytics.services.platform_analytics import PlatformAnalyticsService
 # If you have a dedicated story analytics service, import it here
@@ -18,10 +20,10 @@ class StoryStateTransitionService:
             StoryStateTransitionService._handle_story_reactivated(story)
 
     @staticmethod
-    def _handle_story_deactivated(story):
+    def _handle_story_deactivated(story:Story):
         """Story became inactive – clean up views, remove from feeds, update analytics."""
         # 1. Delete all view records for this story (or mark them as inactive)
-        deleted_views = StoryViewService.clear_story_views(story)
+        deleted_views = ViewService.delete_view_for_object(story)
 
         # 2. Remove story from all feeds (e.g., story feed cache)
         StoryFeedService.remove_story_from_feeds(story)

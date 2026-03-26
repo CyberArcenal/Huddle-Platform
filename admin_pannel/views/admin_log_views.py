@@ -14,7 +14,7 @@ from admin_pannel.serializers.admin_log import AdminLogDisplaySerializer
 from global_utils.pagination import AdminPanelPagination
 
 from ..services.admin_log import AdminLogService
-from ..serializers.base import (
+from ..serializers.utils import (
     AdminLogFilterSerializer,
     AdminStatisticsSerializer,
     BanUserInputSerializer,

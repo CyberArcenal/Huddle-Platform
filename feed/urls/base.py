@@ -1,7 +1,7 @@
 # feed/urls.py
 
 from django.urls import path, include
-from feed.views import comment, feed, post, reaction, share
+from feed.views import bookmark, comment, feed, post, reaction, share, view
 from feed.views import reel
 from feed.views.user_content import UserContentFeedView
 from feed.views.user_liked_items import UserLikedItemsView
@@ -77,6 +77,19 @@ urlpatterns = [
     path('shares/object/', share.ShareObjectSharesView.as_view(), name='share-object-list'),
     path('shares/statistics/user/', share.ShareUserStatisticsView.as_view(), name='share-user-stats'),
     path('shares/<int:share_id>/restore/', share.ShareRestoreView.as_view(), name='share-restore'),
+    
+    
+    path('bookmarks/', bookmark.BookmarkListView.as_view(), name='bookmark-list'),
+    path('bookmarks/action/', bookmark.BookmarkDetailView.as_view(), name='bookmark-action'),
+    path('bookmarks/statistics/', bookmark.BookmarkStatisticsView.as_view(), name='bookmark-statistics'),
+    path('bookmarks/top/', bookmark.BookmarkTopView.as_view(), name='bookmark-top'),
+    
+    
+    
+    path('views/record/', view.ViewRecordView.as_view(), name='view-record'),
+    path('views/statistics/', view.ViewStatisticsView.as_view(), name='view-statistics'),
+    path('views/history/', view.ViewHistoryView.as_view(), name='view-history'),
+    path('views/top/', view.TopViewedView.as_view(), name='view-top'),
 ]
 
 app_name = 'feed'

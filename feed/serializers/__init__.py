@@ -12,7 +12,6 @@ from .comment import (
 from .reaction import (
     ReactionMinimalSerializer,
     LikeCreateSerializer,
-    LikeDisplaySerializer,
     LikeToggleSerializer,
 )
 from .post import (

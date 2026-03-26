@@ -10,8 +10,10 @@ from django.core.exceptions import PermissionDenied
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
+from feed.serializers.view import ViewMinimalSerializer
+from feed.services.view import ViewService
 from global_utils.pagination import StoriesPagination
-from stories.serializers.base import (
+from stories.serializers.story import (
     StoryCleanupResponseSerializer,
     StoryCreateSerializer,
     StoryFeedSerializer,
@@ -22,15 +24,12 @@ from stories.serializers.base import (
     StoryStatsSerializer,
     StoryUpdateSerializer,
     StoryViewCountSerializer,
-    StoryViewCreateSerializer,
-    StoryViewSerializer,
 )
 from django.db import transaction
 from stories.services.story import StoryService
 from stories.services.story_feed import StoryFeedService
-from stories.services.story_view import StoryViewService
 from rest_framework import serializers
-from stories.serializers.base import StorySerializer, StoryViewSerializer
+from stories.serializers.story import StorySerializer
 from users.models.user import User
 
 
@@ -65,18 +64,6 @@ class PaginatedStorySerializer(serializers.Serializer):
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = StorySerializer(many=True)
-
-
-class PaginatedStoryViewSerializer(serializers.Serializer):
-    """Matches the custom pagination response from StoriesPagination"""
-
-    count = serializers.IntegerField()
-    page = serializers.IntegerField()
-    hasNext = serializers.BooleanField()
-    hasPrev = serializers.BooleanField()
-    next = serializers.URLField(allow_null=True)
-    previous = serializers.URLField(allow_null=True)
-    results = StoryViewSerializer(many=True)
 
 
 # --------------------------------------------------------------
@@ -297,73 +284,6 @@ class StoryStatsView(APIView):
         return Response(serializer.data)
 
 
-class StoryViewCreateView(APIView):
-    """Record a story view"""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        tags=["Storie's"],
-        request=StoryViewCreateSerializer,
-        responses={201: StoryViewSerializer},
-        examples=[
-            OpenApiExample("Record view", value={"story_id": 123}, request_only=True)
-        ],
-        description="Record that the current user has viewed a story.",
-    )
-    @transaction.atomic
-    def post(self, request, story_id):
-        serializer = StoryViewCreateSerializer(
-            data={"story_id": story_id}, context={"request": request}
-        )
-        if serializer.is_valid():
-            story_view = serializer.save()
-            return Response(
-                StoryViewSerializer(story_view).data, status=status.HTTP_201_CREATED
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class StoryViewsListView(APIView):
-    """Get views for a specific story"""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        tags=["Storie's"],
-        parameters=[
-            OpenApiParameter(
-                name="page", type=int, description="Page number", required=False
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=int,
-                description="Results per page",
-                required=False,
-            ),
-        ],
-        responses={200: PaginatedStoryViewSerializer},
-        description="Retrieve a paginated list of users who viewed a story. Only the story owner can access.",
-    )
-    def get(self, request, story_id):
-        story = StoryService.get_story_by_id(story_id)
-        if not story:
-            return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        # Permission check: only owner or admin can see viewers
-        if story.user != request.user and not request.user.is_staff:
-            return Response(
-                {"error": "You do not have permission to view viewers of this story"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        views = StoryViewService.get_story_views(story)
-        paginator = StoriesPagination()
-        page = paginator.paginate_queryset(views, request)
-        serializer = StoryViewSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
-
-
 class StoryViewCountView(APIView):
     """Get view count for a story"""
 
@@ -382,53 +302,10 @@ class StoryViewCountView(APIView):
             )
         data = {
             "story_id": story.id,
-            "view_count": StoryViewService.get_story_view_count(story),
-            "unique_viewers": StoryViewService.get_unique_viewers_count(story),
+            "view_count": ViewService.get_view_count(story),
+            "unique_viewers": ViewService.get_unique_viewers(story),
         }
         serializer = StoryViewCountSerializer(data)
-        return Response(serializer.data)
-
-
-class StoryRecentViewersView(APIView):
-    """Get recent viewers for a story (limited list, not paginated)"""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        tags=["Storie's"],
-        parameters=[
-            OpenApiParameter(
-                name="hours",
-                type=int,
-                description="Lookback period in hours",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="limit",
-                type=int,
-                description="Maximum number of viewers",
-                required=False,
-            ),
-        ],
-        responses={200: StoryRecentViewerSerializer(many=True)},
-        description="Get a list of recent viewers of a story. Only the story owner can access.",
-    )
-    def get(self, request, story_id):
-        story = StoryService.get_story_by_id(story_id)
-        if not story:
-            return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        if story.user != request.user and not request.user.is_staff:
-            return Response(
-                {"error": "You do not have permission to view viewers of this story"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 50))
-
-        viewers = StoryViewService.get_recent_viewers(story, hours=hours, limit=limit)
-        serializer = StoryRecentViewerSerializer(viewers, many=True)
         return Response(serializer.data)
 
 
@@ -720,24 +597,6 @@ class StoryViewStatsResponseSerializer(serializers.Serializer):
     expired_stories_viewed = serializers.IntegerField()
 
 
-# ------------------ API View ------------------
-class StoryViewStatsView(APIView):
-    """Get viewing statistics for the current user"""
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        tags=["Storie's"],
-        responses={200: StoryViewStatsResponseSerializer},
-        description="Get statistics about the current user's story viewing habits (stories viewed, unique creators, etc.).",
-    )
-    def get(self, request):
-        stats = StoryViewService.get_user_story_view_stats(request.user)
-        serializer = StoryViewStatsResponseSerializer(stats)
-        return Response(serializer.data)
-
-
-
 # ------------------ Response Serializer ------------------
 class MutualStoryViewsResponseSerializer(serializers.Serializer):
     total_views_by_me = serializers.IntegerField()
@@ -760,7 +619,7 @@ class MutualStoryViewsView(APIView):
     )
     def get(self, request, other_user_id):
         other_user = get_object_or_404(User, id=other_user_id)
-        stats = StoryViewService.get_mutual_story_views(request.user, other_user)
+        stats = ViewService.get_mutual_story_views(request.user, other_user)
         serializer = MutualStoryViewsResponseSerializer(stats)
         return Response(serializer.data)
 
@@ -808,6 +667,7 @@ class PopularStoriesView(APIView):
         hours = int(request.query_params.get("hours", 24))
         limit = int(request.query_params.get("limit", 20))
 
-        popular_stories = StoryViewService.get_popular_stories(hours=hours, limit=limit)
+        popular_stories = StoryService.get_popular_stories(hours=hours, limit=limit)
         serializer = PopularStorySerializer(popular_stories, many=True)
         return Response(serializer.data)
+
