@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from admin_pannel.models.reported_content import ReportedContent
 from admin_pannel.services.reported_content import ReportedContentService
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class ReportedContentMinimalSerializer(serializers.ModelSerializer):
@@ -40,7 +40,6 @@ class ReportedContentCreateSerializer(serializers.Serializer):
             object_id=validated_data["object_id"],
             reason=validated_data["reason"],
         )
-
 
 class ReportedContentDisplaySerializer(serializers.ModelSerializer):
     """Detailed view for a single report."""

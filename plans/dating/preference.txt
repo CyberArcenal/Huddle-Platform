@@ -1,0 +1,50 @@
+# 🎛 Dating Preferences Screen
+
+### 🔺 Header
+- **Title**: “Your Preferences”  
+- **Save / Apply button** → para ma‑update agad ang feed.  
+
+---
+
+### 🔺 Core Filters
+- **Age Range Slider** → min/max (e.g., 22–35).  
+- **Preferred Gender** → Male / Female / Non‑binary / Any.  
+- **Max Distance** → slider (e.g., 10 km, 50 km, 100 km).  
+
+---
+
+### 🔺 Personality & Compatibility
+- **Match by MBTI** → toggle (on/off).  
+- **Match by Love Language** → toggle.  
+- **Match by Relationship Goal** → toggle.  
+
+---
+
+### 🔺 Lifestyle & Interests
+- **Hobbies selector** → chips/tags (e.g., Hiking, Cooking, Gaming).  
+- **Interests selector** → chips/tags (e.g., Tech, Art, Travel).  
+- **Lifestyle tags** → e.g., “Pet lover”, “Environmentalist”.  
+
+---
+
+### 🔺 Privacy & Safety
+- **Visibility toggle** → “Show me only to verified users” / “Hide my profile from certain groups.”  
+- **Verification badge info** → encourage users to verify.  
+
+---
+
+### 🔺 Footer
+- **Reset to Default** → clear all filters.  
+- **Apply Preferences** → update Discovery feed.  
+
+---
+
+👉 In short:  
+- **Core filters** = age, gender, distance.  
+- **Compatibility toggles** = personality, love language, relationship goal.  
+- **Lifestyle selectors** = hobbies, interests, lifestyle tags.  
+- **Safety controls** = visibility, verification.  
+
+Parang **settings page** siya na directly naka‑link sa `DatingPreference` model mo.  
+
+Gusto mo bang i‑pakita ko rin ang **sample JSON API response** ng `dating_preferences` para makita kung paano siya lalabas sa frontend?

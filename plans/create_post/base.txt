@@ -1,0 +1,55 @@
+Para sa **Create Post Screen**, magandang laman ay naka‑focus sa pagiging simple pero flexible para sa iba’t ibang uri ng content. Eto ang plan:
+
+---
+
+# 📝 Create Post Screen Plan
+
+### 🔺 Header
+- **Title**: “Create Post”  
+- **Close button (X)** para bumalik sa feed  
+- **Post button** (highlighted, disabled kung empty ang content)  
+
+---
+
+### 🔺 Composer Area
+- **User profile picture** (para makita kung sino ang nagpo‑post)  
+- **Text input field**: placeholder “What’s on your mind?”  
+- **Formatting options**: bold, italic, hashtags, mentions (@user)  
+
+---
+
+### 🔺 Media Attachments
+- **Photo / Video upload** (gallery or camera)  
+- **Poll creation** (question + options)  
+- **Link attachment** (auto‑preview card)  
+- **File upload** (optional, kung supported ng group)  
+
+---
+
+### 🔺 Visibility & Settings
+- **Audience selector**:  
+  - Group members only  
+  - Public (kung group is public)  
+- **Privacy toggle**: allow comments / reactions  
+- **Post type**: normal post, announcement (kung admin)  
+
+---
+
+### 🔺 Extras
+- **Emoji picker**  
+- **Tagging**: add hashtags or topics  
+- **Location tag** (optional)  
+- **Draft saving**: kung lumabas ang user, hindi mawawala ang sinulat  
+
+---
+
+### ✨ Extra Enhancements
+- **Preview mode**: bago i‑post, makita ang itsura ng post card.  
+- **Quick actions bar**: shortcut buttons (📷 Photo, 🎥 Video, 📊 Poll).  
+- **Contextual CTA**: kung hindi pa member ng group, hindi lalabas ang composer.  
+
+---
+
+👉 Sa ganitong setup, ang **Create Post Screen** ay magiging intuitive at flexible: mabilis gumawa ng simpleng text post, pero may options para sa media, polls, at announcements.  
+
+Gusto mo bang i‑expand ko rin ang **Post Composer Flow** (step‑by‑step mula input → attach media → preview → publish)?

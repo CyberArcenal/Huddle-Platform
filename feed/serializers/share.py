@@ -25,7 +25,7 @@ from groups.serializers.group import GroupMinimalSerializer
 from stories.models.story import Story
 from stories.serializers.story import StorySerializer
 from users.models.user import UserImage
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 from users.serializers.user_image import UserImageDisplaySerializer
 
 

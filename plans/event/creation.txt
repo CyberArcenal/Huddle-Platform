@@ -1,0 +1,91 @@
+Tama ka — mas engaging kung **slidable / step‑by‑step form** ang Event Creation Screen kaysa isang mahaba at static na form. Para siyang wizard style na may *Next* button para lumipat sa susunod na inputs. Eto ang magandang hati:
+
+---
+
+### 🧾 Step 1: Basic Info
+- **Event Title** (required)
+- **Event Type** (Public / Private / Group)
+- **Cover Image** (optional upload)
+
+👉 Button: **Next**
+
+---
+
+### 📍 Step 2: Schedule & Location
+- **Start Date & Time** (picker)
+- **End Date & Time** (optional)
+- **Location** (text + map picker / “Online” toggle)
+
+👉 Button: **Next**
+
+---
+
+### 👥 Step 3: Attendees & Group
+- **Max Attendees** (numeric field / unlimited toggle)
+- **Group Selector** (kung member ng multiple groups)
+- **Privacy Settings** (followers only, group only, public)
+
+👉 Button: **Next**
+
+---
+
+### 📖 Step 4: Description & Extras
+- **Event Description** (multiline text)
+- **Tags / Interests** (chips)
+- **Advanced Options** (RSVP rules, approval)
+
+👉 Button: **Finish / Create Event**
+
+---
+
+### 🧩 UI Flow
+- **Horizontal pager** (Compose `HorizontalPager`) para sa bawat step
+- **Next / Back buttons** sa bottom
+- **Progress indicator** (dots o stepper bar) para makita kung ilang steps na natapos
+
+---
+
+### 🧪 Sample Compose Snippet
+
+```kotlin
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun EventCreationWizard() {
+    val pagerState = rememberPagerState()
+    Column {
+        HorizontalPager(pageCount = 4, state = pagerState) { page ->
+            when (page) {
+                0 -> BasicInfoStep()
+                1 -> ScheduleLocationStep()
+                2 -> AttendeesGroupStep()
+                3 -> DescriptionExtrasStep()
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            if (pagerState.currentPage > 0) {
+                Button(onClick = { scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } }) {
+                    Text("Back")
+                }
+            }
+            Button(onClick = {
+                if (pagerState.currentPage < 3) {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                } else {
+                    // Submit event creation
+                }
+            }) {
+                Text(if (pagerState.currentPage < 3) "Next" else "Create Event")
+            }
+        }
+    }
+}
+```
+
+---
+
+👉 Ang ganitong **slidable wizard** ay mas user‑friendly: hindi nakaka‑overwhelm, may malinaw na progress, at madaling i‑navigate.  
+
+Gusto mo ba igawan kita ng **wireframe sketch** ng bawat step para mas makita ang flow bago mo i‑Compose code?

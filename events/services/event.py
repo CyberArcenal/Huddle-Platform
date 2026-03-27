@@ -300,31 +300,39 @@ class EventService:
         """Get event recommendations for a user"""
         from groups.services import GroupMemberService
         from .event_attendance import EventAttendanceService
-        
+        from feed.models.media import Media
+        from django.db.models import Prefetch
+
+        # Prefetch for media and its variants
+        prefetch = Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+
         # Get groups user is member of
         user_groups = GroupMemberService.get_user_groups(user)
-        
+
         # Get events from user's groups
-        group_events = Event.objects.filter(
+        group_events_qs = Event.objects.filter(
             group__in=user_groups,
             start_time__gte=timezone.now(),
             event_type='group'
         ).exclude(
-            organizer=user  # Exclude events user organized
-        ).order_by('start_time')[:limit]
+            organizer=user
+        ).select_related('group', 'organizer').prefetch_related(prefetch).order_by('start_time')
         
+        group_events = list(group_events_qs[:limit])
+
         # Get public events with many attendees (popular events)
         if len(group_events) < limit:
             remaining = limit - len(group_events)
-            public_events = Event.objects.filter(
+            public_events_qs = Event.objects.filter(
                 event_type='public',
                 start_time__gte=timezone.now()
             ).exclude(
                 organizer=user
-            ).order_by('start_time')[:remaining]
+            ).select_related('group', 'organizer').prefetch_related(prefetch).order_by('start_time')
             
-            group_events = list(group_events) + list(public_events)
-        
+            public_events = list(public_events_qs[:remaining])
+            group_events.extend(public_events)
+
         return group_events[:limit]
     
     @staticmethod

@@ -2,15 +2,15 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from core import settings
 
-User = get_user_model()
 
 class ObjectView(models.Model):
     """
     Generic model to track views on any content object (Post, Story, Reel, etc.)
     """
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="object_views",
         null=True,

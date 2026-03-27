@@ -4,7 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
-from django.db.models import Q, Count, QuerySet
+from django.db.models import Q, Count, QuerySet, Prefetch
 from typing import Iterable, Optional, List, Dict, Any, Tuple
 from django.contrib.contenttypes.models import ContentType
 from admin_pannel.services.reported_content import ReportedContentService
@@ -128,7 +128,11 @@ class PostService:
         if not include_deleted:
             queryset = queryset.filter(is_deleted=False)
 
-        return list(queryset.order_by("-created_at")[offset : offset + limit])
+        queryset = queryset.prefetch_related(
+            Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+        ).order_by("-created_at")
+
+        return list(queryset[offset : offset + limit])
 
     @staticmethod
     def get_public_posts(
@@ -140,7 +144,11 @@ class PostService:
         if exclude_user:
             queryset = queryset.exclude(user=exclude_user)
 
-        return list(queryset.order_by("-created_at")[offset : offset + limit])
+        queryset = queryset.prefetch_related(
+            Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+        ).order_by("-created_at")
+
+        return list(queryset[offset : offset + limit])
 
 
 
@@ -172,10 +180,6 @@ class PostService:
         - Handles service returns that may be QuerySet or list.
         - Uses ids for filtering to avoid embedding large querysets.
         """
-        from groups.services import GroupMemberService
-        from users.services import UserFollowService
-        from feed.models.post import Post
-
         # sanitize limit/offset
         if limit <= 0:
             limit = 1
@@ -198,6 +202,9 @@ class PostService:
         qs: QuerySet = (
             Post.objects.filter((non_group_posts_q | group_posts_q), is_deleted=False)
             .select_related("user", "group")
+            .prefetch_related(
+                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            )
             .order_by("-created_at")
             .distinct()
         )
@@ -432,11 +439,18 @@ class PostService:
             return []
 
         # Get posts from followed users (personal posts only, not group posts)
-        following_posts = Post.objects.filter(
-            user__in=following_users,
-            group__isnull=True,          # personal posts only
-            is_deleted=False
-        ).select_related('user').order_by('-created_at')
+        following_posts = (
+            Post.objects.filter(
+                user__in=following_users,
+                group__isnull=True,
+                is_deleted=False
+            )
+            .select_related('user')
+            .prefetch_related(
+                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            )
+            .order_by('-created_at')
+        )
 
         return list(following_posts[offset:offset + limit])
     
@@ -449,7 +463,6 @@ class PostService:
         from django.db.models import Q
 
         # Find users that follow the current user and are followed by the current user (mutual)
-        # Equivalent to: friends = users who follow user and user follows them
         friends = User.objects.filter(
             Q(followers__follower=user) & Q(following__following=user)
         ).distinct()
@@ -457,16 +470,23 @@ class PostService:
         if not friends:
             return []
 
-        friend_posts = Post.objects.filter(
-            user__in=friends,
-            group__isnull=True,          # personal posts only
-            is_deleted=False
-        ).select_related('user').order_by('-created_at')
+        friend_posts = (
+            Post.objects.filter(
+                user__in=friends,
+                group__isnull=True,
+                is_deleted=False
+            )
+            .select_related('user')
+            .prefetch_related(
+                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            )
+            .order_by('-created_at')
+        )
 
         return list(friend_posts[offset:offset + limit])
-
+    
     @staticmethod
-    def get_user_posts(
+    def get_user_posts_by_id(
         user_id: int, 
         requester: Optional[User] = None, 
         limit: int = 10, 
@@ -480,25 +500,23 @@ class PostService:
 
         # Apply privacy filtering
         if requester and requester.is_authenticated:
-            # If requester is the target user, they see all their own posts
             if requester == target_user:
-                return list(queryset.order_by('-created_at')[offset:offset+limit])
-
-            # Otherwise, apply privacy logic
-            # Public posts: always visible
-            public_posts = queryset.filter(privacy='public')
-            # Followers-only posts: visible if requester follows target_user
-            followers_posts = queryset.filter(privacy='followers')
-            if target_user.followers.filter(id=requester.id).exists():
-                followers_posts = followers_posts  # keep
+                queryset = queryset.order_by('-created_at')
             else:
-                followers_posts = queryset.none()
-            # Secret posts: not visible to others
-            secret_posts = queryset.none()
-            # Union
-            queryset = public_posts | followers_posts
+                public_posts = queryset.filter(privacy='public')
+                followers_posts = queryset.filter(privacy='followers')
+                if not target_user.followers.filter(id=requester.id).exists():
+                    followers_posts = queryset.none()
+                # Union of public and allowed followers posts
+                queryset = public_posts | followers_posts
+                queryset = queryset.order_by('-created_at')
         else:
             # Anonymous user: only see public posts
-            queryset = queryset.filter(privacy='public')
+            queryset = queryset.filter(privacy='public').order_by('-created_at')
 
-        return list(queryset.order_by('-created_at')[offset:offset+limit])
+        # Add prefetch
+        queryset = queryset.prefetch_related(
+            Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+        )
+
+        return list(queryset[offset:offset+limit])

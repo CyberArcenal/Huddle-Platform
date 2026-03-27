@@ -1,0 +1,64 @@
+Para sa **Group List / Discovery Screen**, magandang laman ay yung mga impormasyon na makakatulong sa user na mabilis makilala at makapili ng group. Base sa schema mo, eto ang recommended content:
+
+### 📋 Laman ng Group List / Discovery Screen
+- **Group Card (per group)**  
+  - **Profile picture** → maliit na icon/logo ng group.  
+  - **Group name** → malinaw at naka‑bold.  
+  - **Short description** → 1–2 linya para sa context.  
+  - **Member count** → formatted (hal. “1.2k members”).  
+  - **Group type** → hobby, school, work, cause (may badge o label).  
+  - **Membership status** → indicator kung *joined* na o hindi.  
+
+- **List layout**  
+  - Scrollable feed ng group cards.  
+  - Search bar sa taas para maghanap ng group.  
+  - Filter chips (hal. “Hobbies”, “Work”, “School”, “Causes”).  
+  - Sorting options (hal. “Most popular”, “Newest”, “Nearby”).  
+
+- **Member preview (optional)**  
+  - Sa bawat group card, puwede magpakita ng 2–3 profile pictures ng active members.  
+  - Nagbibigay ng sense ng community at activity level.  
+
+- **Call to action**  
+  - Button: *Join* o *View Group*.  
+  - Kung hindi pa member, makikita ang *Join*; kung member na, makikita ang *View*.  
+
+---
+
+### ✨ Extra Enhancements
+- **Recommendation section**: “Groups you may like” based on hobbies/interests ng user.  
+- **Trending groups**: highlight ng mga groups na mabilis lumalaki.  
+- **Nearby groups**: kung may location data, puwede mag‑suggest ng local communities.  
+
+---
+
+👉 Sa ganitong design, ang **Group List / Discovery Screen** ay magiging parang marketplace ng communities — mabilis makita ang identity ng group, activity level, at kung relevant siya sa user.  
+
+Gusto mo bang ipakita ko ng **sample wireframe layout** (textual mockup) para mas makita mo kung paano naka‑organize ang bawat element sa screen?
+
+
+
+
+
+-------------------------------------------------
+| 🔍 Search bar [Enter group name or keyword]    |
+-------------------------------------------------
+| Tabs (slidable):                              |
+| [All] [Hobbies] [Work] [School] [Causes] [Nearby] [Trending] |
+-------------------------------------------------
+| Group Card                                    |
+| [Profile Picture]  Group Name (bold)          |
+| Short description (1–2 lines)                 |
+| Member count: 1.2k members • Type: Hobby      |
+| Member preview: 👤👤👤                         |
+| [Join] or [View Group] button                 |
+-------------------------------------------------
+| Group Card                                    |
+| [Profile Picture]  Group Name (bold)          |
+| Short description (1–2 lines)                 |
+| Member count: 350 members • Type: School      |
+| Member preview: 👤👤👤                         |
+| [Join] or [View Group] button                 |
+-------------------------------------------------
+| ... scrollable list of groups ...             |
+-------------------------------------------------

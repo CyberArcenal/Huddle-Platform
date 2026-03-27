@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from feed.models.view import ObjectView
 from feed.services.view import ViewService
-from users.serializers.user import UserMinimalSerializer
 from django.contrib.contenttypes.models import ContentType
+
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class ViewStatisticsSerializer(serializers.Serializer):
@@ -43,7 +44,6 @@ class ViewCreateSerializer(serializers.ModelSerializer):
 
         # Use the service layer to add the view
         return ViewService.add_view(user=user, obj=content_object, duration=duration)
-
 
 class ViewMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for individual view records."""

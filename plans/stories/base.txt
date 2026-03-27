@@ -1,0 +1,74 @@
+Para sa **Stories feature**, maganda kung may ilang complementary screens para kumpleto ang experience ng user. Hindi lang siya isang viewer, kundi may ecosystem ng **creation, viewing, highlights, at analytics**. Eto ang detailed plan:
+
+---
+
+# 📖 Stories Screens Plan
+
+### 🔺 1. Stories Feed / Viewer Screen
+- **Top bar**: horizontal scroll ng story circles (profile pic ng user/group).  
+- **Tap circle** → open story viewer.  
+- **Story viewer**:  
+  - Full‑screen media (photo/video).  
+  - Overlay: username, timestamp, reactions.  
+  - Navigation: tap right → next story, tap left → previous, swipe down → exit.  
+  - Quick actions: react, comment (bottomsheet), share.  
+
+---
+
+### 🔺 2. Create Story Screen
+- **Composer**:  
+  - Capture photo/video (camera integration).  
+  - Upload from gallery.  
+  - Add text overlay, stickers, emojis.  
+  - Apply filters/themes.  
+- **Privacy selector**: Public, Followers, Group members.  
+- **Post button** → publish story.  
+
+---
+
+### 🔺 3. Story Highlights Screen
+- **Highlights section** sa profile.  
+- User can **save stories** into highlight collections.  
+- Each highlight = circle with cover image + title.  
+- Tap highlight → viewer of saved stories.  
+
+---
+
+### 🔺 4. Story Detail / Analytics Screen (for author)
+- **Stats**:  
+  - View count.  
+  - Reactions breakdown.  
+  - Who viewed (list of users).  
+- **Actions**:  
+  - Delete story.  
+  - Add to highlights.  
+  - Share story link.  
+
+---
+
+### 🔺 5. Group Stories Screen (optional)
+- Dedicated tab sa group profile.  
+- Shows stories posted by group members.  
+- Same viewer flow, but scoped to group context.  
+
+---
+
+### ✨ Extra Enhancements
+- **Auto‑play**: continuous playback across stories.  
+- **Mute/unmute** toggle.  
+- **Progress bar** per story.  
+- **Pinned story** option (admin).  
+- **Cross‑posting**: share story to multiple groups.  
+
+---
+
+👉 Sa ganitong setup, may **5 key screens**:  
+1. Stories Feed/Viewer  
+2. Create Story  
+3. Story Highlights  
+4. Story Detail/Analytics  
+5. Group Stories (optional)  
+
+Parang Instagram/Facebook style pero mas modular at aligned sa ecosystem ng groups, posts, at bookmarks na na‑design na natin.  
+
+Gusto mo bang i‑layout ko rin ang **wireframe flow** (from Feed → Viewer → Create → Highlights → Analytics) para makita ang hierarchy ng navigation?

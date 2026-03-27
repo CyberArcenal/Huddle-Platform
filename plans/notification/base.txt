@@ -1,0 +1,49 @@
+Para sa **Notification Screens**, magandang plan ay naka‑organize para madaling makita ng user ang mga updates at actions. Base sa schema mo, eto ang design:
+
+---
+
+# 🔔 Notification Screens Plan
+
+### 🔺 Header
+- **Title**: “Notifications”  
+- **Tabs (optional)**: [All] [Unread] [Mentions] [System]  
+- **Mark all as read** button  
+
+---
+
+### 🔺 Notification List (scrollable)
+- **Notification card** per item:  
+  - **Actor details**: profile picture, username, full name.  
+  - **Message**: e.g., “John liked your post”, “Anna joined your group”.  
+  - **Notification type**: like, comment, follow, join, system update.  
+  - **Related model**: link to post, group, event, or user profile.  
+  - **Time ago**: e.g., “5m ago”, “Yesterday”.  
+  - **Read status**: bold highlight kung unread, normal text kung read.  
+
+---
+
+### 🔺 Interaction
+- **Tap notification card** → open related content (post, group, event).  
+- **Swipe left/right** → quick actions (mark as read, delete).  
+- **Long press** → show more options (mute actor, notification settings).  
+
+---
+
+### 🔺 Extras
+- **Grouped notifications**: “3 people liked your post” instead of multiple single likes.  
+- **Actor preview**: kung multiple actors, show stacked profile pictures.  
+- **Filter bar**: unread vs all.  
+- **Empty state**: “No notifications yet” with illustration.  
+
+---
+
+### ✨ Extra Enhancements
+- **Push notification settings**: toggle per type (likes, comments, follows, group invites).  
+- **Highlight important**: system notifications (e.g., policy updates) pinned on top.  
+- **Smart sorting**: newest first, but group similar actions.  
+
+---
+
+👉 Sa ganitong setup, ang **Notification Screen** ay magiging malinaw, interactive, at madaling i‑navigate.  
+
+Gusto mo bang i‑expand ko rin ang **Notification Detail Screen** (yung dedicated view kapag pinindot ang isang notification, showing full context)?

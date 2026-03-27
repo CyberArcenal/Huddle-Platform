@@ -1,0 +1,79 @@
+Para sa **Event Management Screen** (pang-organizer lang), magandang hatiin ito sa mga actionable sections na nagbibigay ng control at insights. Eto ang recommended na laman:
+
+---
+
+### 🧾 Event Overview
+- **Title, Date/Time, Location**
+- **Event Type** (Public/Private/Group)
+- **Attendee Count** (`attendees_count / max_attendees`)
+- **Status Badge**: *Upcoming*, *Ongoing*, *Completed*, *Full*
+
+---
+
+### ✏️ Edit Event Details
+- Button to edit:
+  - Title, Description
+  - Date/Time
+  - Location
+  - Max Attendees
+  - Cover Image
+
+---
+
+### 👥 Attendee Management
+- List of attendees with:
+  - Avatar, name, personality type
+  - RSVP status
+  - Remove / Block / Promote (if applicable)
+- Filter: *Pending*, *Confirmed*, *Friends*, *Group Members*
+
+---
+
+### 📊 Engagement Analytics
+- Total views / shares / reactions
+- RSVP conversion rate
+- Top hobbies / personality types among attendees
+- Optional: capability score distribution
+
+---
+
+### 🔔 Notifications & Triggers
+- Auto-reorder or reminder triggers
+- Manual push notification (e.g. “Event starts in 1 hour!”)
+- History of sent notifications
+
+---
+
+### 🧩 Group Controls (if event is group-based)
+- Member list
+- Invite new members
+- Group settings shortcut
+
+---
+
+### 🧪 Advanced Options
+- Duplicate event
+- Export attendee list
+- Archive / Delete event
+
+---
+
+### 🧬 Compose Layout Idea
+
+```kotlin
+Column {
+    EventOverviewCard(event)
+    EditEventButton()
+    AttendeeManagementSection(attendees)
+    AnalyticsSection(eventStats)
+    NotificationTriggerPanel()
+    if (event.group != null) {
+        GroupControlsSection(event.group)
+    }
+    AdvancedOptionsPanel()
+}
+```
+
+---
+
+Gusto mo bang igawan kita ng wireframe sketch para sa layout ng Event Management Screen? Pwede rin kitang tulungan mag-Compose ng modular components gaya ng `AttendeeManagementCard` o `AnalyticsPanel`.

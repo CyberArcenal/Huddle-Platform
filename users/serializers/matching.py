@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from users.serializers.user import UserMinimalSerializer
 from users.models import User
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class UserMatchScoreSerializer(serializers.Serializer):

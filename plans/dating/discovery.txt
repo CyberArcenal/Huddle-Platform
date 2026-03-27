@@ -1,0 +1,81 @@
+# ❤️ Dating Discovery / Match Feed Screen
+
+### 🔺 Header / Navigation
+- **Title**: “Discover Matches”  
+- **Filter icon** → open Dating Preferences (age, gender, distance).  
+- **Search bar** (optional) → hanapin specific profiles.  
+
+---
+
+### 🔺 Match Cards (scroll/swipe)
+- **Profile picture** (main image, tap to view gallery).  
+- **Basic info**: name, age, location.  
+- **Quick tags**: hobbies, interests, lifestyle tags.  
+- **Personality snippet**: MBTI type, love language.  
+- **Relationship goal badge**: Friendship, Dating, Long‑term, Marriage.  
+- **Mutual preview**: shared groups/events.  
+- **Action buttons**:  
+  - ❤️ Like  
+  - ❌ Pass  
+  - ⭐ Super Like  
+
+---
+
+### 🔺 Interaction Flow
+- **Swipe right** → Like.  
+- **Swipe left** → Pass.  
+- **Swipe up** → Super Like.  
+- **Tap card** → open full Profile Detail Screen.  
+
+---
+
+### 🔺 Extra Enhancements
+- **Dynamic feed** → auto‑refresh with new profiles.  
+- **Highlight banner** → “You have 3 new matches today!”  
+- **Empty state** → “No matches found. Adjust your preferences.”  
+- **Safety badge** → verified users indicator.  
+
+
+
+
+
+
+# ❤️ Wireframe Flow: Dating Discovery / Match Feed
+
+### 1. Header
+- **Logo / Title** → “Discover Matches”  
+- **Filter icon** → opens Dating Preferences (age, gender, distance)  
+- **Search bar** (optional)  
+
+---
+
+### 2. Match Card (Main Content)
+- **Profile Image** (large, center)  
+- **Basic Info Row** → Name, Age, Location  
+- **Quick Tags** → hobbies, interests, lifestyle tags  
+- **Personality Snippet** → MBTI, Love Language  
+- **Relationship Goal Badge** → Dating, Friendship, Long‑term, Marriage  
+- **Mutual Preview** → shared groups/events  
+
+---
+
+### 3. Swipe Actions
+- **Swipe Right** → Like  
+- **Swipe Left** → Pass  
+- **Swipe Up** → Super Like  
+- **Tap Card** → open Profile Detail Screen  
+
+---
+
+### 4. Footer
+- **Action Buttons** (redundant to swipe) → ❤️ Like, ❌ Pass, ⭐ Super Like  
+- **Safety Badge** → Verified user indicator  
+
+---
+
+### 5. States
+- **Dynamic Feed** → auto‑refresh with new profiles  
+- **Highlight Banner** → “You have 3 new matches today!”  
+- **Empty State** → “No matches found. Adjust your preferences.”  
+
+

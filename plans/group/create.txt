@@ -1,0 +1,54 @@
+Narito ang **Group Creation Screen plan** na puwede mong i‑save sa notes:
+
+---
+
+# 🆕 Group Creation Screen Plan
+
+### 🔺 Header
+- **Title**: “Create a New Group”  
+- **Progress indicator** (stepper kung multi‑step form: Info → Settings → Members → Review)  
+
+---
+
+### 🔺 Form Sections
+
+#### 1. **Basic Info**
+- Group name (text field)  
+- Profile picture (upload or choose icon)  
+- Short description (1–2 lines)  
+- Long description (optional, expandable)  
+- Group type (dropdown: Hobby, Work, School, Cause, etc.)  
+
+#### 2. **Privacy & Settings**
+- Privacy options:  
+  - Public (anyone can join)  
+  - Private (approval required)  
+  - Invite‑only  
+- Posting permissions:  
+  - Anyone can post  
+  - Admins/moderators only  
+- Content moderation toggle (optional)  
+
+#### 3. **Membership**
+- Initial member invites (search bar + add friends list)  
+- Role assignment (set admins/moderators during creation)  
+- Member preview (shows invited users)  
+
+#### 4. **Review & Create**
+- Summary card of all inputs (name, type, privacy, invited members).  
+- *Create Group* button.  
+- Confirmation message after creation.  
+
+---
+
+### ✨ Extra Enhancements
+- **Step‑by‑step wizard**: mas guided kaysa isang long form.  
+- **Live preview**: habang nag‑fill out, makikita ang preview ng group card.  
+- **Suggested settings**: default privacy based on group type (e.g., School → Private).  
+- **Rules template**: option na mag‑add ng group rules agad.  
+
+---
+
+👉 Sa ganitong setup, ang **Group Creation Screen** ay magiging intuitive: guided form na may clear steps, preview, at immediate feedback.  
+
+Gusto mo bang i‑expand ko rin ang **Privacy & Settings section** para mas detailed (hal. kung paano gumagana ang public vs private vs invite‑only sa UX)?

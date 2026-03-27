@@ -1,0 +1,46 @@
+Para sa **Event feature** ng Huddle app, magandang hatiin ang karanasan ng user sa ilang magkakahiwalay na screen para hindi siksikan at mas madaling i-navigate. Eto ang rekomendadong bilang at laman ng mga screen:
+
+---
+
+### 📱 Recommended Event Screens
+
+1. **Event List Screen**
+   - Shows upcoming events (cards/list style).
+   - Quick filters: *Nearby*, *Popular*, *Groups you joined*.
+   - CTA: “Create Event” button.
+
+2. **Event Detail Screen**
+   - Full info ng isang event:
+     - Title, description, date/time, location.
+     - Organizer card (avatar, name, follow button).
+     - Group info (name, member count, join button).
+     - Attendees list + RSVP button.
+     - Share / Comment / React actions.
+
+3. **Event Creation Screen**
+   - Form para gumawa ng bagong event:
+     - Title, description, location, date/time.
+     - Privacy (public/private).
+     - Max attendees.
+     - Upload cover image.
+
+4. **Event Attendees Screen**
+   - Dedicated list ng lahat ng attendees.
+   - Show profile preview (name, avatar, personality tags).
+   - Optional: filter by “Friends attending”.
+
+5. **Event Management Screen** *(for organizers only)*
+   - Edit event details.
+   - Manage attendees (approve/reject if private).
+   - View analytics (attendees count, engagement).
+
+---
+
+### 🔑 Notes
+- **Minimum viable setup**: 2 screens (Event List + Event Detail).
+- **Full-featured setup**: 4–5 screens (List, Detail, Create, Attendees, Management).
+- **UI strategy**: Gumamit ng bottom sheet para sa RSVP at share actions, para hindi overloaded ang detail screen.
+
+---
+
+👉 Kung gusto mo ng **Compose navigation graph sketch**, pwede kitang igawan ng flow diagram para makita kung paano magkakabit ang mga screen. Gusto mo ba i-layout ko agad yung **Event Detail Screen** sa Compose code para may starting point ka?

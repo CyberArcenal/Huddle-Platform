@@ -4,7 +4,7 @@ from django.shortcuts import get_list_or_404
 
 from stories.models import StoryHighlight, Story
 from stories.serializers.story import StorySerializer
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class StoryHighlightSerializer(serializers.ModelSerializer):

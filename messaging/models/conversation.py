@@ -3,7 +3,7 @@ import django.db
 
 
 class Conversation(django.db.models.Model):
-    CONVERSATION_TYPES = [
+    CONVERSATION_TYPES: list[tuple[str, str]] = [
         ('direct', 'Direct Message'),
         ('group', 'Group Chat'),
     ]
@@ -15,5 +15,5 @@ class Conversation(django.db.models.Model):
     updated_at = django.db.models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'conversations'
+        db_table: str = 'conversations'
 

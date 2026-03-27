@@ -1,0 +1,44 @@
+Sa **New Chat Screen**, ang idea ay parang “start a conversation hub” — dito pipili ang user kung sino ang kakausapin o anong klaseng chat ang bubuksan. Eto ang magandang laman:
+
+---
+
+# 💬 New Chat Screen Plan
+
+### 🔺 Header
+- **Title**: “New Chat”  
+- **Back button** → balik sa Chat List  
+- **Search bar** → hanapin user o group  
+
+---
+
+### 🔺 Suggested Contacts
+- **Recent interactions** → mga taong huli mong naka‑usap o naka‑like/follow  
+- **Suggested friends** → based sa mutual friends, interests, o activity  
+- **Favorites** → pinned contacts para mabilis ma‑access  
+
+---
+
+### 🔺 Contact List
+- **User avatar + name**  
+- **Status indicator** → online / offline  
+- **Tap to start chat** → automatic mag‑open ng Conversation Screen  
+
+---
+
+### 🔺 Group Options
+- **Create Group Chat** → button para pumili ng multiple contacts  
+- **Suggested groups** → kung may community o event groups na puwedeng salihan  
+
+---
+
+### 🔺 Extra Features
+- **Message requests tab** → kung may mga taong hindi pa friend pero nag‑send ng message  
+- **Invite friends** → option para mag‑send ng invite link o QR code  
+- **Filters** → All / Online / Favorites  
+
+---
+
+👉 In short:  
+Ang **New Chat Screen** ay dapat may **search bar, suggested contacts, contact list, group chat creation, at message requests**. Para siyang entry point papunta sa lahat ng bagong conversations.  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng New Chat Screen** (Header → Suggested Contacts → Contact List → Group Options → Extras) para mas makita ang flow visually?

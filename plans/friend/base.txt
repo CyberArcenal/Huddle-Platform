@@ -1,0 +1,45 @@
+Kung gagawa tayo ng **Friends Page**, maganda kung hindi lang siya simpleng listahan ng friends kundi parang **hub ng social connections**. Eto ang mga screen/sections na puwedeng bumuo sa Friends module:
+
+---
+
+# 👥 Friends Page Screens
+
+### 🔺 1. **Friends List**
+- Listahan ng lahat ng accepted friends.  
+- Avatar + name + status (online/offline).  
+- Quick actions: message, view profile, unfriend.  
+- Sorting options: A–Z, recently added, favorites.  
+
+---
+
+### 🔺 2. **Friend Requests**
+- Incoming requests → accept / decline / block.  
+- Outgoing requests → pending status, option to cancel.  
+- Info text: “These people want to connect with you.”  
+
+---
+
+### 🔺 3. **Suggested Friends**
+- Recommendations based on mutual friends, interests, or events attended.  
+- “Add Friend” button.  
+- Optional filters: Nearby, Same interests, Recently joined.  
+
+---
+
+### 🔺 4. **Favorites**
+- Section para sa pinned friends (besties, close contacts).  
+- Always visible sa taas ng list.  
+- Shortcut to chat or profile.  
+
+---
+
+### 🔺 5. **Search & Filters**
+- Search bar → hanapin specific friend.  
+- Filters → All / Online / Favorites / Recently added.  
+
+---
+
+👉 In short:  
+Ang **Friends Page** ay dapat may **Friends List, Friend Requests, Suggested Friends, Favorites, Search/Filters, Friend Activity, at Blocked List**. Para siyang **social hub** na nagbibigay ng kontrol sa connections at discovery ng bagong tao.  
+
+Gusto mo bang i‑wireframe ko rin ang **flow hierarchy ng Friends Page** (Header → Friends List → Requests → Suggested → Favorites → Activity → Blocked) para mas makita ang logical navigation?

@@ -1,0 +1,29 @@
+Full-Screen Reel Viewer
+
+The Full-Screen Reel Viewer is the main screen where users watch reels in an immersive, distraction-free environment. It is designed to keep the video content front and center with minimal UI overlays for essential controls and information.
+
+Key Features:
+
+Vertical Scroll (Top to Bottom): Users scroll vertically to move through reels one by one, similar to popular reel or short video apps.
+
+Swipe Right to Profile: Swiping right from the reel screen navigates to the uploader's profile page, allowing users to explore more content from the creator.
+
+Swipe Left for Additional Actions: Swiping left can be used to reveal additional options or screens, such as reel details, comments, or sharing options.
+
+Auto-Play Video: Each reel auto-plays as it comes into view, providing a seamless viewing experience.
+
+Tap to Pause/Play: Users can tap the video to pause or resume playback.
+
+Mute/Unmute Button: A control to toggle sound on or off.
+
+User Info Overlay: Displays the uploader's profile picture and username, usually at the top or bottom corner.
+
+Caption/Description: Shows the reel's caption or description text.
+
+Reaction Buttons: Like, comment, share buttons are overlaid on the screen for quick interaction.
+
+Progress Indicator: A visual bar or circle showing how much of the reel has played.
+
+Loading and Error States: Smooth loading animations and friendly error messages if playback fails.
+
+This layout balances immersive video viewing with easy access to social interactions and navigation.

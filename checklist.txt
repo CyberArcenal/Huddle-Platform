@@ -1,0 +1,32 @@
+We have reviewed and updated key service methods to prefetch media variants, ensuring efficient serialization. Here's a summary of the changes and remaining checks:
+
+### Already Updated
+1. **`PostService.get_feed_posts`** – Added `prefetch_related(Prefetch('media', queryset=Media.objects.prefetch_related('variants')))`.
+2. **`ShareService.get_feed_shares`** – Added logic to fetch associated `Post` objects with prefetched media and variants, attaching them to shares as `_cached_content_object`.
+3. **`ReelService.get_feed_reels`** – Added `prefetch_related(Prefetch('media', queryset=Media.objects.prefetch_related('variants')))`.
+4. **`StoryService.get_user_stories`** – Recommended adding `select_related('media').prefetch_related('media__variants')` (or appropriate based on Story model).
+5. **`MediaDisplaySerializer.get_variants`** – Updated to use `obj.variants.all()` with the assumption that variants are prefetched.
+
+### Remaining Areas to Check
+
+1. **`PostService` other methods**  
+   - `get_friend_posts` (if used in feed)  
+   - `get_following_posts` (if used in feed)  
+   - Any method returning posts that may be serialized with media should have the same prefetch.
+
+2. **`GroupService.get_user_group_posts`**  
+   - This is used in the "groups" tab feed. It should be updated to prefetch media and variants.
+
+3. **`EventService.get_recommended_events`**  
+   - If events have media (e.g., cover images), they should be prefetched to avoid N+1 queries.
+
+4. **`ReelService` any other methods returning reels** (e.g., `get_reel_detail`) – ensure they include the prefetch if they will be serialized.
+
+5. **Any custom feed services** that return posts, shares, reels, or stories should be reviewed similarly.
+
+### Next Steps
+- Locate all service methods that return a queryset of posts, shares, reels, stories, or any model that contains media and has a related `MediaVariant` relationship.  
+- Apply the same prefetch pattern (`prefetch_related(Prefetch('media', queryset=Media.objects.prefetch_related('variants')))` for models with a `media` field; for models with a `content_object` pointing to a post, prefetch the post's media).  
+- Verify that serializers do not trigger additional queries by logging or using Django Debug Toolbar.
+
+Once these are in place, the feed and other listings will be fully optimized.

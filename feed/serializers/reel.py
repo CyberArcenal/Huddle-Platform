@@ -14,7 +14,6 @@ from feed.services.comment import CommentService
 from feed.services.reel import ReelService
 from feed.services.reaction import ReactionService
 from feed.utils.media import extract_thumbnail
-from users.serializers.user import UserMinimalSerializer, UserMinimalSerializer
 import os
 import tempfile
 import subprocess
@@ -24,6 +23,7 @@ from rest_framework import serializers
 
 from feed.models import Reel
 from feed.services.reel import ReelService
+from users.serializers.user.minimal import UserMinimalSerializer
 
 class ReelMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for reels (e.g., in a feed)."""

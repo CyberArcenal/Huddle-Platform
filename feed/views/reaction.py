@@ -25,7 +25,7 @@ from feed.services.reaction import ReactionService
 from feed.utils.reaction import can_view_content
 from global_utils.pagination import StandardResultsSetPagination
 from users.models import User
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 logger = logging.getLogger(__name__)
 

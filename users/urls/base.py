@@ -1,122 +1,140 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-
-from users.serializers.user_preference import UserAchievementsView, UserCausesView, UserFavoritesView, UserHobbiesView, UserInterestsView, UserLifestyleTagsView, UserMusicView, UserSchoolsView, UserWorksView
-from users.views.activity import ActivitySummaryView, FollowingActivityView, LogActivityView, RecentActivitiesView, UserActivityListView
-from users.views.admin import AdminBulkUserActionView, AdminCleanupView, AdminCreateUserView, AdminDashboardView, AdminUserDetailView, AdminUserListView, UserExportView
-from users.views.follow import FollowStatsView, FollowStatusView, FollowUserView, FollowersListView, FollowingListView, MutualFollowsView, MutualFriendsView, PopularUsersView, SuggestedUsersView, UnfollowUserView
-from users.views.matching import UserFriendSuggestionsView, UserMatchScoresView
-from users.views.media import CoverPhotoUploadView, GetCoverPhotoView, GetProfilePictureView, ProfilePictureUploadView, RemoveCoverPhotoView, RemoveProfilePictureView
-from users.views.search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
-from users.views.security import ActiveSessionsView, BulkTerminateSessionsView, ChangePasswordView, Check2FAStatusView, Disable2FAView, Enable2FAView, FailedLoginAttemptsView, SecurityLogsView, SecuritySettingsView, SuspiciousActivitiesView, TerminateAllSessionsView, TerminateSessionView
-from users.views.user import CheckEmailView, CheckUsernameView, EmailVerificationView, ResendVerificationView, UserDeactivateView, UserDetailView, UserProfileView, UserRegisterView, UserStatusUpdateView, VerifyUserView
-from users.views.user_media import UserMediaGridView
+import django.urls
+import rest_framework.routers
+import users.serializers.user_preference
+import users.views.activity
+import users.views.admin
+import users.views.block
+import users.views.follow
+import users.views.friendship
+import users.views.suggestions
+import users.views.media
+import users.views.search
+import users.views.security
+import users.views.user
+import users.views.user_media
 from .login import urlpatterns as login_urlpatterns
 from .login_checkpoint import urlpatterns as checkpoint
 from .reset import urlpatterns as password_urlpatterns
 # Create a router for API views
-router = DefaultRouter()
+router = rest_framework.routers.DefaultRouter()
 
 urlpatterns = [
     # User endpoints
-    path('register/', UserRegisterView.as_view(), name='user-register'),
-    path('profile/', UserProfileView.as_view(), name='user-profile'),
-    path('profile/<int:user_id>/', UserDetailView.as_view(), name='user-detail'),
-    path('search/', UserSearchView.as_view(), name='user-search'),
-    path('status/update/', UserStatusUpdateView.as_view(), name='user-status-update'),
-    path('deactivate/', UserDeactivateView.as_view(), name='user-deactivate'),
-    path('verify/', VerifyUserView.as_view(), name='user-verify'),
-    path('check-username/', CheckUsernameView.as_view(), name='check-username'),
-    path('check-email/', CheckEmailView.as_view(), name='check-email'),
-    path('verify-email/', EmailVerificationView.as_view(), name='verify-email'),
-    path('resend-verification/', ResendVerificationView.as_view(), name='resend-verification'),
+    django.urls.path('register/', users.views.user.UserRegisterView.as_view(), name='user-register'),
+    django.urls.path('profile/', users.views.user.UserProfileView.as_view(), name='user-profile'),
+    django.urls.path('profile/<int:user_id>/', users.views.user.UserDetailView.as_view(), name='user-detail'),
+    django.urls.path('search/', users.views.search.UserSearchView.as_view(), name='user-search'),
+    django.urls.path('status/update/', users.views.user.UserStatusUpdateView.as_view(), name='user-status-update'),
+    django.urls.path('deactivate/', users.views.user.UserDeactivateView.as_view(), name='user-deactivate'),
+    django.urls.path('verify/', users.views.user.VerifyUserView.as_view(), name='user-verify'),
+    django.urls.path('check-username/', users.views.user.CheckUsernameView.as_view(), name='check-username'),
+    django.urls.path('check-email/', users.views.user.CheckEmailView.as_view(), name='check-email'),
+    django.urls.path('verify-email/', users.views.user.EmailVerificationView.as_view(), name='verify-email'),
+    django.urls.path('resend-verification/', users.views.user.ResendVerificationView.as_view(), name='resend-verification'),
     
     # Follow endpoints
-    path('follow/', FollowUserView.as_view(), name='follow-user'),
-    path('unfollow/', UnfollowUserView.as_view(), name='unfollow-user'),
-    path('follow-status/<int:user_id>/', FollowStatusView.as_view(), name='follow-status'),
-    path('follow-stats/', FollowStatsView.as_view(), name='follow-stats'),
-    path('follow-stats/<int:user_id>/', FollowStatsView.as_view(), name='follow-stats-user'),
-    path('followers/', FollowersListView.as_view(), name='followers-list'),
-    path('followers/<int:user_id>/', FollowersListView.as_view(), name='followers-list-user'),
-    path('following/', FollowingListView.as_view(), name='following-list'),
-    path('following/<int:user_id>/', FollowingListView.as_view(), name='following-list-user'),
-    path('mutual-follows/<int:user_id>/', MutualFollowsView.as_view(), name='mutual-follows'),
-    path('suggested-users/', SuggestedUsersView.as_view(), name='suggested-users'),
+    django.urls.path('follow/', users.views.follow.FollowUserView.as_view(), name='follow-user'),
+    django.urls.path('unfollow/', users.views.follow.UnfollowUserView.as_view(), name='unfollow-user'),
+    django.urls.path('follow-status/<int:user_id>/', users.views.follow.FollowStatusView.as_view(), name='follow-status'),
+    django.urls.path('follow-stats/', users.views.follow.FollowStatsView.as_view(), name='follow-stats'),
+    django.urls.path('follow-stats/<int:user_id>/', users.views.follow.FollowStatsView.as_view(), name='follow-stats-user'),
+    django.urls.path('followers/', users.views.follow.FollowersListView.as_view(), name='followers-list'),
+    django.urls.path('followers/<int:user_id>/', users.views.follow.FollowersListView.as_view(), name='followers-list-user'),
+    django.urls.path('following/', users.views.follow.FollowingListView.as_view(), name='following-list'),
+    django.urls.path('following/<int:user_id>/', users.views.follow.FollowingListView.as_view(), name='following-list-user'),
+    django.urls.path('mutual-follows/<int:user_id>/', users.views.follow.MutualFollowsView.as_view(), name='mutual-follows'),
+    django.urls.path('suggested-users/', users.views.follow.SuggestedUsersView.as_view(), name='suggested-users'),
 
-    path('mutual-friends/', MutualFriendsView.as_view(), name='mutual-friends'),
-    path('popular-users/', PopularUsersView.as_view(), name='popular-users'),
-    path('matches/', UserMatchScoresView.as_view(), name='user-matches'),
-    path('friend-suggestions/', UserFriendSuggestionsView.as_view(), name='friend-suggestions'),
+    django.urls.path('mutual-friends/', users.views.follow.MutualFriendsView.as_view(), name='mutual-friends'),
+    django.urls.path('popular-users/', users.views.follow.PopularUsersView.as_view(), name='popular-users'),
+    
+    django.urls.path('friend-suggestions/', users.views.suggestions.UserFriendSuggestionsView.as_view(), name='friend-suggestions'),
 
     
     # Security endpoints
-    path('security/change-password/', ChangePasswordView.as_view(), name='change-password'),
-    path('security/enable-2fa/', Enable2FAView.as_view(), name='enable-2fa'),
-    path('security/disable-2fa/', Disable2FAView.as_view(), name='disable-2fa'),
-    path('security/settings/', SecuritySettingsView.as_view(), name='security-settings'),
-    path('security/logs/', SecurityLogsView.as_view(), name='security-logs'),
-    path('security/failed-logins/', FailedLoginAttemptsView.as_view(), name='failed-logins'),
-    path('security/suspicious-activities/', SuspiciousActivitiesView.as_view(), name='suspicious-activities'),
-    path('security/sessions/', ActiveSessionsView.as_view(), name='active-sessions'),
-    path('security/terminate-session/', TerminateSessionView.as_view(), name='terminate-session'),
-    path('security/bulk-terminate-sessions/', BulkTerminateSessionsView.as_view(), name='bulk-terminate-sessions'),
-    path('security/terminate-all-sessions/', TerminateAllSessionsView.as_view(), name='terminate-all-sessions'),
-    path('security/check-2fa/', Check2FAStatusView.as_view(), name='check-2fa'),
+    django.urls.path('security/change-password/', users.views.security.ChangePasswordView.as_view(), name='change-password'),
+    django.urls.path('security/enable-2fa/', users.views.security.Enable2FAView.as_view(), name='enable-2fa'),
+    django.urls.path('security/disable-2fa/', users.views.security.Disable2FAView.as_view(), name='disable-2fa'),
+    django.urls.path('security/settings/', users.views.security.SecuritySettingsView.as_view(), name='security-settings'),
+    django.urls.path('security/logs/', users.views.security.SecurityLogsView.as_view(), name='security-logs'),
+    django.urls.path('security/failed-logins/', users.views.security.FailedLoginAttemptsView.as_view(), name='failed-logins'),
+    django.urls.path('security/suspicious-activities/', users.views.security.SuspiciousActivitiesView.as_view(), name='suspicious-activities'),
+    django.urls.path('security/sessions/', users.views.security.ActiveSessionsView.as_view(), name='active-sessions'),
+    django.urls.path('security/terminate-session/', users.views.security.TerminateSessionView.as_view(), name='terminate-session'),
+    django.urls.path('security/bulk-terminate-sessions/', users.views.security.BulkTerminateSessionsView.as_view(), name='bulk-terminate-sessions'),
+    django.urls.path('security/terminate-all-sessions/', users.views.security.TerminateAllSessionsView.as_view(), name='terminate-all-sessions'),
+    django.urls.path('security/check-2fa/', users.views.security.Check2FAStatusView.as_view(), name='check-2fa'),
     
     # Activity endpoints
-    path('activity/', UserActivityListView.as_view(), name='user-activity'),
-    path('activity/following/', FollowingActivityView.as_view(), name='following-activity'),
-    path('activity/summary/', ActivitySummaryView.as_view(), name='activity-summary'),
-    path('activity/recent/', RecentActivitiesView.as_view(), name='recent-activities'),
-    path('activity/log/', LogActivityView.as_view(), name='log-activity'),
+    django.urls.path('activity/', users.views.activity.UserActivityListView.as_view(), name='user-activity'),
+    django.urls.path('activity/following/', users.views.activity.FollowingActivityView.as_view(), name='following-activity'),
+    django.urls.path('activity/summary/', users.views.activity.ActivitySummaryView.as_view(), name='activity-summary'),
+    django.urls.path('activity/recent/', users.views.activity.RecentActivitiesView.as_view(), name='recent-activities'),
+    django.urls.path('activity/log/', users.views.activity.LogActivityView.as_view(), name='log-activity'),
     
     # Media endpoints
-    path('media/profile-picture/', ProfilePictureUploadView.as_view(), name='upload-profile-picture'),
-    path('media/cover-photo/', CoverPhotoUploadView.as_view(), name='upload-cover-photo'),
-    path('media/remove-profile-picture/', RemoveProfilePictureView.as_view(), name='remove-profile-picture'),
-    path('media/remove-cover-photo/', RemoveCoverPhotoView.as_view(), name='remove-cover-photo'),
-    path('media/profile-picture/<int:user_id>/', GetProfilePictureView.as_view(), name='get-profile-picture'),
-    path('media/cover-photo/<int:user_id>/', GetCoverPhotoView.as_view(), name='get-cover-photo'),
+    django.urls.path('media/profile-picture/', users.views.media.ProfilePictureUploadView.as_view(), name='upload-profile-picture'),
+    django.urls.path('media/cover-photo/', users.views.media.CoverPhotoUploadView.as_view(), name='upload-cover-photo'),
+    django.urls.path('media/remove-profile-picture/', users.views.media.RemoveProfilePictureView.as_view(), name='remove-profile-picture'),
+    django.urls.path('media/remove-cover-photo/', users.views.media.RemoveCoverPhotoView.as_view(), name='remove-cover-photo'),
+    django.urls.path('media/profile-picture/<int:user_id>/', users.views.media.GetProfilePictureView.as_view(), name='get-profile-picture'),
+    django.urls.path('media/cover-photo/<int:user_id>/', users.views.media.GetCoverPhotoView.as_view(), name='get-cover-photo'),
     
-    path('users/<int:user_id>/media/', UserMediaGridView.as_view(), name='user-media'),
-    path('me/media/', UserMediaGridView.as_view(), name='my-media'),
+    django.urls.path('users/<int:user_id>/media/', users.views.user_media.UserMediaGridView.as_view(), name='user-media'),
+    django.urls.path('me/media/', users.views.user_media.UserMediaGridView.as_view(), name='my-media'),
     
     # Search endpoints
-    path('search/users/', UserSearchView.as_view(), name='search-users'),
-    path('search/advanced/', AdvancedUserSearchView.as_view(), name='advanced-search'),
-    path('search/autocomplete/', SearchAutocompleteView.as_view(), name='search-autocomplete'),
-    path('search/by-username/', SearchByUsernameView.as_view(), name='search-by-username'),
-    path('search/by-email/', SearchByEmailView.as_view(), name='search-by-email'),
-    path('search/global/', GlobalSearchView.as_view(), name='global-search'),
+    django.urls.path('search/users/', users.views.search.UserSearchView.as_view(), name='search-users'),
+    django.urls.path('search/advanced/', users.views.search.AdvancedUserSearchView.as_view(), name='advanced-search'),
+    django.urls.path('search/autocomplete/', users.views.search.SearchAutocompleteView.as_view(), name='search-autocomplete'),
+    django.urls.path('search/by-username/', users.views.search.SearchByUsernameView.as_view(), name='search-by-username'),
+    django.urls.path('search/by-email/', users.views.search.SearchByEmailView.as_view(), name='search-by-email'),
+    django.urls.path('search/global/', users.views.search.GlobalSearchView.as_view(), name='global-search'),
     
     # Admin endpoints
-    path('admin/users/', AdminUserListView.as_view(), name='admin-user-list'),
-    path('admin/users/<int:user_id>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
-    path('admin/users/create/', AdminCreateUserView.as_view(), name='admin-create-user'),
-    path('admin/bulk-action/', AdminBulkUserActionView.as_view(), name='admin-bulk-action'),
-    path('admin/dashboard/', AdminDashboardView.as_view(), name='admin-dashboard'),
-    path('admin/export/<int:user_id>/', UserExportView.as_view(), name='user-export'),
-    path('admin/cleanup/', AdminCleanupView.as_view(), name='admin-cleanup'),
+    django.urls.path('admin/users/', users.views.admin.AdminUserListView.as_view(), name='admin-user-list'),
+    django.urls.path('admin/users/<int:user_id>/', users.views.admin.AdminUserDetailView.as_view(), name='admin-user-detail'),
+    django.urls.path('admin/users/create/', users.views.admin.AdminCreateUserView.as_view(), name='admin-create-user'),
+    django.urls.path('admin/bulk-action/', users.views.admin.AdminBulkUserActionView.as_view(), name='admin-bulk-action'),
+    django.urls.path('admin/dashboard/', users.views.admin.AdminDashboardView.as_view(), name='admin-dashboard'),
+    django.urls.path('admin/export/<int:user_id>/', users.views.admin.UserExportView.as_view(), name='user-export'),
+    django.urls.path('admin/cleanup/', users.views.admin.AdminCleanupView.as_view(), name='admin-cleanup'),
 ]
 
 
 urlpatterns += [
-    path("auth/", include(login_urlpatterns)),
-    path("password/", include(password_urlpatterns)),
-    path("auth-checkpoints/", include(checkpoint)),
+    django.urls.path("auth/", django.urls.include(login_urlpatterns)),
+    django.urls.path("password/", django.urls.include(password_urlpatterns)),
+    django.urls.path("auth-checkpoints/", django.urls.include(checkpoint)),
 ]
 
 
 urlpatterns += [
     # Preference endpoints
-    path('preferences/hobbies/', UserHobbiesView.as_view(), name='user-hobbies'),
-    path('preferences/interests/', UserInterestsView.as_view(), name='user-interests'),
-    path('preferences/favorites/', UserFavoritesView.as_view(), name='user-favorites'),
-    path('preferences/music/', UserMusicView.as_view(), name='user-music'),
-    path('preferences/works/', UserWorksView.as_view(), name='user-works'),
-    path('preferences/schools/', UserSchoolsView.as_view(), name='user-schools'),
-    path('preferences/achievements/', UserAchievementsView.as_view(), name='user-achievements'),
-    path('preferences/causes/', UserCausesView.as_view(), name='user-causes'),
-    path('preferences/lifestyle-tags/', UserLifestyleTagsView.as_view(), name='user-lifestyle-tags'),
+    django.urls.path('preferences/hobbies/', users.serializers.user_preference.UserHobbiesView.as_view(), name='user-hobbies'),
+    django.urls.path('preferences/interests/', users.serializers.user_preference.UserInterestsView.as_view(), name='user-interests'),
+    django.urls.path('preferences/favorites/', users.serializers.user_preference.UserFavoritesView.as_view(), name='user-favorites'),
+    django.urls.path('preferences/music/', users.serializers.user_preference.UserMusicView.as_view(), name='user-music'),
+    django.urls.path('preferences/works/', users.serializers.user_preference.UserWorksView.as_view(), name='user-works'),
+    django.urls.path('preferences/schools/', users.serializers.user_preference.UserSchoolsView.as_view(), name='user-schools'),
+    django.urls.path('preferences/achievements/', users.serializers.user_preference.UserAchievementsView.as_view(), name='user-achievements'),
+    django.urls.path('preferences/causes/', users.serializers.user_preference.UserCausesView.as_view(), name='user-causes'),
+    django.urls.path('preferences/lifestyle-tags/', users.serializers.user_preference.UserLifestyleTagsView.as_view(), name='user-lifestyle-tags'),
+]
+
+urlpatterns += [
+    django.urls.path('blocks/', users.views.block.BlockedUsersListView.as_view(), name='blocked-list'),
+    django.urls.path('blocks/block/', users.views.block.BlockView.as_view(), name='block'),
+    django.urls.path('blocks/unblock/', users.views.block.UnblockView.as_view(), name='unblock'),
+    django.urls.path('blocks/check/<int:user_id>/', users.views.block.CheckBlockedView.as_view(), name='check-blocked'),
+]
+
+urlpatterns += [
+    django.urls.path('friends/', users.views.friendship.FriendsListView.as_view(), name='friends-list'),
+    django.urls.path('friends/requests/send/', users.views.friendship.FriendRequestSendView.as_view(), name='friend-request-send'),
+    django.urls.path('friends/requests/pending/', users.views.friendship.PendingRequestsView.as_view(), name='pending-requests'),
+    django.urls.path('friends/requests/<int:pk>/accept/', users.views.friendship.FriendRequestAcceptView.as_view(), name='friend-request-accept'),
+    django.urls.path('friends/requests/<int:pk>/decline/', users.views.friendship.FriendRequestDeclineView.as_view(), name='friend-request-decline'),
+    django.urls.path('friends/remove/', users.views.friendship.FriendRemoveView.as_view(), name='friend-remove'),
+    django.urls.path('friends/<int:pk>/tag/', users.views.friendship.FriendTagUpdateView.as_view(), name='friend-tag-update'),
 ]

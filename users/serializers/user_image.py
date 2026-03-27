@@ -4,9 +4,37 @@ from rest_framework import serializers
 from feed.models.post import POST_PRIVACY_TYPES
 from users.models import UserImage
 from users.models.user import PROFILE_IMAGE_TYPE_CHOICES
-from users.serializers.user import PostStatsSerializers, UserMinimalSerializer
+from users.serializers.user.profile import UserMinimalSerializer
 from users.services.user_image import UserImageService
 
+
+
+
+
+
+
+# ========================================================================
+class PostStatsSerializers(serializers.Serializer):
+    comment_count = serializers.IntegerField()
+    like_count = serializers.IntegerField()
+    reaction_count = serializers.DictField()
+    privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES)
+    comments = serializers.DictField()
+    liked = serializers.BooleanField()
+    current_reaction = serializers.StringRelatedField()
+    share_count = serializers.IntegerField()
+    
+    view_count = serializers.IntegerField()
+    moots_who_reacted = serializers.ListField()
+    unique_viewers = serializers.IntegerField()
+    bookmark_count = serializers.IntegerField()
+    report_count = serializers.IntegerField()
+    is_author = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+    trending_score = serializers.FloatField()
+    
+# ========================================================================
 class NormalizedImageField(serializers.ImageField):
     """
     ImageField that ensures uploaded file has a sensible filename extension
@@ -60,6 +88,39 @@ class NormalizedImageField(serializers.ImageField):
 
 # ==============================================================================================
 
+
+class UserImageDisplaySerializer(serializers.ModelSerializer):
+    """Detailed view for a user image with interaction statistics."""
+
+    image_url = serializers.SerializerMethodField()
+    user = UserMinimalSerializer()
+    statistics = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserImage
+        fields = [
+            "id",
+            "user",
+            "image_url",
+            "caption",
+            "image_type",
+            "is_active",
+            "created_at",
+            "statistics",
+        ]
+
+    def get_image_url(self, obj):
+        if obj.image:
+            return self.context["request"].build_absolute_uri(obj.image.url)
+        return None
+
+    def get_statistics(
+        self, obj
+    ) -> PostStatsSerializers:  # dont remove it, its use to detailed openapi schema
+        from feed.services.post import PostService
+
+        return PostService.get_post_statistics(serializer=self, obj=obj)
+    
 
 class UserMediaItemSerializer(serializers.Serializer):
     type = serializers.CharField()
@@ -148,36 +209,5 @@ class UserImageCreateSerializer(serializers.ModelSerializer):
             crop_width=crop_width,
             crop_height=crop_height,
         )
+        
 
-
-class UserImageDisplaySerializer(serializers.ModelSerializer):
-    """Detailed view for a user image with interaction statistics."""
-
-    image_url = serializers.SerializerMethodField()
-    user = UserMinimalSerializer()
-    statistics = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserImage
-        fields = [
-            "id",
-            "user",
-            "image_url",
-            "caption",
-            "image_type",
-            "is_active",
-            "created_at",
-            "statistics",
-        ]
-
-    def get_image_url(self, obj):
-        if obj.image:
-            return self.context["request"].build_absolute_uri(obj.image.url)
-        return None
-
-    def get_statistics(
-        self, obj
-    ) -> PostStatsSerializers:  # dont remove it, its use to detailed openapi schema
-        from feed.services.post import PostService
-
-        return PostService.get_post_statistics(serializer=self, obj=obj)

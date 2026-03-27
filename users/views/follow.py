@@ -8,8 +8,8 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from global_utils.pagination import StandardResultsSetPagination, UsersPagination
-from users.serializers.user import UserListSerializer
-from users.services.matching import MatchingService
+from users.serializers.user.base import UserListSerializer
+from dating.services.matching import MatchingService
 from users.views.user import PaginatedUserListSerializer
 
 from ..services.user_follow import UserFollowService
@@ -373,7 +373,7 @@ class MutualFollowsView(APIView):
 
 # users/views/follow.py (updated part)
 
-from users.services.matching import MatchingService
+from dating.services.matching import MatchingService
 from users.serializers.matching import UserMutualCountSerializer
 
 

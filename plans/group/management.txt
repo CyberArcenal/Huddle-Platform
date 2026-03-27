@@ -1,0 +1,63 @@
+Narito ang **Group Management Screen plan** na puwede mong i‑save sa notes:
+
+---
+
+# ⚙️ Group Management Screen Plan
+
+### 🔺 Header
+- **Group name + profile picture**  
+- **Member count + type**  
+- **Admin badge** (visible lang kung admin ang user)  
+
+---
+
+### 🔺 Management Tabs / Sections
+
+#### 1. **Group Info**
+- Edit group name, description, profile picture.  
+- Change group type (hobby, work, school, cause).  
+- Privacy settings (public, private, invite‑only).  
+- Save changes button.  
+
+#### 2. **Membership Requests**
+- List of pending join requests.  
+- Each request card: profile picture, name, short bio.  
+- Approve / Decline buttons.  
+- Bulk actions (approve all, decline all).  
+
+#### 3. **Members & Roles**
+- Full member list with search bar.  
+- Role badges (Admin, Moderator, Member).  
+- Actions: Promote to admin/moderator, Demote, Remove member.  
+- Joined date + activity indicator.  
+
+#### 4. **Content & Posts**
+- Manage posts (pin, delete, moderate).  
+- Option to set posting rules (e.g., only admins can post).  
+- Reported posts queue for moderation.  
+
+#### 5. **Events Management**
+- List of upcoming events created by group.  
+- Edit or delete events.  
+- Create new event button.  
+- RSVP overview (who’s going, interested).  
+
+#### 6. **Analytics / Insights**
+- Member growth chart (weekly/monthly).  
+- Engagement stats (posts per week, comments, reactions).  
+- Top contributors list.  
+- Activity trends (most active days/times).  
+
+---
+
+### ✨ Extra Enhancements
+- **Invite Members shortcut**: quick button to send invites.  
+- **Group Rules editor**: admins can set guidelines.  
+- **Notifications toggle**: control group notifications.  
+- **Audit log**: track admin actions (role changes, removals).  
+
+---
+
+👉 Sa ganitong setup, ang **Group Management Screen** ay magiging admin hub: lahat ng tools para i‑manage ang group, members, content, at events nasa iisang lugar.  
+
+Gusto mo bang i‑expand ko rin ang **Analytics / Insights section** para mas detailed (hal. graphs, top posts, member activity heatmap)?

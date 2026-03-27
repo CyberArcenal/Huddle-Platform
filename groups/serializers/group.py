@@ -1,13 +1,11 @@
-from typing import List, Optional
+from typing import Optional
 
 from rest_framework import serializers
 from django.core.exceptions import ValidationError
 from groups.models.group import GROUP_PRIVACY_CHOICES, GROUP_TYPE_CHOICES, Group
-from groups.models.member import MemberRole
-from groups.serializers.member import GroupMemberMinimalSerializer
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
-from users.models import User
+from groups.serializers.member import GroupMemberMinimalSerializer
 
 class GroupMemberPreviewSerializer(serializers.Serializer):
     id = serializers.IntegerField()
@@ -57,7 +55,7 @@ class GroupMinimalSerializer(serializers.ModelSerializer):
             return f"{n/1_000:.1f}k"
         return str(n)
 
-    def get_member_preview(self, obj) -> list:
+    def get_member_preview(self, obj) -> GroupMemberMinimalSerializer(many=True): # type: ignore
         """Return up to 3 preview members serialized."""
         members_qs = getattr(obj, 'members_preview', None)
         if not members_qs:
@@ -210,7 +208,7 @@ class GroupDisplaySerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
-    def get_member_preview(self, obj) -> list:
+    def get_member_preview(self, obj) -> GroupMemberMinimalSerializer(many=True): # type: ignore
         """Return up to 3 preview members serialized."""
         members_qs = getattr(obj, 'members_preview', None)
         if not members_qs:

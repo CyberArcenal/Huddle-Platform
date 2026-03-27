@@ -10,22 +10,22 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 from core.settings.dev import LOGGER
 from global_utils.pagination import UsersPagination
+from users.serializers.user.profile import UserProfileSerializer
 
 from ..services.user import UserService
 from ..services.security_log import SecurityLogService
 from ..services.login_session import LoginSessionService
-from ..serializers.user import (
+from ..serializers.user.base import (
     UserCreateSerializer,
     UserProfileSchemaUpdateSerializer,
     UserRegisterSerializer,
     UserUpdateSerializer,
-    UserProfileSerializer,
     UserListSerializer,
     UserStatusSerializer,
 )
 from ..models import User, UserStatus
 from rest_framework import serializers
-from ..serializers.user import UserListSerializer
+from ..serializers.user.base import UserListSerializer
 
 
 # ----- Paginated response serializers for drf-spectacular -----

@@ -2,10 +2,9 @@
 from rest_framework import serializers
 from feed.models.comment import Comment
 from feed.services.comment import CommentService
-from users.serializers.user import UserMinimalSerializer
 from django.contrib.contenttypes.models import ContentType
 from feed.services.comment import CommentService
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class ReactionCountSerializer(serializers.Serializer):

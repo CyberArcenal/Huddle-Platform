@@ -194,7 +194,7 @@ class SearchByUsernameView(APIView):
 
             if exact_match:
                 # Return list with one user, using UserListSerializer for consistency
-                from ..serializers.user import UserListSerializer
+                from ..serializers.user.base import UserListSerializer
                 serializer = UserListSerializer(
                     [exact_match], many=True, context={"request": request}
                 )
@@ -208,7 +208,7 @@ class SearchByUsernameView(APIView):
                 username__icontains=username, status=UserStatus.ACTIVE
             ).order_by("username")[:20]
 
-            from ..serializers.user import UserListSerializer
+            from ..serializers.user.base import UserListSerializer
             serializer = UserListSerializer(
                 partial_matches, many=True, context={"request": request}
             )
@@ -243,7 +243,7 @@ class SearchByEmailView(APIView):
 
         try:
             users = User.objects.filter(email__icontains=email).order_by("email")[:50]
-            from ..serializers.user import UserListSerializer
+            from ..serializers.user.base import UserListSerializer
             serializer = UserListSerializer(
                 users, many=True, context={"request": request}
             )
@@ -304,7 +304,7 @@ class GlobalSearchView(APIView):
                 status=UserStatus.ACTIVE,
             ).order_by("username")[:10]
 
-            from ..serializers.user import UserListSerializer
+            from ..serializers.user.base import UserListSerializer
             user_serializer = UserListSerializer(
                 users, many=True, context={"request": request}
             )

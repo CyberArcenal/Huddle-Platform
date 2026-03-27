@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from admin_pannel.models.admin_log import AdminLog
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class AdminLogMinimalSerializer(serializers.ModelSerializer):

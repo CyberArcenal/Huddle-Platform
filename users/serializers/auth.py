@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from users.serializers.user import UserProfileSerializer, UserMinimalSerializer
+
+from users.serializers.user.minimal import UserMinimalSerializer
+from users.serializers.user.profile import UserProfileSerializer
 
 class LoginRequestSerializer(serializers.Serializer):
     email = serializers.CharField()

@@ -1,0 +1,52 @@
+Para sa **Search Screen**, magandang laman ay naka‑focus sa mabilis na paghahanap at malinaw na resulta. Eto ang plan:
+
+---
+
+# 🔍 Search Screen Plan
+
+### 🔺 Header
+- **Search bar** (prominent sa taas, may magnifying glass icon).  
+- **Voice search option** (optional).  
+- **Filter icon** para sa advanced search.  
+
+---
+
+### 🔺 Tabs / Categories (slidable sa taas ng results)
+- [All]  
+- [Groups]  
+- [Members]  
+- [Posts]  
+- [Events]  
+- [Hashtags / Topics]  
+
+---
+
+### 🔺 Results Layout
+- **All tab** → mixed results (group cards, member cards, posts).  
+- **Groups tab** → group cards (profile picture, name, short description, member count, join/view button).  
+- **Members tab** → member cards (profile picture, full name, username, hobbies, location, follow button).  
+- **Posts tab** → post cards (author, timestamp, content, reactions).  
+- **Events tab** → event cards (title, date/time, location, RSVP button).  
+- **Hashtags tab** → trending topics, clickable to open related posts.  
+
+---
+
+### 🔺 Interaction
+- **Tap result card** → open detail (group detail, member profile, post detail, event detail).  
+- **Long press** → quick actions (follow, join, save, mute).  
+- **Filters** → refine search (by type, date, popularity).  
+- **Recent searches** → quick access sa history.  
+
+---
+
+### ✨ Extra Enhancements
+- **Suggestions while typing** (autocomplete for groups, members, hashtags).  
+- **Trending searches** section.  
+- **Empty state**: “No results found” with illustration.  
+- **Smart ranking**: prioritize groups/members na may connection sa user.  
+
+---
+
+👉 Sa ganitong setup, ang **Search Screen** ay magiging parang central discovery hub — madaling maghanap ng groups, members, posts, events, at topics sa iisang lugar.  
+
+Gusto mo bang i‑expand ko rin ang **Search Result Card designs** (detalyado kung ano ang laman ng bawat card per category)?

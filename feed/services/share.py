@@ -2,10 +2,13 @@ from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from django.contrib.contenttypes.models import ContentType
 from typing import Optional, List, Dict, Any, Union
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 
+from feed.models.media import Media
+from feed.models.post import Post
 from groups.models.group import Group
 from users.models import User
+from users.services.user_follow import UserFollowService
 from ..models import Share
 
 
@@ -189,8 +192,6 @@ class ShareService:
         - public shares from others (if we want discovery, not for now)
         For simplicity, only from followed users and own shares.
         """
-        from users.services.user_follow import UserFollowService
-
         following = UserFollowService.get_following(user)
         # Get shares from followed users and own shares
         queryset = Share.objects.filter(
@@ -198,8 +199,24 @@ class ShareService:
             is_deleted=False
         ).select_related('user', 'content_type').order_by('-created_at')
 
-        # Optionally filter out shares where the target object is deleted or not viewable
-        # For performance, we'll just trust that the original content is still available.
-        # A more robust implementation would check each content_object.
+        shares = list(queryset[offset : offset + limit])
 
-        return list(queryset[offset : offset + limit])
+        # Prefetch the content objects (assume they are Posts) with their media variants
+        if shares:
+            # Get the content type for Post model
+            post_ct = ContentType.objects.get_for_model(Post)
+            # Collect IDs of shares that point to Post objects
+            post_ids = [s.object_id for s in shares if s.content_type == post_ct]
+            if post_ids:
+                # Fetch those Posts with prefetched media and variants
+                posts = Post.objects.filter(id__in=post_ids).prefetch_related(
+                    Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+                )
+                # Create a mapping from id to post
+                post_map = {p.id: p for p in posts}
+                # Attach the post to each share as _cached_content_object
+                for share in shares:
+                    if share.content_type == post_ct and share.object_id in post_map:
+                        share._cached_content_object = post_map[share.object_id]
+
+        return shares

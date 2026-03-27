@@ -1,0 +1,51 @@
+Ang **Chat Requests** ay isang espesyal na screen na parang “message inbox filter” para sa mga mensahe galing sa mga taong **hindi mo pa ka‑friend o hindi pa verified connection**.  
+
+### 🔎 Idea ng Chat Requests
+- **Segregation** → para hindi basta‑basta makapasok sa main chat list ang mga hindi kilala.  
+- **Control** → ikaw ang mag‑decide kung tatanggapin, i‑ignore, o i‑block ang request.  
+- **Safety** → proteksyon laban sa spam, harassment, o unwanted messages.  
+
+---
+
+# 📥 Chat Requests Screen Plan
+
+### 🔺 Header
+- **Title**: “Message Requests”  
+- **Info text**: “Messages from people you don’t know will appear here.”  
+
+---
+
+### 🔺 Request List
+- **User avatar + name**  
+- **Preview of message** → unang linya lang  
+- **Timestamp** → oras ng pagkakasend  
+- **Action buttons** → Accept / Decline / Block  
+
+---
+
+### 🔺 Accepted Requests
+- Kapag in‑accept → lilipat sa **main Chat List** at magiging normal conversation.  
+
+---
+
+### 🔺 Declined Requests
+- Kapag dinecline → mawawala sa list, hindi makaka‑chat ulit (optional archive).  
+
+---
+
+### 🔺 Blocked Requests
+- Kapag binlock → hindi na makakapag‑send ng kahit anong message.  
+
+---
+
+### 🔺 Extras
+- **Filter tabs** → All / Unread / Blocked  
+- **Bulk actions** → select multiple requests → decline/block in one go  
+- **Spam detection** → auto‑flag suspicious requests  
+
+---
+
+👉 In short:  
+Ang **Chat Requests Screen** ay parang **gatekeeper inbox** — lahat ng messages mula sa strangers o hindi pa verified connections ay dumadaan dito bago maging full conversation.  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng Chat Requests Screen** (Header → Request List → Actions → Filters → Extras) para mas makita ang flow visually?

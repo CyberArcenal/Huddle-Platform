@@ -1,0 +1,43 @@
+# ✨ Optional Enhancements Plan
+
+### 1. **Date Ideas Screen**
+**Purpose**: Magbigay ng inspiration para sa mga matches kung saan sila puwedeng mag‑bond.  
+**Content**:
+- **Suggested activities** → based on mutual hobbies (e.g., Hiking, Cooking class, Jazz concert).  
+- **Categories** → Outdoor, Food & Drink, Arts & Culture, Chill at Home.  
+- **Personalization** → “Because you both love Hiking, try Mt. Pulag day trip.”  
+- **CTA** → “Invite your match to this activity.”  
+
+---
+
+### 2. **Safety Tips Screen**
+**Purpose**: Mag‑educate users sa safe dating practices.  
+**Content**:
+- **General guidelines** → meet in public places, tell a friend, don’t overshare personal info.  
+- **App‑specific tips** → use in‑app chat, report/block suspicious accounts.  
+- **Visual icons** → quick, friendly reminders.  
+- **CTA** → “Learn more about online safety.”  
+
+---
+
+### 3. **Events for Singles Screen**
+**Purpose**: Mag‑curate ng group events para sa social discovery.  
+**Content**:
+- **Upcoming events list** → Singles Night, Speed Dating, Hiking Meetup, Book Club.  
+- **Event details** → date, location, description, participants.  
+- **Personalization** → “Because you love Jazz, join Jazz Night for Singles.”  
+- **CTA** → “RSVP” or “Invite your match.”  
+
+---
+
+### 🔎 Flow Integration
+- **Discovery → Match → Chat → Date Ideas** → natural progression kapag may connection na.  
+- **Safety Tips** → accessible sa Profile Detail at Match Screen para laging visible.  
+- **Events for Singles** → integrated sa Insights at Discovery feed bilang “social opportunities.”  
+
+---
+
+👉 In short:  
+- **Date Ideas Screen** = inspiration hub.  
+- **Safety Tips Screen** = trust & security hub.  
+- **Events for Singles Screen** = community hub.  

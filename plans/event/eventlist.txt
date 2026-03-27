@@ -1,0 +1,77 @@
+Para sa **Event List Screen**, maganda kung magiging informative pero lightweight ang bawat card para mabilis ma‑scan ng user. Eto ang mga recommended na laman:
+
+---
+
+### 📋 Event Card Content (per item sa list)
+
+1. **Cover Image / Group Banner**
+   - `group.profile_picture` o fallback gradient
+   - Overlay: group name o event type badge (Public/Private)
+
+2. **Event Title**
+   - Malinaw at bold (`event.title`)
+   - Max 2 lines, ellipsis kung mahaba
+
+3. **Date & Time**
+   - `start_time` → formatted (e.g. *Fri, Mar 27 • 7:16 AM*)
+   - Optional: duration kung may `end_time`
+
+4. **Location**
+   - `event.location` (shortened kung mahaba)
+   - Icon + text row
+
+5. **Organizer Info (compact)**
+   - Avatar (`organizer.profile_picture_url`)
+   - Username o full name
+
+6. **Attendee Status**
+   - `attendees_count / max_attendees`
+   - Badge kung `is_full == true`
+
+7. **Quick Actions (optional)**
+   - RSVP / Join button
+   - Overflow menu (Share, Save)
+
+---
+
+### 🧩 Extra Enhancements
+
+- **Event Type Badge** → “Public” / “Private” / “Group”
+- **Group Member Preview** → maliit na row ng avatars (`member_preview`)
+- **User Status Indicator** → kung naka‑RSVP na si user (`user_status`)
+
+---
+
+### 🧪 Sample Compose Layout (simplified)
+
+```kotlin
+@Composable
+fun EventCard(event: EventList, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(event.title, style = MaterialTheme.typography.titleMedium)
+            Text(formatDate(event.startTime), style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.LocationOn, contentDescription = null)
+                Text(event.location ?: "TBA", style = MaterialTheme.typography.bodySmall)
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("${event.attendeesCount}/${event.maxAttendees} attending",
+                 style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+```
+
+---
+
+👉 Sa **Event List Screen**, magandang balance ay: **title + date/time + location + attendee status**. Optional na lang ang organizer at group preview para hindi maging crowded.  
+
+Gusto mo bang igawan kita ng **wireframe flow** kung paano mag‑transition mula Event List → Event Detail → RSVP?

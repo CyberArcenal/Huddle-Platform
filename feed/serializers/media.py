@@ -47,18 +47,20 @@ class MediaDisplaySerializer(serializers.ModelSerializer):
         return None
 
     def get_variants(self, obj):
-        """Return a dictionary of variant URLs based on metadata."""
+        """
+        Return a dictionary mapping variant type to absolute file URL.
+        Uses the related MediaVariant objects instead of the metadata field.
+        """
         request = self.context.get('request')
-        variants = obj.metadata.get('variants', {})
         if not request:
-            return variants  # fallback to raw data
+            return {}
 
+        # Access the prefetched variants (to avoid N+1)
+        variants = getattr(obj, '_prefetched_objects_cache', {}).get('variants', obj.variants.all())
         result = {}
-        for name, info in variants.items():
-            file_path = info.get('file')
-            if file_path:
-                # Assuming file_path is relative to MEDIA_URL
-                result[name] = request.build_absolute_uri(settings.MEDIA_URL + file_path)
+        for variant in variants:
+            if variant.file:
+                result[variant.variant_type] = request.build_absolute_uri(variant.file.url)
             else:
-                result[name] = None
+                result[variant.variant_type] = None
         return result

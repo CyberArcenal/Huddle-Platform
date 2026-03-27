@@ -1,0 +1,53 @@
+Ang **Group Chat Screen** ay basically yung **conversation view** pero para sa isang grupo ng users, hindi lang one‑on‑one. Ang idea dito ay magbigay ng **shared space** kung saan maraming tao sabay‑sabay nag‑uusap. Eto ang magandang laman:
+
+---
+
+# 👥 Group Chat Screen Plan
+
+### 🔺 Header
+- **Group name** → hal. “Team Project” o “Barkada Chat”  
+- **Group avatar / cover** → customizable icon/photo  
+- **Member count** → “12 members”  
+- **Options menu** → view members, add/remove, mute group, leave group  
+
+---
+
+### 🔺 Conversation Area
+- **Message bubbles** → may label ng sender (name + avatar)  
+- **Timestamps** → oras ng bawat message  
+- **Read receipts** → optional (kung supported, makikita kung sino ang nakabasa)  
+- **Typing indicator** → “Juan and Maria are typing…”  
+- **Media previews** → inline display ng images, videos, voice notes  
+- **Reactions** → emoji reactions sa messages  
+
+---
+
+### 🔺 Input Bar
+- **Text field** → main input  
+- **Send button** → icon (paper plane)  
+- **Attachment options** → photo, video, voice note, GIF/sticker  
+- **Emoji picker** → quick access  
+
+---
+
+### 🔺 Group Features
+- **Member list screen** → makita lahat ng members, roles (admin, member)  
+- **Add members** → invite via search, link, QR code  
+- **Change group name/photo** → admin‑only option  
+- **Pinned messages** → important announcements sa taas  
+- **Shared media tab** → lahat ng photos/videos/documents exchanged  
+
+---
+
+### 🔺 Safety & Privacy
+- **Mute group** → disable notifications  
+- **Leave group** → exit conversation  
+- **Report group** → flag inappropriate content  
+- **Block members** → stop communication from specific people  
+
+---
+
+👉 In short:  
+Ang **Group Chat Screen** ay parang **Conversation Screen** pero may dagdag na **group management tools** (member list, add/remove, pinned messages, shared media).  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng Group Chat Screen** (Header → Conversation → Input → Group Features → Safety) para mas makita ang flow visually?

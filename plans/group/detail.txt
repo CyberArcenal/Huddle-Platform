@@ -1,0 +1,74 @@
+Narito ang **recreated plan para sa Group Detail Screen** na puwede mong i‑save sa notes:
+
+---
+
+# 📱 Group Detail Screen Plan
+
+### 🔺 Header Section
+- **Group profile picture**  
+- **Group name** (bold, prominent)  
+- **Member count** (formatted, e.g. “1.2k members”)  
+- **Group type** (Hobby, Work, School, Cause)  
+- **Short description** (1–2 lines)  
+- **Long description** (expandable text)  
+- **Membership status** (`is_member`)  
+- **Action buttons**:  
+  - *Join / Leave* (dynamic depende sa status)  
+  - *Invite Friends*  
+
+---
+
+### 🔺 Tabs (slidable sa taas ng content)
+- **Posts / Feed**  
+- **Events**  
+- **Members**  
+- **About**  
+
+---
+
+### 📋 Tab Contents
+
+#### 1. Posts / Feed Tab
+- **Create Post button**  
+  - Option A: *Top composer* (“What’s on your mind?” style, with profile pic + text input).  
+  - Option B: *Floating Action Button (FAB)* sa lower‑right corner, “+” icon → options (Text, Photo/Video, Poll).  
+- **Post cards**:  
+  - Author info (profile pic, name, role).  
+  - Timestamp.  
+  - Content (text, image, video).  
+  - Reactions + comments.  
+- **Feed layout**: scrollable, newest posts on top.
+
+#### 2. Events Tab
+- Upcoming events list (title, date/time, location).  
+- RSVP status (Going, Interested, Not Going).  
+- Event capacity + attendees preview.  
+- *Create Event* button (kung admin).  
+
+#### 3. Members Tab
+- Member list with:  
+  - Profile picture, full name, hobbies/personality type.  
+  - Role badge (Admin, Moderator, Member).  
+  - Joined date.  
+- Search bar para maghanap ng member.  
+- Role management (kung admin).  
+
+#### 4. About Tab
+- Full group description.  
+- Group rules / guidelines.  
+- Group creation date.  
+- Admin contact info.  
+
+---
+
+### ✨ Extra Enhancements
+- Sticky header (group name + join/leave button always visible).  
+- Animated transitions kapag nag‑switch ng tab.  
+- Invite friends shortcut.  
+- Contextual CTA (Create Post button hidden kung hindi pa member).  
+
+---
+
+👉 Sa ganitong plan, malinaw ang hierarchy: **Header → Tabs → Content per tab**, at may **Create Post button** sa Posts tab para maging interactive ang group.  
+
+Gusto mo bang i‑expand ko rin ang **Events Tab plan** para mas detailed (hal. event detail screen, RSVP flow, attendee list)?

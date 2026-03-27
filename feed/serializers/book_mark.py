@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from feed.services.bookmark import BookmarkService
-from users.serializers.user import UserMinimalSerializer
 from feed.models.bookmark import ObjectBookmark
 from django.contrib.contenttypes.models import ContentType
+
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class BookmarkStatisticsSerializer(serializers.Serializer):

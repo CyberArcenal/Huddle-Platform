@@ -1,0 +1,36 @@
+Ang **Match Screen** ay yung special moment kapag nag‑mutual like ang dalawang users. Parang “celebration screen” siya na nagsisilbing transition mula sa Discovery/Profile papunta sa Chat.  
+
+### 🔎 Magandang laman ng Match Screen
+
+**Header / Overlay**
+- Animated banner: *“It’s a Match!”*  
+- Profile pictures ng dalawang users side‑by‑side (ikaw + siya).  
+- Background effect (confetti, glow, heart animation).  
+
+**Info Section**
+- Names ng parehong users.  
+- Short tagline: *“You both liked each other.”*  
+- Optional compatibility meter (based on preferences/personality).  
+
+**Actions**
+- 💬 **Start Chat** → direct link to Messaging Screen.  
+- 🔄 **Continue Browsing** → balik sa Discovery feed.  
+- ⭐ **Send Super Like Gift** (optional gamification).  
+
+**Footer / Safety**
+- Reminder: *“Stay safe. Don’t share sensitive info too soon.”*  
+- Quick access: Block/Report (kung kailangan).  
+
+---
+
+### ✨ Extra Enhancements
+- **Mini bio preview** → short snippet ng match’s bio.  
+- **Shared interests highlight** → “You both love Hiking and Jazz Music.”  
+- **Event suggestion** → “Join the upcoming Singles Night in your area.”  
+
+---
+
+👉 In short:  
+Ang **Match Screen** ay hindi profile page, kundi **celebration + gateway**. Pinapakita niya na may connection na, at binibigyan ka ng choice: magsimula ng chat o magpatuloy sa pag‑discover.  
+
+Gusto mo bang i‑layout ko rin ang **wireframe flow** (Overlay → Info → Actions → Footer) para makita ang hierarchy ng Match Screen?

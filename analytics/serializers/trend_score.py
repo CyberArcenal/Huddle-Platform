@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from analytics.models.trend_score import ObjectTrendScore
 from analytics.services.trend_score import TrendScoreService
-from users.serializers.user import UserMinimalSerializer
 
 
 class TrendScoreStatisticsSerializer(serializers.Serializer):

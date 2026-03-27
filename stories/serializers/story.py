@@ -7,8 +7,7 @@ from feed.services.view import ViewService
 from stories.models import Story
 from stories.services.story import StoryService
 from users.models import User
-from users.serializers.user import UserMinimalSerializer
-
+from users.serializers.user.minimal import UserMinimalSerializer
 
 class StoryStatsSerializer(serializers.Serializer):
     total_stories = serializers.IntegerField()

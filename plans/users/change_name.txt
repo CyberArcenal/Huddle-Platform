@@ -1,0 +1,45 @@
+Tama ang observation mo — sa **Profile Settings Page** dapat may hiwalay na **Change Name Page** para hindi basta‑basta makakapagpalit ng pangalan ang user.  
+
+### 🔎 Bakit kailangan ng hiwalay na Change Name Page
+- **Control & Limitations** → para maiwasan ang abuse (hal. palit ng name araw‑araw).  
+- **Audit trail** → mas madaling i‑log kung kailan at ilang beses nagpalit ng name.  
+- **Verification** → puwedeng i‑require ang password o OTP bago ma‑approve ang name change.  
+- **Consistency** → hindi magugulo ang search, matches, at analytics dahil stable ang identity.  
+
+---
+
+# ✨ Change Name Page (Design)
+
+### 🔺 Header
+- Title: **Change Display Name**  
+- Info text: “You can only change your name once every 30 days.”  
+
+---
+
+### 🔺 Form
+- **Current name** (read‑only)  
+- **New name field** (text input, with validation rules)  
+  - Min/max length  
+  - Allowed characters  
+  - No offensive words (filter)  
+- **Confirm password / OTP** (security check)  
+
+---
+
+### 🔺 Validation & Rules
+- **Cooldown period** → e.g., 30 days before next change.  
+- **Audit log** → store old names for admin reference.  
+- **Notification** → “Your name was successfully updated.”  
+
+---
+
+### 🔺 Footer
+- **Save changes** button (disabled if cooldown not met).  
+- **Cancel** button → back to Profile Settings.  
+
+---
+
+👉 In short:  
+Ang **Change Name Page** ay hiwalay na screen na may **form + security check + cooldown rules**. Nakakatulong ito para protektado ang identity ng user at hindi ma‑abuso ang feature.  
+
+Gusto mo bang ipakita ko rin ang **sample Django model + serializer logic** para sa name change (may cooldown validation)?

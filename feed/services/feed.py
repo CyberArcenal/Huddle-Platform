@@ -8,7 +8,7 @@ from feed.services.post import PostService
 from feed.services.reel import ReelService
 from feed.services.share import ShareService
 from stories.services.story_feed import StoryFeedService
-from users.services.matching import MatchingService
+from dating.services.matching import MatchingService
 from groups.services.group_suggestion import GroupSuggestionService
 from groups.services.group import GroupService  # for group posts
 

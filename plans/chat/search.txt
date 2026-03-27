@@ -1,0 +1,39 @@
+Ang **Search in Conversation** ay isang feature/screen na nagbibigay sa user ng kakayahang **maghanap ng specific messages, media, o links** sa loob ng isang chat thread. Ang idea dito ay gawing mabilis at organized ang pagbalik sa mga lumang usapan, lalo na kung mahaba na ang history ng conversation.
+
+---
+
+# 🔍 Search in Conversation Screen Plan
+
+### 🔺 Header
+- **Title**: “Search in Conversation”  
+- **Back button** → balik sa conversation  
+- **Search bar** → input ng keywords o phrases  
+
+---
+
+### 🔺 Search Results Area
+- **Highlighted matches** → ipakita ang message snippet na tumugma sa query  
+- **Sender info** → sino ang nagpadala ng message  
+- **Timestamp** → kailan na‑send  
+- **Jump to message button** → direktang dadalhin ang user sa eksaktong message sa conversation  
+
+---
+
+### 🔺 Filters
+- **By type** → Messages / Media / Files / Links  
+- **By sender** → filter kung sino ang nagpadala  
+- **By date range** → hanapin sa specific period (hal. “March 2026”)  
+
+---
+
+### 🔺 Extras
+- **Recent searches** → quick access sa huling hinanap  
+- **Clear search history** → option para burahin ang logs  
+- **Smart suggestions** → auto‑complete ng keywords based sa conversation context  
+
+---
+
+👉 In short:  
+Ang **Search in Conversation Screen** ay parang **mini search engine sa loob ng chat** — may search bar, results list na may highlights, filters (type, sender, date), at jump‑to‑message function para mabilis makabalik sa eksaktong usapan.  
+
+Gusto mo bang i‑wireframe ko rin ang **flow hierarchy** (Header → Search bar → Results → Filters → Extras) para mas makita ang logical navigation ng Search in Conversation?

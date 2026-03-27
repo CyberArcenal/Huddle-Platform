@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
+from django.db.models import Prefetch
 from django.db import models
 from feed.models.media import Media
 from feed.services.comment import CommentService
@@ -112,6 +113,9 @@ class ReelService:
                 ],  # followers can see followers-only reels from followed users
             )
             .select_related("user")
+            .prefetch_related(
+                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            )
             .order_by("-created_at")[offset : offset + limit]
         )
         return list(feed_reels)

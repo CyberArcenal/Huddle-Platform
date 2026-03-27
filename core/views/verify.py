@@ -8,13 +8,13 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from users.models import BlacklistedAccessToken
-from users.serializers.user import UserMinimalSerializer
 
 from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiTypes
 from users.serializers.auth import (
     TokenVerifyRequestSerializer,
     TokenVerifyResponseSerializer,
 )
+from users.serializers.user.minimal import UserMinimalSerializer
 
 User = get_user_model()
 

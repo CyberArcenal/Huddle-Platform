@@ -1,0 +1,83 @@
+👤 Profile Screen with Bookmarks Tab
+
+🔺 Header
+
+Profile picture (circle avatar)
+
+Full name + username
+
+Bio / short description
+
+Stats row: Posts count, Followers, Following, Groups joined
+
+Action buttons: Follow/Unfollow, Edit Profile, Settings
+
+🔺 Tabs Row
+
+Horizontal navigation bar under the header:
+
+Posts → all posts created by the user
+
+Groups → groups joined or created
+
+Events → events created or attended
+
+Bookmarks → saved content feed
+
+Active tab is highlighted (underline or bold). Swipe left/right or tap to switch.
+
+🔺 Bookmarks Tab Content
+
+Feed-style scrollable list of saved items:
+
+Post card
+
+Author info (profile picture, name)
+
+Content text + media preview
+
+Reactions summary
+
+Timestamp: “Saved 2d ago”
+
+Event card
+
+Title, date/time, location
+
+RSVP status
+
+Quick action: Unsave
+
+Group card
+
+Group name, profile picture
+
+Member count, join status
+
+Short description
+
+Story/Reel card
+
+Thumbnail preview
+
+Tap to view full story/reel
+
+🔺 Interactions
+
+Tap card → open original content
+
+Long press → remove bookmark
+
+Swipe left/right → quick delete or share
+
+✨ Extra Enhancements
+
+Filter bar → filter saved items by type (Posts, Events, Groups)
+
+Search bar → find specific saved item
+
+Empty state → “No bookmarks yet” with illustration
+
+Consistent card design → same look and feel as feed
+
+👉 In this setup, the Bookmarks tab behaves like a personalized feed of saved content. It reuses the same card design as the main feed, making it familiar and easy to navigate while keeping all saved items centralized in the profile.

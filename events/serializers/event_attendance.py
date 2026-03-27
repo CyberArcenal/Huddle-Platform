@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 from ..models import EventAttendance
 from ..services import EventAttendanceService, EventService
 from .event import EventListSerializer
@@ -222,3 +222,4 @@ class UserAttendanceStatisticsSerializer(serializers.Serializer):
             "events_organized",
             "attendance_rate",
         ]
+

@@ -1,0 +1,57 @@
+Sige, eto ang **recreated plan para sa Profile Settings Page** — naka‑ayos na parang wireframe hierarchy para malinaw ang flow:
+
+---
+
+# ⚙️ Profile Settings Page Plan
+
+### 🔺 Header
+- **Title**: “Profile Settings”  
+- **Save / Apply button** → para ma‑update agad ang changes  
+
+---
+
+### 🔺 Account Information
+- **Display Name** → may link papunta sa **Change Name Page** (with cooldown rules)  
+- **Username** → read‑only (fixed identity)  
+- **Email address** → verification status (verified / not verified)  
+- **Phone number** → optional, for 2FA  
+- **Password change** shortcut  
+
+---
+
+### 🔺 Privacy & Security
+- **Profile visibility** → toggle (show in search / hide profile)  
+- **Two‑Factor Authentication (2FA)** → enable/disable  
+- **Active sessions list** → terminate sessions individually  
+- **Blocked users list** → manage blocked accounts  
+
+---
+
+### 🔺 Notifications
+- **Email notifications** → toggle (likes, matches, messages)  
+- **Push notifications** → toggle (app alerts)  
+- **Digest frequency** → daily / weekly summary  
+
+---
+
+### 🔺 Preferences
+- **Dating preferences shortcut** → age range, distance, gender  
+- **Content preferences** → “Show me events”, “Suggest date ideas”  
+- **Language & Region** → localization settings  
+
+---
+
+### 🔺 Account Management
+- **Deactivate account** → temporary disable  
+- **Delete account** → permanent removal  
+- **Export data** → download profile & activity history  
+
+---
+
+👉 In short:  
+- **Profile page** = identity visuals (profile pic, cover photo, bio).  
+- **Settings page** = control center (name change, privacy, security, notifications, preferences, account management).  
+
+---
+
+Gusto mo bang i‑expand ko rin ang **Change Name Page plan** (form fields, cooldown validation, audit log) para kumpleto ang settings module?

@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiParameter, extend_schema, OpenApiExample
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from users.serializers.user_image import (
     UserImageCreateSerializer,
     UserImageDisplaySerializer,
@@ -12,7 +12,6 @@ from users.serializers.user_image import (
 )
 from users.services.user_image import UserImageService
 from users.models import User
-from users.serializers.user import UserProfileSerializer
 
 
 class ProfilePictureUploadView(APIView):

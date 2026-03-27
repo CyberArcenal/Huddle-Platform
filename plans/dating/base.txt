@@ -1,0 +1,53 @@
+# ❤️ Dating Screens Plan
+
+### 🔑 Core Screens
+
+1. **Dating Discovery / Match Feed Screen**
+   - Scrollable feed ng potential matches.  
+   - Card layout: profile picture, name, age, location, hobbies, personality type.  
+   - Quick actions: *Like*, *Pass*, *Super Like*.  
+   - Filters: age range, location, interests.  
+
+2. **Profile Detail Screen (Potential Match)**
+   - Full profile view: bio, hobbies, personality type, capability score.  
+   - Photo gallery.  
+   - Mutual groups/events preview.  
+   - Buttons: *Like*, *Message* (kung matched na).  
+
+3. **Match Screen**
+   - Animated overlay: “It’s a Match!”  
+   - Options: *Start Chat*, *Continue Browsing*.  
+
+4. **Chat / Messaging Screen**
+   - Real‑time messaging with matched users.  
+   - Features: text, emojis, media attachments.  
+   - Quick actions: send location, share group/event invite.  
+   - Safety tools: block/report.  
+
+5. **Dating Preferences Screen**
+   - Filters: age range, gender, distance.  
+   - Interests/hobbies selection.  
+   - Personality type matching toggle.  
+   - Privacy settings: who can see you.  
+
+6. **Dating Insights Screen**
+   - Analytics: profile views, likes received, matches.  
+   - Breakdown ng reactions (like, super like).  
+   - Trends: most common hobbies among matches.  
+
+---
+
+### ✨ Optional Enhancements
+- **Date Ideas Screen** → suggested activities based on mutual hobbies.  
+- **Safety Tips Screen** → guidelines for safe dating.  
+- **Events for Singles Screen** → curated group events for dating.  
+
+---
+
+👉 Sa ganitong setup, kumpleto ang dating feature:  
+- **Discovery** → browse matches.  
+- **Profile Detail** → view full info.  
+- **Match** → connect kapag mutual.  
+- **Chat** → start conversations.  
+- **Preferences** → control filters.  
+- **Insights** → track engagement.  

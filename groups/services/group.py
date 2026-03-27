@@ -307,7 +307,8 @@ class GroupService:
         Get posts from all groups that the user is a member of.
         """
         from groups.services.group_member import GroupMemberService
-        from feed.models import Post
+        from feed.models import Post, Media
+        from django.db.models import Prefetch
 
         # Get groups the user is a member of
         user_groups = GroupMemberService.get_user_groups(user)
@@ -315,10 +316,17 @@ class GroupService:
             return []
 
         # Get posts from those groups (excluding deleted)
-        group_posts = Post.objects.filter(
-            group__in=user_groups,
-            is_deleted=False
-        ).select_related('user', 'group').order_by('-created_at')
+        group_posts = (
+            Post.objects.filter(
+                group__in=user_groups,
+                is_deleted=False
+            )
+            .select_related('user', 'group')
+            .prefetch_related(
+                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            )
+            .order_by('-created_at')
+        )
 
         return list(group_posts[offset:offset + limit])
     

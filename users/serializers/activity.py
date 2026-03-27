@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.db.models import Count, Q
 from typing import Dict, Any, List, Optional
 
-from users.serializers.user import UserListSerializer, UserMinimalSerializer
+from users.serializers.user.profile import UserMinimalSerializer
 
 from ..models import UserActivity, SecurityLog, LoginSession
 

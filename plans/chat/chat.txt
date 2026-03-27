@@ -1,0 +1,49 @@
+Ah, gets ko na — ang ibig mong sabihin ay yung **main Chat Page** (list of all conversations), hindi yung one‑on‑one match chat. Eto ang magandang laman at structure:
+
+---
+
+# 💬 Chat Page (Conversation List)
+
+### 🔺 Header
+- **Title**: “Chats”  
+- **Search bar** → hanapin users/conversations  
+- **Filter options** → All / Unread / Favorites  
+
+---
+
+### 🔺 Conversation List (main body)
+- **User avatar** → profile picture ng kausap  
+- **Name / Display name**  
+- **Last message preview** → huling message snippet  
+- **Timestamp** → oras ng last message  
+- **Unread badge** → bilang ng unread messages  
+- **Status icon** → online / offline indicator  
+
+---
+
+### 🔺 Extra Features
+- **Pinned chats** → important conversations sa taas ng list  
+- **Archived chats** → hiwalay na section para sa inactive threads  
+- **Mute option** → disable notifications per chat  
+- **Swipe actions** → delete, archive, pin  
+
+---
+
+### 🔺 Footer / Navigation
+- **New chat button** → start conversation  
+- **Tabs** → Chats / Groups / Requests (kung may friend requests o message requests)  
+
+---
+
+### 🔺 Optional Enhancements
+- **Smart sorting** → prioritize active or favorite chats  
+- **Quick actions** → long press → block/report user  
+- **Media highlights** → show thumbnail kung last message ay image/video  
+- **Typing indicator in list** → “User is typing…” sa preview  
+
+---
+
+👉 In short:  
+Ang **Chat Page** ay parang inbox — listahan ng lahat ng conversations, may **search, filters, unread badges, pinned chats, archive, mute**, at **quick actions**.  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng Chat Page** (Header → Search/Filters → Conversation List → Footer Navigation) para mas makita ang flow visually?

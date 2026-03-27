@@ -1,0 +1,47 @@
+Maganda yang idea mo — parang **stories style filter bar** sa taas ng Group Feed. Eto ang plan:
+
+---
+
+# 📰 Group Feed / Home Screen with Group Circles
+
+### 🔺 Top Filter Bar (slidable circles)
+- **First circle = “All Groups”** → lahat ng posts mula sa groups na kasali ang user.  
+- **Next circles = bawat group** → profile picture ng group (bilog), clickable.  
+- **Horizontal scroll** → puwedeng i‑slide para makita lahat ng groups.  
+- **Active state** → naka‑highlight ang kasalukuyang filter (hal. may border o glow).  
+
+---
+
+### 🔺 Feed Content (depends on selected circle)
+- **All Groups** → aggregated feed ng lahat ng groups.  
+- **Specific Group** → feed ng posts mula sa napiling group lang.  
+
+---
+
+### 🔺 Post Composer
+- Visible kung member ng group.  
+- “What’s on your mind?” field + media upload + poll option.  
+- Post button.  
+
+---
+
+### 🔺 Post Cards
+- Author info (profile pic, name, role).  
+- Timestamp.  
+- Content (text, image, video).  
+- Reactions + comments.  
+- Share button.  
+
+---
+
+### ✨ Extra Enhancements
+- **Pinned posts**: announcements sa taas ng feed.  
+- **Upcoming events preview**: kung group filter ay active.  
+- **Smart sorting**: newest, most popular, media only.  
+- **FAB (Floating Action Button)**: quick create post kahit anong filter.  
+
+---
+
+👉 Sa ganitong design, parang **Instagram stories bar** pero pang‑filter ng groups. User makakakita agad ng “All Groups” feed, tapos puwede mag‑slide para pumili ng specific group feed.  
+
+Gusto mo bang i‑expand ko rin ang **All Groups Feed logic** (hal. paano i‑merge posts, sorting rules, at UI indicators kung saan galing ang post)?

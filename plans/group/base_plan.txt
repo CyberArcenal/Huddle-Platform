@@ -1,0 +1,46 @@
+Yes, eksakto — ang **Group Stories Screen** ay bahagi ng **Group Plan**.  
+Kung titingnan mo ang buong flow ng group feature, natural na kasama ang Stories bilang isa sa mga tab sa **Group Detail Screen**.  
+
+### 📌 Updated Group Plan (with Stories)
+1. **Group List / Discovery Screen**  
+   - Hanapin at i‑browse ang groups.  
+
+2. **Group Detail Screen**  
+   - Header: group name, profile pic, member count, description.  
+   - Membership status + join/leave buttons.  
+   - Tabs:  
+     - **Posts/Feed** → lahat ng content ng members.  
+     - **Events** → upcoming/past events.  
+     - **Members** → listahan ng admins at members.  
+     - **Stories** → ephemeral content hub ng group.  
+
+3. **Member Preview Screen**  
+   - Highlighted members, roles, hobbies, personality type.  
+
+4. **Group Stories Screen**  
+   - Story circles row (members with active stories).  
+   - Group highlight circle (curated/pinned stories ng admins).  
+   - Full‑screen story viewer (author info, role, timestamp, group badge).  
+   - Quick actions: react, comment, share.  
+   - Create Group Story (camera/gallery, text overlay, stickers, filters).  
+   - Privacy default: group members only.  
+   - Highlights section (curated collections).  
+   - Analytics (views, reactions, who viewed, expiry countdown).  
+
+5. **Group Management Screen** (admins)  
+   - Edit info, manage requests, assign roles, analytics.  
+
+6. **Group Creation Screen**  
+   - Form for name, type, description, privacy, invites.  
+
+---
+
+👉 Sa ganitong setup, ang **Stories tab** ay nagiging natural extension ng group ecosystem.  
+- **Feed** = permanent posts.  
+- **Events** = scheduled activities.  
+- **Members** = people directory.  
+- **Stories** = ephemeral, casual updates.  
+
+Mas buo ang identity ng group dahil may **short‑form, temporary content** na nagbibigay ng dagdag engagement at personality.  
+
+Gusto mo bang i‑expand ko rin ang **navigation wireframe** (step‑by‑step kung paano pupunta ang user mula Group List → Group Detail → Stories tab → Story viewer)?

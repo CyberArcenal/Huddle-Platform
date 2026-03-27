@@ -1,10 +1,15 @@
 from enum import Enum
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-
+from django.core.validators import RegexValidator
 from feed.models.post import POST_PRIVACY_TYPES
 from users.enums import UserStatus
 from users.models.utilities import USER_STATUS_CHOICES
+
+phone_regex = RegexValidator(
+    regex=r'^\+?1?\d{9,15}$',
+    message="Phone number must be entered in the format: '+639171234567'. Up to 15 digits allowed."
+)
 
 
 class ProfileImageTypeEnum(str, Enum):
@@ -132,7 +137,12 @@ class User(AbstractUser):
     )
     bio = models.TextField(max_length=500, blank=True)
     date_of_birth = models.DateField(blank=True, null=True)
-    phone_number = models.CharField(max_length=15, blank=True)
+    phone_number = models.CharField(
+        validators=[phone_regex],
+        max_length=17,  # para may allowance sa '+' at country code
+        blank=True,
+        help_text="Enter phone number in international format (e.g. +639171234567)"
+    )
     is_verified = models.BooleanField(default=False)
 
     # Lifestyle fields (pre-defined choices)
@@ -201,7 +211,8 @@ class UserImage(models.Model):
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-
+    
+    metadata = models.JSONField(null=True, blank=True)
     class Meta:
         db_table = "user_images"
         unique_together = ("user", "image_type")

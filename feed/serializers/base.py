@@ -2,7 +2,7 @@ from rest_framework import serializers
 from feed.models.post import POST_PRIVACY_TYPES, POST_TYPES
 from feed.models.reaction import REACTION_TYPES
 from feed.serializers.comment import CommentDisplaySerializer
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 class ReactionCountSerializer(serializers.Serializer):
     # dynamic fields per reaction type

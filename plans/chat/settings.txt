@@ -1,0 +1,53 @@
+Ang **Settings for Chat** ay hiwalay na screen o section na nagbibigay ng user ng **kontrol sa messaging experience** nila. Ang idea dito ay hindi tungkol sa mismong conversation, kundi sa **global at per‑chat preferences** para sa privacy, notifications, at usability.  
+
+---
+
+# ⚙️ Settings for Chat Screen Plan
+
+### 🔺 Header
+- **Title**: “Chat Settings”  
+- **Back button** → balik sa main Settings o Chat List  
+
+---
+
+### 🔺 Notifications
+- **Mute all chats** → global toggle  
+- **Per‑chat mute** → shortcut list ng active conversations para i‑mute individually  
+- **Notification style** → banner, silent, vibration only  
+- **Message previews** → show/hide content sa lock screen  
+
+---
+
+### 🔺 Privacy
+- **Who can message you** → Everyone / Friends only / Matches only  
+- **Message requests** → enable/disable requests tab  
+- **Read receipts toggle** → allow/disallow others to see “seen” status  
+- **Typing indicator toggle** → show/hide “is typing…”  
+
+---
+
+### 🔺 Media & Storage
+- **Auto‑download media** → WiFi only / Always / Never  
+- **Storage management** → clear cached images/videos  
+- **Shared media access** → shortcut papunta sa Shared Media screen  
+
+---
+
+### 🔺 Safety & Security
+- **Blocked users list** → manage blocked accounts  
+- **Report history** → see flagged conversations  
+- **Encryption info** → notice na secure ang messages  
+
+---
+
+### 🔺 Extras
+- **Theme customization** → light/dark mode, chat bubble colors  
+- **Font size** → adjust readability  
+- **Archived chats** → manage archived conversations  
+
+---
+
+👉 In short:  
+Ang **Chat Settings Screen** ay parang **control panel** para sa messaging — nandito ang **notifications, privacy, media/storage, safety/security, at customization**.  
+
+Gusto mo bang i‑wireframe ko rin ang **flow hierarchy** (Header → Notifications → Privacy → Media → Safety → Extras) para mas makita ang logical navigation ng Chat Settings?

@@ -9,7 +9,7 @@ from feed.serializers.reel import ReelDisplaySerializer, ReelMinimalSerializer
 from feed.serializers.share import ShareFeedSerializer
 from groups.serializers.group import GroupMinimalSerializer
 from stories.serializers.story import StoryFeedSerializer, StorySerializer
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 from users.serializers.user_image import UserImageDisplaySerializer
 
 FEED_DATA_TYPES = [

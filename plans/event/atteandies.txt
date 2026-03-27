@@ -1,0 +1,70 @@
+Para sa **Event Attendance Screen**, magandang hatiin ito sa informative sections na madaling i-scan at i-filter. Eto ang recommended na laman:
+
+---
+
+### 👥 Attendee List (Main Content)
+- **Avatar + Name** (`profile_picture_url`, `full_name`)
+- **Username** (`username`)
+- **Personality Type** (`personality_type`) — optional badge
+- **Hobbies Preview** (`hobbies`) — chips or icons
+- **Location** — optional, kung relevant sa event
+
+---
+
+### 🔍 Filter & Sort Options
+- **Search bar** — by name or username
+- **Sort by**: Capability Score, Alphabetical, Recent Join
+- **Filter by**: Personality Type, Hobby, Location
+
+---
+
+### 🧠 Capability Insights (optional)
+- Show `capability_score` badge
+- Expandable card with `reasons` (why they’re a good fit)
+
+---
+
+### 🧩 Grouping Options
+- **Friends attending** — separate section
+- **Group members** — if event is group-based
+- **New attendees** — recent joiners
+
+---
+
+### 🧪 Action Buttons (optional)
+- View profile
+- Message (if chat is enabled)
+- Remove / Block (for organizer only)
+
+---
+
+### 🧬 Compose Layout Idea
+
+```kotlin
+LazyColumn {
+    items(attendees) { attendee ->
+        AttendeeCard(attendee)
+    }
+}
+
+@Composable
+fun AttendeeCard(attendee: Attendee) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Avatar(attendee.profilePictureUrl)
+        Column {
+            Text(attendee.fullName)
+            Text("@${attendee.username}", style = MaterialTheme.typography.labelSmall)
+            Text(attendee.personalityType ?: "", style = MaterialTheme.typography.labelSmall)
+            HobbyChips(attendee.hobbies)
+        }
+        Spacer(Modifier.weight(1f))
+        if (attendee.capabilityScore > 0) {
+            CapabilityBadge(attendee.capabilityScore)
+        }
+    }
+}
+```
+
+---
+
+Gusto mo ba ng **slidable filter bar** sa taas para mabilis mag-toggle ng personality types or hobbies? Pwede rin kitang igawan ng wireframe sketch para sa layout ng attendee cards at filter controls.

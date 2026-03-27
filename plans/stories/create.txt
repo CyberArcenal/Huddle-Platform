@@ -1,0 +1,54 @@
+Para sa **Create Story Screen**, maganda kung simple pero flexible ang laman para makapag‑express ang user ng mabilis. Eto ang detailed breakdown:
+
+---
+
+# 📸 Create Story Screen
+
+### 🔺 Header
+- **Title**: “Create Story”  
+- **Close button (X)** → exit composer  
+- **Post button** → publish story  
+
+---
+
+### 🔺 Media Capture / Upload
+- **Camera integration** → take photo or record video.  
+- **Gallery upload** → pick existing photo/video.  
+- **Preview area** → full‑screen preview ng media bago i‑post.  
+
+---
+
+### 🔺 Editing Tools
+- **Text overlay** → add captions, quotes, hashtags.  
+- **Stickers & emojis** → fun elements.  
+- **Drawing tools** → freehand doodles.  
+- **Filters** → color grading, effects.  
+- **Resize & crop** → adjust framing.  
+
+---
+
+### 🔺 Enhancements
+- **Music overlay** → add background track.  
+- **Location tag** → optional geotag.  
+- **Tag users** → mention friends.  
+- **Poll / Q&A sticker** → interactive story element.  
+
+---
+
+### 🔺 Privacy & Settings
+- **Audience selector**: Public, Followers, Group members.  
+- **Expiry**: default 24h, option to save to Highlights.  
+- **Allow replies** toggle (on/off).  
+
+---
+
+### 🔺 Preview & Publish
+- **Preview mode** → see full story before posting.  
+- **Publish button** → post story live.  
+- **Save to device** option → keep a copy locally.  
+
+---
+
+👉 Sa ganitong setup, ang **Create Story Screen** ay parang mini‑studio: mabilis mag‑capture, may editing tools, interactive stickers, privacy controls, at preview bago i‑publish. Familiar flow (Instagram/Facebook style) pero puwede mong i‑expand para sa **Groups** at **Highlights** integration.  
+
+Gusto mo bang i‑layout ko rin ang **wireframe flow** (Capture → Edit → Settings → Preview → Publish) para mas malinaw ang step‑by‑step navigation?

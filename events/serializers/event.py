@@ -3,8 +3,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from typing import Optional, Dict, Any
 from groups.serializers.group import GroupMinimalSerializer
-from users.serializers.user import UserMinimalSerializer
-
+from users.serializers.user.profile import UserMinimalSerializer
 from ..models import Event
 from ..services import EventService
 

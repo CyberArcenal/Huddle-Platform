@@ -1,4 +1,3 @@
-from typing import Dict, Any, Optional
 
 from django.core.exceptions import ValidationError
 from django.contrib.contenttypes.models import ContentType
@@ -7,7 +6,7 @@ from rest_framework import serializers
 from feed.models import Reaction, Post, Comment
 from feed.models.reaction import REACTION_TYPES
 from feed.services.reaction import ReactionService
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 class ReactionDisplayContentData(serializers.Serializer):
     type = serializers.CharField()

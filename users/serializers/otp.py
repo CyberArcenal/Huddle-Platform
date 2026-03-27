@@ -4,7 +4,7 @@ import logging
 
 from users.models import OtpRequest, User
 from users.models.utilities import OTP_TYPES
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 from users.services.otp_request import OtpRequestService
 
 logger = logging.getLogger(__name__)

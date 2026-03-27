@@ -1,0 +1,53 @@
+Para sa **Story Detail / Analytics Screen (for author)**, maganda kung comprehensive pero madaling basahin ang laman. Eto ang detailed breakdown:
+
+---
+
+# 📊 Story Detail / Analytics Screen (Author View)
+
+### 🔺 Header
+- **Story preview thumbnail** (photo/video)  
+- **Timestamp**: “Posted 5h ago”  
+- **Actions**: Delete, Add to Highlights, Share  
+
+---
+
+### 🔺 Viewer Statistics
+- **Total views** → count ng lahat ng nakakita ng story  
+- **Unique viewers** → distinct users na nag‑open  
+- **View graph** → timeline ng views (optional, line chart style)  
+- **Top viewers** → list ng mga pinaka‑engaged (hal. nag‑react o nag‑comment)  
+
+---
+
+### 🔺 Reactions Breakdown
+- **Reaction summary bar** → like, love, haha, wow, sad, angry  
+- **Count per reaction type**  
+- **List of reactors** → profile picture + name + reaction icon  
+
+---
+
+### 🔺 Comments / Replies
+- **Threaded comments** → same bottomsheet style reused from generic comment model  
+- **Quick actions** → reply, delete, report  
+- **Engagement count** → total comments + replies  
+
+---
+
+### 🔺 Audience Insights
+- **Who viewed** → scrollable list of users (profile pic, name, timestamp)  
+- **Follower vs non‑follower ratio**  
+- **Group members vs outsiders** (kung group story)  
+
+---
+
+### 🔺 Extra Enhancements
+- **Save to Highlights** → one‑tap add to highlight collection  
+- **Export analytics** → optional, for admins/creators  
+- **Expiry countdown** → “Story expires in 18h”  
+- **Privacy indicator** → Public / Followers / Group members  
+
+---
+
+👉 Sa ganitong setup, ang **Story Detail / Analytics Screen** ay parang control panel ng author: nakikita niya kung sino ang nanood, paano nag‑react, gaano karami ang engagement, at may quick actions para i‑manage ang story (delete, save, share).  
+
+Gusto mo bang i‑layout ko rin ang **wireframe flow** (Preview → Stats → Reactions → Comments → Actions) para mas malinaw ang hierarchy ng screen?

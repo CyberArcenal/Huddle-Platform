@@ -1,6 +1,5 @@
+# Core Django + third-party apps
 INSTALLED_APPS = [
-    # "daphne",
-    # "channels",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.sites",
@@ -9,22 +8,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
-]
-
-INSTALLED_APPS += [
-    "admin_pannel",
-    "analytics",
-    "events",
-    "feed",
-    "groups",
-    "messaging",
-    "notifications",
-    "search",
-    "stories",
-    "users",
-]
-
-INSTALLED_APPS += [
     "qrcode",
     "celery",
     "django_celery_beat",
@@ -34,3 +17,21 @@ INSTALLED_APPS += [
     "cloudinary_storage",
     "drf_spectacular",
 ]
+
+# Project apps (single source of truth)
+PROJECT_APPS = [
+    "admin_pannel",
+    "analytics",
+    "events",
+    "feed",
+    "groups",
+    "messaging",
+    "notifications",
+    "search",
+    "stories",
+    "dating",
+    "users",
+    "audit",
+]
+
+INSTALLED_APPS += PROJECT_APPS

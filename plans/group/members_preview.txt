@@ -1,0 +1,44 @@
+Para sa **Member Preview Screen**, ang laman ay dapat magbigay ng mabilis na snapshot ng mga miyembro ng group, para makita ng user kung sino ang active at kung anong vibe ng community. Eto ang plan:
+
+---
+
+# 👥 Member Preview Screen Plan
+
+### 🔺 Header
+- **Title**: “Members Preview” o “Top Members”  
+- **Member count**: formatted (e.g. “1.2k members”)  
+- **Action button**: *View All Members* → dadalhin sa full Members tab  
+
+---
+
+### 🔺 Member Cards (scrollable list o grid)
+- **Profile picture** (small, circular)  
+- **Full name / username**  
+- **Role badge** (Admin, Moderator, Member)  
+- **Joined date** (e.g. “Joined Mar 2026”)  
+- **Quick info**:  
+  - Personality type (e.g. ISTJ)  
+  - Location  
+  - Hobbies (list or tags)  
+- **Follow status**: indicator kung *is_following* na ng current user  
+
+---
+
+### 🔺 Layout Options
+- **Horizontal scroll preview**: 3–5 members lang, pang‑teaser.  
+- **Grid layout**: mas compact, puwede magpakita ng mas maraming members.  
+- **Expandable**: “See More” → dadalhin sa full Members tab.  
+
+---
+
+### ✨ Extra Enhancements
+- **Role highlighting**: admins/moderators naka‑badge o naka‑highlight.  
+- **Activity indicator**: last active time (optional).  
+- **Invite button**: shortcut para mag‑invite ng bagong members.  
+- **Search bar**: kung gusto ng user maghanap ng specific member.  
+
+---
+
+👉 Sa ganitong setup, ang **Member Preview Screen** ay magiging parang “community snapshot” — mabilis makita kung sino ang nasa group, anong roles nila, at kung active ba ang community.  
+
+Gusto mo bang i‑expand ko rin ang **full Members Tab plan** (yung detailed list na may search, role management, at filters) para kumpleto ang flow mula preview → detail?

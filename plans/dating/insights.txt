@@ -1,0 +1,47 @@
+# 📊 Dating Insights Screen
+
+### 🔺 Header
+- **Title**: “Your Dating Insights”  
+- **Time filter** → Today / This Week / This Month / All Time  
+
+---
+
+### 🔺 Key Metrics (cards)
+- **Total Matches** → bilang ng mutual likes.  
+- **Messages Sent / Received** → activity level.  
+- **Profile Views** → ilang beses nakita ang profile mo.  
+- **Likes Received** → bilang ng users na nag‑like sa iyo.  
+- **Super Likes Received** → bilang ng special likes.  
+
+---
+
+### 🔺 Compatibility Highlights
+- **Top shared interests** → “Most of your matches love Hiking and Jazz Music.”  
+- **Common love language** → “60% of your matches value Quality Time.”  
+- **Relationship goal alignment** → “70% of matches also want Long‑term Relationship.”  
+
+---
+
+### 🔺 Trends & Graphs
+- **Matches over time** → line chart (growth trend).  
+- **Messages per day/week** → bar chart.  
+- **Top hobbies that attract matches** → pie chart.  
+
+---
+
+### 🔺 Recommendations
+- **Profile optimization tips** → “Add more photos to increase views.”  
+- **Preference adjustment** → “Expand age range to find 15% more matches.”  
+- **Engagement prompts** → “Send a message to your 3 newest matches.”  
+
+---
+
+### 🔺 Footer
+- **Safety reminder** → “Stay safe. Report suspicious accounts.”  
+- **CTA** → “Update Preferences” or “Boost Profile.”  
+
+---
+
+👉 In short:  
+Ang **Dating Insights Screen** ay parang **analytics dashboard** na nag‑combine ng stats (matches, messages, likes), compatibility highlights (shared interests, love language, goals), at actionable recommendations.  
+

@@ -3,21 +3,10 @@ from django.core.exceptions import ValidationError
 
 from groups.models.member import GROUP_ROLE_CHOICES, GroupMember
 from groups.services.group_member import GroupMemberService
+import users
 from users.models import User
-from users.serializers.user import UserMinimalSerializer
-
-
-class GroupMemberMinimalSerializer(serializers.ModelSerializer):
-    """Lightweight member info for lists."""
-    user = UserMinimalSerializer(read_only=True)
-    role = serializers.ChoiceField(choices=GROUP_ROLE_CHOICES)
-
-    class Meta:
-        model = GroupMember
-        fields = ['id', 'user', 'role', 'joined_at']
-        read_only_fields = fields
-
-
+from users.models.user import Hobby
+from users.serializers.user.minimal import UserMinimalSerializer
 class GroupMemberCreateSerializer(serializers.Serializer):
     """Serializer for adding a member to a group."""
     user_id = serializers.IntegerField()
@@ -62,21 +51,7 @@ class GroupMemberCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(e))
 
 
-class GroupMemberDisplaySerializer(serializers.ModelSerializer):
-    """Detailed view for a group member."""
-    user = UserMinimalSerializer(read_only=True)
-    is_creator = serializers.SerializerMethodField()
 
-    class Meta:
-        model = GroupMember
-        fields = [
-            'id', 'user',
-            'role', 'joined_at', 'is_creator'
-        ]
-        read_only_fields = ['user_id', 'joined_at', 'is_creator']
-
-    def get_is_creator(self, obj) -> bool:
-        return obj.group.creator == obj.user
 
 
 class GroupMemberUpdateSerializer(serializers.Serializer):
@@ -108,3 +83,29 @@ class GroupMemberUpdateSerializer(serializers.Serializer):
         instance.role = validated_data['role']
         instance.save()
         return instance
+
+class GroupMemberMinimalSerializer(serializers.ModelSerializer):
+    """Lightweight member info for lists."""
+    user = UserMinimalSerializer(read_only=True)
+    role = serializers.ChoiceField(choices=GROUP_ROLE_CHOICES)
+
+    class Meta:
+        model = GroupMember
+        fields = ['id', 'user', 'role', 'joined_at']
+        read_only_fields = fields
+
+class GroupMemberDisplaySerializer(serializers.ModelSerializer):
+    """Detailed view for a group member."""
+    user = UserMinimalSerializer(read_only=True)
+    is_creator = serializers.SerializerMethodField()
+
+    class Meta:
+        model = GroupMember
+        fields = [
+            'id', 'user',
+            'role', 'joined_at', 'is_creator'
+        ]
+        read_only_fields = ['user_id', 'joined_at', 'is_creator']
+
+    def get_is_creator(self, obj) -> bool:
+        return obj.group.creator == obj.user

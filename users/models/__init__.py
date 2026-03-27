@@ -8,3 +8,6 @@ from .user_activity import *
 from .user_follow import *
 from .user_security_setting import *
 from .user import *
+from .friendship import *
+from .blocked import *
+from .mute import *

@@ -1,0 +1,96 @@
+Para sa **Event Detail Screen**, magandang maging rich at informative pero hindi cluttered. Eto ang mga section na dapat makita ng user:
+
+---
+
+### 🏷️ Header
+- **Event Title** (malaki, bold)
+- **Event Type Badge** (Public / Private / Group)
+- **Date & Time** (formatted start–end)
+- **Location** (icon + text)
+
+---
+
+### 🖼️ Cover / Banner
+- **Group Image** (`group.profile_picture`) o event cover
+- Overlay: group name + member count
+- CTA: *Join Group* kung hindi pa member
+
+---
+
+### 👤 Organizer Card
+- Avatar (`organizer.profile_picture_url`)
+- Name + username
+- Personality type / hobbies (optional preview)
+- Follow button kung `is_following == false`
+
+---
+
+### 📖 Description
+- Full `event.description`
+- Expand/collapse kung mahaba
+
+---
+
+### 👥 Attendees Section
+- Count (`attendees_count / max_attendees`)
+- Badge kung `is_full == true`
+- Horizontal avatar preview (`member_preview`)
+- CTA: RSVP / Cancel RSVP depende sa `user_status`
+
+---
+
+### 🧩 Group Info
+- Group name, type (`group_type_display`)
+- Short description
+- Member preview row
+
+---
+
+### ⚡ Actions
+- Share, Comment, React buttons
+- Save / Bookmark
+- Report (overflow menu)
+
+---
+
+### 🧪 Optional Enhancements
+- **Sticky RSVP Bar** sa bottom (lagi visible)
+- **Related Events Carousel** (same group/location)
+- **Organizer Capability Score** (kung gusto mong ipakita `capability_score` at `reasons`)
+
+---
+
+### 🧩 Sample Compose Layout
+
+```kotlin
+@Composable
+fun EventDetailScreen(event: EventList, onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(event.title) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, null) } }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            EventHeader(event)
+            EventBanner(event.group)
+            OrganizerCard(event.organizer)
+            DescriptionSection(event.description)
+            AttendeesSection(event)
+            GroupInfoSection(event.group)
+            ActionBar(event)
+        }
+    }
+}
+```
+
+---
+
+👉 Ang **core display** ay: *title + date/time + location + organizer + description + attendees + group info + actions*.  
+Kung gusto mo, puwede kitang igawan ng **wireframe mockup** para makita ang hierarchy ng mga section bago ka mag‑Compose code. Gusto mo ba ng visual wireframe sketch ng layout?

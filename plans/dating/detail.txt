@@ -1,0 +1,62 @@
+Para sa **Profile Detail Screen (Potential Match)**, maganda kung mas malalim at mas personal ang laman kaysa sa Discovery feed card. Eto ang breakdown:
+
+---
+
+# ❤️ Profile Detail Screen (Potential Match)
+
+### 🔺 Header
+- **Profile picture / gallery** → swipeable images (profile + cover + uploads).  
+- **Name + Age** prominently displayed.  
+- **Location** (city, distance from you).  
+- **Verification badge** kung verified user.  
+
+---
+
+### 🔺 Bio Section
+- **Short bio** → free‑text description ng user.  
+- **Relationship goal** → badge (Friendship, Dating, Long‑term, Marriage).  
+- **Love language** → tag (Words, Acts, Time, Gifts, Touch).  
+- **Personality type (MBTI)** → e.g., “INFJ – Counselor”.  
+
+---
+
+### 🔺 Lifestyle & Interests
+- **Hobbies** → chips/tags (e.g., Hiking, Cooking, Gaming).  
+- **Interests** → chips/tags (e.g., Tech, Art, Travel).  
+- **Favorites** → music, movies, books.  
+- **Work / School** → current occupation or alma mater.  
+- **Social causes / lifestyle tags** → e.g., “Environmentalist”, “Pet lover”.  
+
+---
+
+### 🔺 Mutual Connections
+- **Shared groups** → preview of groups both belong to.  
+- **Shared events** → upcoming events attended by both.  
+
+---
+
+### 🔺 Actions
+- ❤️ **Like**  
+- ⭐ **Super Like**  
+- 💬 **Message** (kung matched na)  
+- ❌ **Pass**  
+
+---
+
+### 🔺 Footer / Extra
+- **Safety tools** → Block, Report.  
+- **Last active** → “Active 2h ago”.  
+- **Compatibility meter** (optional) → based on preferences/personality match.  
+
+---
+
+👉 Sa ganitong setup, ang **Profile Detail Screen** ay parang full dating card:  
+- **Visuals** (gallery)  
+- **Identity** (bio, age, location, verification)  
+- **Personality & lifestyle** (MBTI, love language, hobbies, interests)  
+- **Mutual context** (groups/events)  
+- **Actions** (like, super like, message, pass)  
+
+Mas nagbibigay siya ng **depth** kaysa sa Discovery feed, para makapag‑decide ang user kung worth i‑like o i‑message.  
+
+Gusto mo bang i‑expand ko rin ang **wireframe flow** (Gallery → Bio → Lifestyle → Mutual → Actions) para makita ang hierarchy ng screen visually?

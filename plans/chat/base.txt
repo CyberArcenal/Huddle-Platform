@@ -1,0 +1,120 @@
+Kung pag‑uusapan natin ang **mga screen na bumubuo sa Chat module/page**, hindi lang siya isang listahan ng conversations at isang conversation view. Para maging kumpleto at user‑friendly, eto ang mga karaniwang screen na magandang meron:
+
+---
+
+# 📱 Chat Module Screens
+
+### 🔺 1. **Chat List (Inbox)**
+- Listahan ng lahat ng conversations (one‑on‑one at group chats).  
+- May search bar, filters (All / Unread / Favorites), at pinned/archived sections.  
+
+---
+
+### 🔺 2. **Conversation Screen**
+- One‑on‑one o group chat view.  
+- Message bubbles, timestamps, read receipts, typing indicator, attachments, reactions.  
+- Header na may avatar, name, online status, at options (block, report, mute).  
+
+---
+
+### 🔺 3. **New Chat / Start Conversation**
+- Screen para pumili ng user o group na kakausapin.  
+- Search bar para hanapin contacts.  
+- Suggested friends o recent interactions.  
+
+---
+
+### 🔺 4. **Group Chat Screen**
+- Katulad ng conversation screen pero may group name, group avatar, at list ng members.  
+- Options: add/remove members, change group name/photo, mute group.  
+
+---
+
+### 🔺 5. **Chat Requests**
+- Inbox para sa mga message requests (hal. galing sa hindi pa friend o hindi pa accepted).  
+- Option: accept, decline, block.  
+
+---
+
+### 🔺 6. **Shared Media / Files**
+- Tab o hiwalay na screen para makita lahat ng photos, videos, voice notes, documents na na‑share sa conversation.  
+- Organized by type at date.  
+
+---
+
+### 🔺 7. **Settings for Chat**
+- Notification preferences (mute per chat, global mute).  
+- Privacy (who can message you, message requests).  
+- Blocked users list.  
+
+---
+
+### 🔺 8. **Search in Conversation**
+- Screen o overlay para maghanap ng specific messages sa loob ng isang chat.  
+- Results na naka‑highlight at may jump‑to‑message option.  
+
+---
+
+👉 In short:  
+Ang **Chat Page ecosystem** ay binubuo ng **Chat List, Conversation Screen, New Chat, Group Chat, Chat Requests, Shared Media, Chat Settings, at Search in Conversation**.  
+
+Gusto mo bang i‑layout ko ito bilang **wireframe flow diagram** (Chat List → Conversation → Shared Media → Settings) para mas makita ang hierarchy ng navigation?
+
+
+
+Sa **Chat Page**, ang goal ay maging **real‑time, intuitive, at safe space** para sa users na mag‑usap. Eto ang magandang laman at structure:
+
+---
+
+# 💬 Chat Page Plan
+
+### 🔺 Header
+- **Match/User name** → sino kausap mo  
+- **Online status indicator** → online / last seen  
+- **Options menu** → block, report, mute notifications  
+
+---
+
+### 🔺 Conversation Area
+- **Message bubbles** → clear distinction (left = other user, right = ikaw)  
+- **Timestamps** → maliit sa ilalim ng bawat message  
+- **Read receipts** → “✓✓” kapag nabasa na  
+- **Typing indicator** → “User is typing…”  
+
+---
+
+### 🔺 Input Bar
+- **Text field** → main input  
+- **Send button** → icon (paper plane)  
+- **Attachment options** → photo, video, voice note, GIF/sticker  
+- **Emoji picker** → quick reactions  
+
+---
+
+### 🔺 Extra Features
+- **Quick reactions** → double tap message → ❤️, 👍, 😂  
+- **Reply/Quote** → swipe message → reply with context  
+- **Forward message** → share to another chat  
+- **Delete message** → remove for me / remove for both  
+
+---
+
+### 🔺 Safety & Privacy
+- **Report button** → flag inappropriate content  
+- **Block user** → stop communication  
+- **Encryption notice** → “Messages are private and secure”  
+
+---
+
+### 🔺 Optional Enhancements
+- **Voice/Video call button** → start call directly from chat  
+- **Shared media tab** → view all photos/videos exchanged  
+- **Date ideas shortcut** → suggest activity based on mutual hobbies  
+- **Events shortcut** → invite to singles events  
+
+---
+
+👉 In short:  
+Ang **Chat Page** ay dapat may **conversation area (messages, receipts, typing)**, **input bar (text, attachments, emojis)**, **safety controls (block, report)**, at **enhancements (calls, shared media, date ideas)**.  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng Chat Page** (Header → Conversation → Input → Extras → Safety) para mas visual ang flow?

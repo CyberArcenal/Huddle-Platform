@@ -7,10 +7,10 @@
 # -------------------------------------------------------------------
 
 # Get all installed apps that belong to your project
-from core.settings.components.apps import INSTALLED_APPS
+from core.settings.components.apps import PROJECT_APPS
 
 
-PROJECT_APPS = [app for app in INSTALLED_APPS]
+
 PROJECT_APPS.append("global_utils")
 APP_LOGGERS = {
     app: {

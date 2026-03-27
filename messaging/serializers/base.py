@@ -2,7 +2,7 @@ from typing import Optional
 
 from rest_framework import serializers
 from messaging.models import Conversation, Message
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -19,7 +19,7 @@ class MessageSerializer(serializers.ModelSerializer):
         if obj.media:
             return obj.media.url
         return None
-
+    
 
 class ConversationSerializer(serializers.ModelSerializer):
     participants_details = UserMinimalSerializer(source='participants', many=True, read_only=True)

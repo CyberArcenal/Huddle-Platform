@@ -11,4 +11,4 @@ from .security import *
 from .session import *
 from .user_image import *
 from .user_preference import *
-from .user import *
+from .user.base import *

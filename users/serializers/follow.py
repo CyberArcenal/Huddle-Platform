@@ -8,7 +8,8 @@ from typing import Dict, Any, List, Optional
 
 
 from users.enums import UserStatus
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
+from users.services.block import BlockedUserService
 
 from ..models import User, UserFollow, UserActivity
 from ..services import UserService
@@ -39,15 +40,20 @@ class FollowUserSerializer(serializers.ModelSerializer):
         return None
 
     def validate_following_id(self, value: int) -> int:
+        from users.services.block import BlockedUserService
+        
         """Validate the user to follow"""
         request = self.context.get("request")
-
         if not request or not request.user.is_authenticated:
             raise serializers.ValidationError("Authentication required")
-
+        
+        blocked_ids = BlockedUserService.get_blocked_ids(request.user)
         # Check if trying to follow self
         if value == request.user.id:
             raise serializers.ValidationError("Cannot follow yourself")
+        
+        if value in blocked_ids:
+            raise serializers.ValidationError("Connot follow blocked user")
 
         try:
             following_user = User.objects.get(id=value)

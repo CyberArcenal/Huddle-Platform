@@ -1,0 +1,45 @@
+🎞️ Reel Screens Breakdown
+
+1. Thumbnail Grid or Carousel Preview
+
+Displays reel thumbnails in a grid or horizontal carousel.
+
+Allows users to browse multiple reels quickly.
+
+2. Full-Screen Reel Viewer
+
+Auto-plays reels in full screen.
+
+Supports swipe left/right to navigate between reels.
+
+Tap to pause/play.
+
+Mute/unmute controls.
+
+3. Reactions and Comments Overlay
+
+Overlay buttons for like, comment, and share.
+
+Positioned on the side or bottom for easy access.
+
+4. User Info and Reel Description
+
+Shows profile picture and username.
+
+Displays reel caption or description.
+
+5. Progress Indicator
+
+Visual bar or circle showing reel playback progress.
+
+6. Action Buttons
+
+Save/bookmark, share, report, remix options.
+
+7. Loading and Error States
+
+Smooth loading animations while reel loads.
+
+Friendly error messages if playback fails.
+
+Each screen is designed to enhance user engagement and provide intuitive navigation through reels.

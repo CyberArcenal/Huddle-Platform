@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from users.serializers.activity import UserActivitySerializer
 from users.serializers.base import ActivitySerializer, FollowerSerializer, FollowingSerializer, SecurityLogSerializer
 from users.serializers.session import LoginSessionSerializer
-from users.serializers.user import UserProfileSerializer
+from users.serializers.user.profile import UserProfileSerializer
 from users.services.user import UserService
 
 from ..models import User, UserStatus, UserActivity, SecurityLog

@@ -23,7 +23,6 @@ from users.models import (
     SecurityLog,
     UserSecuritySettings,
 )
-from users.serializers.user import UserProfileSerializer
 from drf_spectacular.utils import (
     PolymorphicProxySerializer,
     extend_schema,
@@ -38,6 +37,8 @@ from users.serializers.auth import (
     Resend2FAResponseSerializer,
 )
 from rest_framework import serializers
+
+from users.serializers.user.profile import UserProfileSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)

@@ -1,0 +1,49 @@
+Ang **Shared Media / Files Screen** ay parang **gallery at archive** ng lahat ng media at dokumento na naipadala sa isang conversation (one‑on‑one o group). Ang idea dito ay gawing madali para sa user na balikan ang mga photos, videos, voice notes, at files nang hindi na kailangang mag‑scroll sa buong chat history.
+
+---
+
+# 📂 Shared Media / Files Screen Plan
+
+### 🔺 Header
+- **Title**: “Shared Media & Files”  
+- **Back button** → balik sa conversation  
+- **Tabs / Filters** → Media | Files | Links  
+
+---
+
+### 🔺 Media Section
+- **Grid view** ng lahat ng photos at videos exchanged  
+- **Preview thumbnails** → tap to open full view  
+- **Date grouping** → “March 2026”, “February 2026” para madaling hanapin  
+- **Download / Save option** → i‑save sa device  
+
+---
+
+### 🔺 Files Section
+- **List view** ng documents (PDF, DOCX, XLSX, TXT)  
+- **Filename + icon** → hal. 📄 Report.pdf  
+- **Sender info** → sino nag‑send  
+- **Timestamp** → kailan na‑send  
+- **Download / Open button**  
+
+---
+
+### 🔺 Links Section
+- **List of shared links** → clickable URLs  
+- **Preview snippet** → page title + favicon  
+- **Date grouping** → para madaling hanapin  
+
+---
+
+### 🔺 Extras
+- **Search bar** → hanapin specific media/file/link  
+- **Sort options** → by date, by sender, by type  
+- **Bulk actions** → select multiple → download/delete  
+- **Pinned media/files** → important items highlighted  
+
+---
+
+👉 In short:  
+Ang **Shared Media / Files Screen** ay parang **mini‑library** ng conversation — naka‑organize ang lahat ng photos, videos, documents, at links para madaling ma‑access at ma‑manage.  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng Shared Media / Files Screen** (Header → Tabs → Media Grid → Files List → Links List → Extras) para mas makita ang flow visually?

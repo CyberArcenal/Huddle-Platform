@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from users.models import LoginCheckpoint, User
-from users.serializers.user import UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 from users.services.login_checkpoint import LoginCheckpointService
 
 logger = logging.getLogger(__name__)

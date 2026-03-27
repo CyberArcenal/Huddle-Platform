@@ -1,0 +1,88 @@
+# 💬 Chat / Messaging Screen
+
+### 🔺 Header
+- **Match name + profile picture**  
+- **Status indicator** → online/offline, last active.  
+- **Safety tools** → Block, Report, Unmatch.  
+
+---
+
+### 🔺 Conversation Area
+- **Message bubbles** (left/right alignment).  
+- **Content types**:  
+  - Text messages  
+  - Emojis/stickers  
+  - Media attachments (photos, short videos)  
+  - Location share (optional)  
+- **Read receipts** → checkmarks or “Seen”.  
+- **Timestamp** per message.  
+
+---
+
+### 🔺 Input Bar
+- **Text field** → type message.  
+- **Attachment icon** → upload photo/video.  
+- **Emoji/sticker button**.  
+- **Send button** → prominent, easy to tap.  
+
+---
+
+### 🔺 Extra Enhancements
+- **Conversation starter prompts** → “Ask about their hobbies” / “Share your favorite song.”  
+- **Shared interests highlight** → pinned at top: “You both love Hiking and Jazz Music.”  
+- **Event invite shortcut** → “Invite to Group Event.”  
+- **Safety reminder** → subtle banner: “Don’t share sensitive info too soon.”  
+
+---
+
+👉 In short:  
+- **Header** = identity + safety.  
+- **Conversation area** = rich messaging with receipts.  
+- **Input bar** = quick, intuitive sending.  
+- **Extras** = prompts, shared interests, event invites.  
+
+
+
+
+
+
+
+
+# 💬 Wireframe Flow: Chat / Messaging Screen
+
+### 1. Header
+- **Profile picture + name** ng match  
+- **Status indicator** → Online / Last Active  
+- **Safety tools** → Block, Report, Unmatch  
+
+---
+
+### 2. Conversation Area
+- **Message bubbles** (left/right alignment)  
+  - Text messages  
+  - Emojis/stickers  
+  - Media attachments (photos, short videos)  
+  - Location share (optional)  
+- **Read receipts** → checkmarks or “Seen”  
+- **Timestamps** sa bawat message  
+
+---
+
+### 3. Input Bar
+- **Text field** → type message  
+- **Emoji/sticker button**  
+- **Attachment icon** → upload photo/video  
+- **Send button** → prominent, easy to tap  
+
+---
+
+### 4. Extras
+- **Conversation starter prompts** → “Ask about their hobbies” / “Share your favorite song”  
+- **Shared interests highlight** → pinned at top: “You both love Hiking and Jazz Music”  
+- **Event invite shortcut** → “Invite to Group Event”  
+- **Safety reminder banner** → “Don’t share sensitive info too soon”  
+
+---
+
+👉 Flow hierarchy:  
+**Header (identity + safety) → Conversation (messages) → Input bar (compose) → Extras (prompts, interests, events, safety).**

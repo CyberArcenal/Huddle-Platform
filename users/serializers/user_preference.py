@@ -5,7 +5,7 @@ from users.models import (
     Hobby, Interest, Favorite, Music, Work, School,
     Achievement, SocialCause, LifestyleTag
 )
-from users.serializers.user import (
+from users.serializers.user.base import (
     HobbySerializer, InterestSerializer, FavoriteSerializer,
     MusicSerializer, WorkSerializer, SchoolSerializer,
     AchievementSerializer, SocialCauseSerializer, LifestyleTagSerializer

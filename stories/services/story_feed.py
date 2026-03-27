@@ -1,6 +1,6 @@
 from django.utils import timezone
 from typing import List, Dict, Any
-
+from django.db.models import Prefetch
 from feed.services.view import ViewService
 from stories.services.story import StoryService
 from ..models import Story
@@ -70,6 +70,27 @@ class StoryFeedService:
         # This can be expanded based on your discovery algorithm
 
         return feed
+    
+    @staticmethod    
+    def get_user_stories(
+        user: User,
+        include_expired: bool = False,
+        limit: int = 5,
+    ) -> List[Story]:
+        """
+        Get stories for a specific user, optionally including expired ones.
+        Prefetches media and variants for efficient serialization.
+        """
+        queryset = Story.objects.filter(user=user)
+        if not include_expired:
+            queryset = queryset.filter(expires_at__gt=timezone.now())
+
+        # Prefetch media and their variants
+        queryset = queryset.select_related('media').prefetch_related(
+            Prefetch('media__variants')
+        ).order_by('-created_at')
+
+        return list(queryset[:limit])
 
     @staticmethod
     def get_story_highlights(

@@ -1,0 +1,65 @@
+Para sa **Huddle Map Screen → nearby events/friends via location**, magandang gawin itong interactive at visually clear. Eto ang mga idea sa laman:
+
+---
+
+### 🗺️ Core Elements
+- **Map View (Google Maps / Mapbox)**  
+  - Centered sa current location ng user.  
+  - Theme‑aware (DeepPurple pins/markers).  
+
+- **Event Pins**  
+  - Distinct icon para sa events (calendar/flag).  
+  - Tap → show event preview card (title, date/time, location, RSVP button).  
+
+- **Friend Pins**  
+  - Avatar bubble markers para sa friends nearby.  
+  - Tap → quick profile preview (name, hobbies, personality type).  
+
+---
+
+### 📋 Overlay UI
+- **Filter Bar (top)**  
+  - Toggle: *Events* / *Friends* / *Both*.  
+  - Optional: filter by date, group, hobby.  
+
+- **Bottom Sheet (expandable)**  
+  - Shows list view of nearby events/friends.  
+  - Swipe up → full list with details.  
+  - Swipe down → collapse to mini preview.  
+
+- **Floating Action Button (FAB)**  
+  - “Create Event Here” → auto‑fill location.  
+  - Or “Center on Me” → recenter map.  
+
+---
+
+### 🧩 Extra Features
+- **Distance Labels** → show “2 km away” sa pins.  
+- **Live Presence** → green dot kung active online ang friend.  
+- **Cluster Markers** → kapag maraming events/friends sa isang lugar.  
+- **Route Suggestion** → optional integration (tap event → show directions).  
+
+---
+
+### 🧪 Compose Layout Idea
+
+```kotlin
+Scaffold(
+    topBar = { FilterBar() },
+    floatingActionButton = { CreateEventFab() }
+) { padding ->
+    Box(modifier = Modifier.fillMaxSize()) {
+        MapView(events, friends)
+        BottomSheetList(events, friends)
+    }
+}
+```
+
+---
+
+💡 Ang **Map Screen** ay hybrid ng *visual map* + *list overlay*.  
+- Map = spatial awareness.  
+- Bottom sheet = quick browsing.  
+- FAB = action shortcut.  
+
+Gusto mo bang igawan kita ng **wireframe sketch** ng Huddle Map Screen para makita ang layout ng map, pins, at bottom sheet?

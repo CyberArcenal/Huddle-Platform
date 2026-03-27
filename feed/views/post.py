@@ -112,42 +112,6 @@ class PostListView(APIView):
         tags=["Post's"],
         request=PostCreateSerializer,
         responses={201: PostDisplaySerializer},
-        examples=[
-            OpenApiExample(
-                "Create text post",
-                value={
-                    "content": "Hello world!",
-                    "post_type": "text",
-                    "privacy": 'public',
-                },
-                request_only=True,
-            ),
-            OpenApiExample(
-                "Create image post",
-                value={
-                    "content": "Check out this photo",
-                    "post_type": "image",
-                    "media_url": "https://example.com/image.jpg",
-                    "privacy": 'public',
-                },
-                request_only=True,
-            ),
-            OpenApiExample(
-                "Post response",
-                value={
-                    "id": 123,
-                    "user": 1,
-                    "content": "Hello world!",
-                    "post_type": "text",
-                    "media_url": None,
-                    "privacy": 'public',
-                    "is_deleted": False,
-                    "created_at": "2025-03-07T12:34:56Z",
-                    "updated_at": "2025-03-07T12:34:56Z",
-                },
-                response_only=True,
-            ),
-        ],
         description="Create a new post.",
     )
     @transaction.atomic

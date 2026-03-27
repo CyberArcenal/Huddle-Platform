@@ -19,7 +19,7 @@ from rest_framework import serializers
 logger = logging.getLogger(__name__)
 
 
-class PaginatedPostFeedSerializer(serializers.Serializer):
+class PaginatedMediaSerializer(serializers.Serializer):
     """Matches the structure of paginator.get_paginated_response()"""
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -90,7 +90,7 @@ class MediaListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedPostFeedSerializer},
+        responses={200: PaginatedMediaSerializer},
         description="List media, optionally filtered by content type, object ID, or by group.",
     )
     def get(self, request):

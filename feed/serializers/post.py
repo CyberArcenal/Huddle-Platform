@@ -13,10 +13,10 @@ from feed.services.reaction import ReactionService
 
 from groups.models.group import Group
 from groups.serializers.group import GroupMinimalSerializer
-from users.serializers.user import UserMinimalSerializer, UserMinimalSerializer
+from users.serializers.user.minimal import UserMinimalSerializer
 
 from .comment import CommentDisplaySerializer
-from .media import MediaDisplaySerializer, MediaCreateSerializer
+from .media import MediaDisplaySerializer
 from users.models import User
 logger = logging.getLogger(__name__)
 

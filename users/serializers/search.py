@@ -6,7 +6,7 @@ from django.db.models import Q
 from typing import Dict, Any, List, Optional
 
 from users.enums import UserStatus
-from users.serializers.user import UserListSerializer
+from users.serializers.user.base import UserListSerializer
 
 from ..models import User, UserFollow
 

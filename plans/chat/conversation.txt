@@ -1,0 +1,51 @@
+Ah, gets ko — gusto mo yung **Conversation Screen** mismo (yung one‑on‑one chat view kapag pumili ka ng isang thread sa Chat Page). Eto ang magandang laman at layout:
+
+---
+
+# 💬 Conversation Screen Plan
+
+### 🔺 Header
+- **User avatar + name** → sino kausap mo  
+- **Online status / last seen** → “Online” o “Last seen 2h ago”  
+- **Options menu** → block, report, mute, view profile  
+
+---
+
+### 🔺 Conversation Area
+- **Message bubbles** → left (other user), right (ikaw)  
+- **Timestamps** → maliit sa ilalim ng bawat message  
+- **Read receipts** → check marks (✓ sent, ✓✓ delivered, ✓✓ blue = read)  
+- **Typing indicator** → “User is typing…”  
+- **Media previews** → inline display ng images, videos, voice notes  
+- **Reactions** → quick emoji reactions sa messages  
+
+---
+
+### 🔺 Input Bar
+- **Text field** → main input  
+- **Send button** → icon (paper plane)  
+- **Attachment options** → photo, video, voice note, GIF/sticker  
+- **Emoji picker** → quick access  
+
+---
+
+### 🔺 Extras
+- **Reply/Quote** → swipe message → reply with context  
+- **Forward message** → share to another chat  
+- **Delete message** → remove for me / remove for both  
+- **Shared media tab** → shortcut para makita lahat ng photos/videos exchanged  
+- **Call buttons** → voice/video call option sa header  
+
+---
+
+### 🔺 Safety & Privacy
+- **Block user** → stop communication  
+- **Report user** → flag inappropriate content  
+- **Encryption notice** → “Messages are private and secure”  
+
+---
+
+👉 In short:  
+Ang **Conversation Screen** ay dapat may **header (identity + options)**, **conversation area (messages, receipts, typing)**, **input bar (text + attachments)**, at **extras (reactions, calls, shared media)**.  
+
+Gusto mo bang i‑sketch ko rin ang **wireframe hierarchy ng Conversation Screen** (Header → Conversation Area → Input Bar → Extras → Safety) para mas visual ang flow?
