@@ -23,12 +23,14 @@ from rest_framework import serializers
 
 from feed.models import Reel
 from feed.services.reel import ReelService
+from groups.serializers.group import GroupMinimalSerializer
 from users.serializers.user.minimal import UserMinimalSerializer
 
 class ReelMinimalSerializer(serializers.ModelSerializer):
     """Lightweight list view for reels (e.g., in a feed)."""
 
     user = UserMinimalSerializer(read_only=True)
+    group = GroupMinimalSerializer()
     video_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
 
@@ -37,6 +39,7 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
+            "group",
             "caption",
             "video_url",
             "thumbnail_url",
@@ -176,6 +179,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
     """Detailed view for a single reel, including engagement metrics and comments."""
 
     user = UserMinimalSerializer(read_only=True)
+    group = GroupMinimalSerializer()
     video_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     audio_url = serializers.SerializerMethodField()
@@ -192,6 +196,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
+            "group",
             "caption",
             "video_url",
             "thumbnail_url",

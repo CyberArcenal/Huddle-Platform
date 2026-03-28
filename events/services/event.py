@@ -209,19 +209,22 @@ class EventService:
         return list(queryset.order_by('start_time')[offset:offset + limit])
     
     @staticmethod
-    def get_group_events(
-        group: Group,
-        upcoming_only: bool = True,
-        limit: int = 50,
-        offset: int = 0
-    ) -> List[Event]:
-        """Get events for a specific group"""
-        queryset = Event.objects.filter(group=group)
-        
-        if upcoming_only:
-            queryset = queryset.filter(start_time__gte=timezone.now())
-        
-        return list(queryset.order_by('start_time')[offset:offset + limit])
+    def get_group_events(group, requester=None, limit=20, offset=0):
+        """
+        Return events associated with a group.
+        """
+        from groups.services.group import GroupService
+
+        if requester and not GroupService.is_user_allowed_to_view(requester, group):
+            return []
+
+        queryset = Event.objects.filter(
+            group=group,
+            is_deleted=False,
+            # maybe privacy filtering
+        ).order_by('-start_time')
+
+        return list(queryset[offset:offset + limit])
     
     @staticmethod
     def get_user_organized_events(

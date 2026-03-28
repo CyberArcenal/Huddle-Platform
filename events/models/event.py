@@ -1,7 +1,8 @@
 from django.conf import settings
 from django.db import models
+from feed.models.media import Media
 from groups.models import Group
-
+from django.contrib.contenttypes.fields import GenericRelation
 
 class Event(models.Model):
     EVENT_TYPES = [
@@ -18,6 +19,7 @@ class Event(models.Model):
     group = models.ForeignKey(
         Group, on_delete=models.CASCADE, null=True, blank=True, related_name="events"
     )
+    media = GenericRelation(Media, related_query_name='event')
     event_type = models.CharField(max_length=10, choices=EVENT_TYPES, default="public")
     location = models.CharField(max_length=255)
     start_time = models.DateTimeField()

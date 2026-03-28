@@ -13,6 +13,7 @@ from groups.views.base import (
     GroupStatisticsView,
     GroupTransferOwnershipView,
 )
+from groups.views.feed import GroupFeedView
 from groups.views.group_suggestion import GroupSuggestionView
 
 app_name = "groups"
@@ -53,4 +54,6 @@ urlpatterns = [
     path("popular/", GroupPopularView.as_view(), name="popular-groups"),
     
     path("suggestions/", GroupSuggestionView.as_view(), name="group-suggestions"),
+    
+    path('<int:group_id>/feed/', GroupFeedView.as_view(), name='group-feed'),
 ]

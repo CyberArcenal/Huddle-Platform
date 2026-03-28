@@ -10,6 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 from core.settings.dev import LOGGER
 from global_utils.pagination import UsersPagination
+from users.serializers.user.minimal import UserMinimalSerializer
 from users.serializers.user.profile import UserProfileSerializer
 
 from ..services.user import UserService
@@ -20,13 +21,10 @@ from ..serializers.user.base import (
     UserProfileSchemaUpdateSerializer,
     UserRegisterSerializer,
     UserUpdateSerializer,
-    UserListSerializer,
     UserStatusSerializer,
 )
 from ..models import User, UserStatus
 from rest_framework import serializers
-from ..serializers.user.base import UserListSerializer
-
 
 # ----- Paginated response serializers for drf-spectacular -----
 class PaginatedUserListSerializer(serializers.Serializer):
@@ -36,7 +34,7 @@ class PaginatedUserListSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = UserListSerializer(many=True)
+    results = UserMinimalSerializer(many=True)
 
 
 # ----- New input serializer for UserDeactivateView -----
@@ -287,7 +285,7 @@ class UserSearchView(APIView):
             users = UserService.search_users(query)
             paginator = UsersPagination()
             page = paginator.paginate_queryset(users, request)
-            serializer = UserListSerializer(
+            serializer = UserMinimalSerializer(
                 page, many=True, context={"request": request}
             )
             return paginator.get_paginated_response(serializer.data)

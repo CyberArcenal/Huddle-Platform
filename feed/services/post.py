@@ -520,3 +520,22 @@ class PostService:
         )
 
         return list(queryset[offset:offset+limit])
+    
+    @staticmethod
+    def get_group_posts(group_id: int, user: User, limit: int = 20, offset: int = 0):
+        try:
+            group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            return []
+
+        if not GroupService.is_user_allowed_to_view(user, group):
+            return []
+
+        return list(
+            Post.objects.filter(group=group, is_deleted=False)
+            .select_related('user', 'group')
+            .prefetch_related(
+                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            )
+            .order_by('-created_at')[offset:offset + limit]
+        )

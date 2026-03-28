@@ -220,3 +220,23 @@ class ShareService:
                         share._cached_content_object = post_map[share.object_id]
 
         return shares
+    
+    @staticmethod
+    def get_group_shares(group, requester=None, limit=20, offset=0):
+        """
+        Return shares that are posted to a specific group.
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from groups.services.group import GroupService
+
+        # Check if the requester can view the group (optional)
+        if requester and not GroupService.is_user_allowed_to_view(requester, group):
+            return []
+
+        queryset = Share.objects.filter(
+            group=group,
+            is_deleted=False,
+            # Possibly filter by privacy if share has that field
+        ).select_related('user', 'content_type').order_by('-created_at')
+
+        return list(queryset[offset:offset + limit])

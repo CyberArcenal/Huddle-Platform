@@ -1,9 +1,10 @@
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from typing import Optional, List, Dict, Any, Tuple
 
+from feed.models.media import Media
 from feed.models.post import Post
 from groups.models.group import GROUP_PRIVACY_CHOICES
 from users.models.user import User
@@ -329,6 +330,7 @@ class GroupService:
         )
 
         return list(group_posts[offset:offset + limit])
+    
     
     @staticmethod
     def cleanup_inactive_groups(days_inactive: int = 365, min_members: int = 0) -> List[Group]:

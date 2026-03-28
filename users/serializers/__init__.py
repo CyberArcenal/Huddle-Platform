@@ -6,7 +6,6 @@ from .checkpoint import *
 from .follow import *
 from .matching import *
 from .otp import *
-from .search import *
 from .security import *
 from .session import *
 from .user_image import *

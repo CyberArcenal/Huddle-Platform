@@ -1,12 +1,12 @@
 # search/urls.py
 from django.urls import path
-from search.views.dedicated import (
-    UserSearchView,
+from search.views.dedicated_search import (
     GroupSearchView,
     EventSearchView,
     PostSearchView,
 )
-from search.views.search import (  # existing history views
+from search.views.user_search import AdvancedUserSearchView, GlobalSearchView, SearchAutocompleteView, SearchByEmailView, SearchByUsernameView, UserSearchView
+from search.views.search_history import (  # existing history views
     SearchHistoryAPIView,
     DeleteSearchEntryAPIView,
     RecentSearchesAPIView,
@@ -19,10 +19,18 @@ from search.views.search import (  # existing history views
 
 urlpatterns = [
     # Dedicated content searches
-    path('users/', UserSearchView.as_view(), name='search-users'),
+    
     path('groups/', GroupSearchView.as_view(), name='search-groups'),
     path('events/', EventSearchView.as_view(), name='search-events'),
     path('posts/', PostSearchView.as_view(), name='search-posts'),
+    
+    # Search endpoints
+    path('users/', UserSearchView.as_view(), name='search-users'),
+    path('search/advanced/', AdvancedUserSearchView.as_view(), name='advanced-search'),
+    path('search/autocomplete/', SearchAutocompleteView.as_view(), name='search-autocomplete'),
+    path('search/by-username/', SearchByUsernameView.as_view(), name='search-by-username'),
+    path('search/by-email/', SearchByEmailView.as_view(), name='search-by-email'),
+    path('search/global/', GlobalSearchView.as_view(), name='global-search'),
 
     # Existing history endpoints
     path('history/', SearchHistoryAPIView.as_view(), name='search-history'),

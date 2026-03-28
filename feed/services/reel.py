@@ -251,3 +251,22 @@ class ReelService:
         count = old_deleted.count()
         old_deleted.delete()
         return count
+
+    @staticmethod
+    def get_group_reels(group, requester=None, limit=20, offset=0):
+        """
+        Return reels that belong to a specific group.
+        Assumes the Reel model has a 'group' field (ForeignKey to Group).
+        """
+        from groups.services.group import GroupService
+
+        if requester and not GroupService.is_user_allowed_to_view(requester, group):
+            return []
+
+        queryset = Reel.objects.filter(
+            group=group,
+            is_deleted=False,
+            # optionally privacy filtering
+        ).select_related('user').order_by('-created_at')
+
+        return list(queryset[offset:offset + limit])

@@ -1,3 +1,5 @@
+from typing import List, Optional
+
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework import status
@@ -23,37 +25,43 @@ class CustomPagination(PageNumberPagination):
 
     def get_paginated_response(
         self,
-        data=None,
-        message=None,
-        status=True,
-        response_status=status.HTTP_200_OK,
-        clean_pagination=False,
-    ):
+        data: Optional[List[dict]] = None,
+        message: Optional[str] = None,
+        success: bool = True,
+        response_status: int = status.HTTP_200_OK,
+        clean_pagination: bool = False,
+        **kwargs,
+    ) -> Response:
         if data is None:
             data = []
-        response_data = {
-            "status": status,
-            "message": message or "Success",
-            "pagination": {
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "count": self.page.paginator.count,
-                "current_page": self.page.number,
-                "total_pages": self.page.paginator.num_pages,
-                "page_size": self.page_size,
-            },
-            "data": data,
+
+        pagination_data = {
+            "next": self.get_next_link(),
+            "previous": self.get_previous_link(),
+            "count": self.page.paginator.count,
+            "current_page": self.page.number,
+            "total_pages": self.page.paginator.num_pages,
+            "page_size": self.get_page_size(self.request),
         }
 
-        # Remove null values from pagination
         if clean_pagination:
-            response_data["pagination"] = {
-                k: v for k, v in response_data["pagination"].items() if v is not None
-            }
-        # logger.debug(response_data)
+            pagination_data = {k: v for k, v in pagination_data.items() if v is not None}
+            
+        response_data = {
+            "status": success,
+            "message": message or "Success",
+            "pagination": pagination_data,
+            "data": data,
+        }
+        
+        # Merge extra kwargs into response_data
+        if kwargs:
+            response_data.update(kwargs)
+            
         return Response(response_data, status=response_status)
 
-    def get_paginated_error(self, data=None, message=None, status=False):
+
+    def get_paginated_error(self, data=None, message=None, status=False) -> Response:
         if data is None:
             data = []
 
@@ -102,7 +110,7 @@ class CursorPagination:
         self.request = request
         return items
 
-    def get_paginated_response(self, data=None, message=None, status=True, response_status=200):
+    def get_paginated_response(self, data=None, message=None, status=True, response_status=200) -> Response:
         if data is None:
             data = []
         response_data = {

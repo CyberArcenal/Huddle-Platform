@@ -722,7 +722,6 @@ class Command(BaseCommand):
         self.stdout.write(f"Created {len(reels)} reels.")
 
     def seed_shares(self, count=300):
-        # ... (unchanged, uses generic relations)
         self.stdout.write("Creating shares...")
         users = list(User.objects.all())
         groups = list(Group.objects.all())
@@ -731,11 +730,14 @@ class Command(BaseCommand):
         for model in models:
             if model.objects.exists():
                 content_types.append(ContentType.objects.get_for_model(model))
+
         if not content_types:
-            self.stdout.write("No shareable content found, skipping.")
+            self.stdout.write(
+                self.style.WARNING("No shareable content found, skipping shares.")
+            )
             return
 
-        shares = []
+        shares_created = 0
         for _ in range(count):
             user = random.choice(users)
             ct = random.choice(content_types)
@@ -758,10 +760,14 @@ class Command(BaseCommand):
                 is_deleted=False,
                 created_at=created,
                 updated_at=created + timedelta(hours=random.randint(1, 48)),
+                # Required fields from Post
+                post_type='share',
+                content=f"Shared {ct.model}: {object_id}",   # placeholder content
             )
-            shares.append(share)
-        Share.objects.bulk_create(shares, ignore_conflicts=True)
-        self.stdout.write(f"Created {len(shares)} shares.")
+            share.save()
+            shares_created += 1
+
+        self.stdout.write(f"Created {shares_created} shares.")
 
     def seed_conversations(self, count=30):
         # ... (unchanged)

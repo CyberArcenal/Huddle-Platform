@@ -8,7 +8,6 @@ import users.views.follow
 import users.views.friendship
 import users.views.suggestions
 import users.views.media
-import users.views.search
 import users.views.security
 import users.views.user
 import users.views.user_media
@@ -23,7 +22,6 @@ urlpatterns = [
     django.urls.path('register/', users.views.user.UserRegisterView.as_view(), name='user-register'),
     django.urls.path('profile/', users.views.user.UserProfileView.as_view(), name='user-profile'),
     django.urls.path('profile/<int:user_id>/', users.views.user.UserDetailView.as_view(), name='user-detail'),
-    django.urls.path('search/', users.views.search.UserSearchView.as_view(), name='user-search'),
     django.urls.path('status/update/', users.views.user.UserStatusUpdateView.as_view(), name='user-status-update'),
     django.urls.path('deactivate/', users.views.user.UserDeactivateView.as_view(), name='user-deactivate'),
     django.urls.path('verify/', users.views.user.VerifyUserView.as_view(), name='user-verify'),
@@ -82,14 +80,7 @@ urlpatterns = [
     
     django.urls.path('users/<int:user_id>/media/', users.views.user_media.UserMediaGridView.as_view(), name='user-media'),
     django.urls.path('me/media/', users.views.user_media.UserMediaGridView.as_view(), name='my-media'),
-    
-    # Search endpoints
-    django.urls.path('search/users/', users.views.search.UserSearchView.as_view(), name='search-users'),
-    django.urls.path('search/advanced/', users.views.search.AdvancedUserSearchView.as_view(), name='advanced-search'),
-    django.urls.path('search/autocomplete/', users.views.search.SearchAutocompleteView.as_view(), name='search-autocomplete'),
-    django.urls.path('search/by-username/', users.views.search.SearchByUsernameView.as_view(), name='search-by-username'),
-    django.urls.path('search/by-email/', users.views.search.SearchByEmailView.as_view(), name='search-by-email'),
-    django.urls.path('search/global/', users.views.search.GlobalSearchView.as_view(), name='global-search'),
+
     
     # Admin endpoints
     django.urls.path('admin/users/', users.views.admin.AdminUserListView.as_view(), name='admin-user-list'),

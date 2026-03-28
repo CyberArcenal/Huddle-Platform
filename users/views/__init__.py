@@ -53,15 +53,6 @@ from .media import (
     GetCoverPhotoView
 )
 
-from .search import (
-    UserSearchView as SearchUserView,
-    AdvancedUserSearchView,
-    SearchAutocompleteView,
-    SearchByUsernameView,
-    SearchByEmailView,
-    GlobalSearchView
-)
-
 from .admin import (
     AdminUserListView,
     AdminUserDetailView,

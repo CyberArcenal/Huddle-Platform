@@ -5,12 +5,16 @@ from feed.models.post import POST_PRIVACY_TYPES
 from django.contrib.contenttypes.fields import GenericRelation
 
 from feed.models.media import Media
+from groups.models.group import Group
 
 
 
 
 class Reel(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reels')
+    group = models.ForeignKey(
+        Group, null=True, blank=True, on_delete=models.CASCADE, related_name="reels"
+    )
     caption = models.TextField(blank=True)
     media = GenericRelation(Media, related_query_name='reel')        # main video
     thumbnail = models.ImageField(upload_to='reels/thumbnails/', blank=True, null=True)

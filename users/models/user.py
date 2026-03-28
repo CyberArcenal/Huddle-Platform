@@ -116,17 +116,6 @@ class UserQuerySet(models.QuerySet):
         return self.filter(status=UserStatus.DELETED.value)
 
 
-class ActiveUserManager(models.Manager):
-    def get_queryset(self):
-        return UserQuerySet(self.model, using=self._db).active()
-
-    def active(self):
-        return self.get_queryset()
-
-    # expose other helpers from the queryset if needed
-    def not_suspended(self):
-        return UserQuerySet(self.model, using=self._db).not_suspended()
-
 
 class User(AbstractUser):
     status = models.CharField(
@@ -159,11 +148,6 @@ class User(AbstractUser):
     lifestyle_tags = models.ManyToManyField(
         "LifestyleTag", blank=True, related_name="users"
     )
-    
-    # Keep default manager for admin/migrations
-    objects = models.Manager()
-    # Add active_objects for convenience (returns only active users)
-    active_objects = ActiveUserManager()
 
     # Personality & relationship fields
     personality_type = models.CharField(
@@ -216,3 +200,5 @@ class UserImage(models.Model):
     class Meta:
         db_table = "user_images"
         unique_together = ("user", "image_type")
+        
+        

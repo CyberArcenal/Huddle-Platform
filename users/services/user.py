@@ -134,8 +134,6 @@ class UserService:
                     user.first_name = "Deleted"
                     user.last_name = "User"
                     user.phone_number = ""
-                    user.profile_picture = None
-                    user.cover_photo = None
                     user.bio = ""
                     user.save()
 
