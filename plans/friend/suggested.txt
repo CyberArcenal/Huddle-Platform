@@ -1,0 +1,53 @@
+### Overview
+Gusto kong gawing **Suggested Friends** bilang isang contextual, explainable discovery feed — hindi random list kundi mga rekomendasyong may dahilan. Target: mabilis na koneksyon na may konteksto (bakit sila inirerekomenda), madaling aksyon (Add Friend, Preview, Hide), at kontrol ng user.
+
+---
+
+### Pinakamahalagang attributes (priority table)
+| **Attribute** | **Why it matters** | **Client label** |
+|---|---:|---|
+| **Mutuals** | Pinakamalakas na social signal | **3 mutuals** |
+| **Shared interests** | Mas mataas conversion kapag may common hobbies | **Same interest: Photography** |
+| **Recent interaction** | Profile views / likes increase relevance | **Viewed you 2d ago** |
+| **Proximity** | Useful kung app supports location | **Nearby 1.2 km** |
+| **Recency** | New users benefit from onboarding boosts | **Joined 5 days ago** |
+
+---
+
+### UI layout and components
+- **Header**: title **Suggested**, small filter icon, lightweight sort (Mutuals / Interests / Nearby).  
+- **Filter chips**: Mutuals; Interests; Nearby; New.  
+- **Card** per suggestion: avatar; **name** bold; **reason chip** (e.g., “3 mutuals”); one‑line bio or shared interest; primary **Add Friend** button; secondary **Preview** (opens bottom sheet); overflow menu **Hide** / **Report**.  
+- **Compact grid option**: 2‑column cards for quick browsing; toggle in header.  
+- **Empty state**: CTA **Find people** or **Sync contacts**.  
+- **Microcopy**: show **score** or short explanation under name when space allows: “Suggested because you both follow Ana and like Hiking.”
+
+---
+
+### Ranking, scoring, and backend expectations
+- **Scoring model**: weighted sum (example weights: Mutuals 40, Shared interests 25, Interaction 15, Proximity 10, Recency 10).  
+- **Diversity**: add small randomness and category diversity to avoid echo chamber.  
+- **Explainability**: return `reason` and `score` in API so client can surface “Because…” text.  
+- **API contract**: `GET /friend-suggestions/?filter=&page=` returns `[{id,name,avatar,mutual_count,shared_interests,reason,score,distance_km}]`.  
+- **Client behavior**: sort client‑side by score, allow filter chips to request backend when needed.
+
+---
+
+### Interactions and microflows
+- **Add Friend**: tap → button disables + spinner → optimistic show **Pending**; call `POST /friends/requests/send/ { to_user_id }`; on failure rollback and show toast. Show Undo snackbar for a few seconds.  
+- **Preview**: bottom sheet with mutuals, recent posts, and actions (Message, Add Friend, View Profile).  
+- **Hide / Report**: overflow menu; hide reduces similar future suggestions; report opens moderation flow.  
+- **Filters**: quick client filters for shared interests; complex filters call backend.  
+- **A/B testing**: experiment with ordering (mutuals-first vs. interests-first) to maximize accept rate.
+
+---
+
+### Metrics, privacy, and safety
+- **Metrics to track**: suggestion click rate, add friend conversion, undo rate, hide/report rate, time to add.  
+- **Privacy**: respect user opt‑outs and blocked lists; do not surface location unless user consented.  
+- **Abuse control**: throttle suggestion frequency and Add Friend actions to prevent spam; surface rate‑limit messages gracefully.  
+- **Quality loop**: use conversion signals to reweight scoring (learn which signals predict acceptance).
+
+---
+
+Sabihin mo kung gusto mo ng **Compose mockup** ng Suggested screen, o **Retrofit + ViewModel** scaffold na may sample DTOs at optimistic Add Friend flow — gagawin ko agad ang susunod na deliverable.

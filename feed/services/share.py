@@ -19,24 +19,26 @@ class ShareService:
     def create_share(
         user: User,
         content_object,
-        caption: str = '',
-        privacy: str = 'public',
-        group: Group = None
+        caption: str = "",
+        privacy: str = "public",
+        group: Group = None,
     ) -> Share:
         """
         Create a new share for any content object.
         """
         if not user or not content_object:
             raise ValidationError("User and content object are required.")
-        
+
         if group and not isinstance(group, Group):
             raise ValidationError(f"Group: {group} is not an instance")
-        
+
         if not isinstance(user, User):
             raise ValidationError(f"User: {user} is not and intance")
 
         # Validate privacy
-        valid_privacy = [choice[0] for choice in Share._meta.get_field('privacy').choices]
+        valid_privacy = [
+            choice[0] for choice in Share._meta.get_field("privacy").choices
+        ]
         if privacy not in valid_privacy:
             raise ValidationError(f"Privacy must be one of {valid_privacy}")
 
@@ -46,7 +48,8 @@ class ShareService:
                     user=user,
                     content_object=content_object,
                     caption=caption,
-                    privacy=privacy
+                    privacy=privacy,
+                    group=group,
                 )
                 return share
         except IntegrityError as e:
@@ -66,7 +69,7 @@ class ShareService:
         requester: Optional[User] = None,
         include_deleted: bool = False,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Share]:
         """Get shares created by a specific user, filtered by privacy."""
         queryset = Share.objects.filter(user=user)
@@ -76,29 +79,25 @@ class ShareService:
         # Apply privacy filtering if requester is not the owner
         if requester and requester != user:
             # Public shares only (we could also allow followers if share privacy = 'followers')
-            queryset = queryset.filter(privacy='public')
+            queryset = queryset.filter(privacy="public")
         elif not requester:
             # Anonymous: only public shares
-            queryset = queryset.filter(privacy='public')
+            queryset = queryset.filter(privacy="public")
 
-        return list(queryset.order_by('-created_at')[offset:offset + limit])
+        return list(queryset.order_by("-created_at")[offset : offset + limit])
 
     @staticmethod
     def get_shares_for_object(
-        content_object,
-        include_deleted: bool = False,
-        limit: int = 100,
-        offset: int = 0
+        content_object, include_deleted: bool = False, limit: int = 100, offset: int = 0
     ) -> List[Share]:
         """Get all shares of a particular object."""
         content_type = ContentType.objects.get_for_model(content_object)
         queryset = Share.objects.filter(
-            content_type=content_type,
-            object_id=content_object.pk
+            content_type=content_type, object_id=content_object.pk
         )
         if not include_deleted:
             queryset = queryset.filter(is_deleted=False)
-        return list(queryset.order_by('-created_at')[offset:offset + limit])
+        return list(queryset.order_by("-created_at")[offset : offset + limit])
 
     @staticmethod
     def delete_share(share: Share, soft: bool = True) -> bool:
@@ -106,7 +105,7 @@ class ShareService:
         try:
             if soft:
                 share.is_deleted = True
-                share.save(update_fields=['is_deleted'])
+                share.save(update_fields=["is_deleted"])
             else:
                 share.delete()
             return True
@@ -119,7 +118,7 @@ class ShareService:
         if not share.is_deleted:
             return False
         share.is_deleted = False
-        share.save(update_fields=['is_deleted'])
+        share.save(update_fields=["is_deleted"])
         return True
 
     @staticmethod
@@ -131,7 +130,9 @@ class ShareService:
         if caption is not None:
             share.caption = caption
         if privacy is not None:
-            valid_privacy = [choice[0] for choice in Share._meta.get_field('privacy').choices]
+            valid_privacy = [
+                choice[0] for choice in Share._meta.get_field("privacy").choices
+            ]
             if privacy not in valid_privacy:
                 raise ValidationError(f"Privacy must be one of {valid_privacy}")
             share.privacy = privacy
@@ -144,15 +145,12 @@ class ShareService:
         """Get number of shares for an object (excluding deleted)."""
         content_type = ContentType.objects.get_for_model(content_object)
         return Share.objects.filter(
-            content_type=content_type,
-            object_id=content_object.pk,
-            is_deleted=False
+            content_type=content_type, object_id=content_object.pk, is_deleted=False
         ).count()
 
     @staticmethod
     def get_recent_shares(
-        content_type_model: str = None,
-        limit: int = 20
+        content_type_model: str = None, limit: int = 20
     ) -> List[Share]:
         """
         Get recent shares across all content, optionally filtered by model name.
@@ -160,10 +158,18 @@ class ShareService:
         """
         queryset = Share.objects.filter(is_deleted=False)
         if content_type_model:
-            app_label, model = content_type_model.split('.') if '.' in content_type_model else ('feed', content_type_model)
+            app_label, model = (
+                content_type_model.split(".")
+                if "." in content_type_model
+                else ("feed", content_type_model)
+            )
             content_type = ContentType.objects.get(app_label=app_label, model=model)
             queryset = queryset.filter(content_type=content_type)
-        return list(queryset.select_related('user', 'content_type').order_by('-created_at')[:limit])
+        return list(
+            queryset.select_related("user", "content_type").order_by("-created_at")[
+                :limit
+            ]
+        )
 
     @staticmethod
     def get_user_share_statistics(user: User) -> Dict[str, Any]:
@@ -171,18 +177,25 @@ class ShareService:
         total_shares = Share.objects.filter(user=user, is_deleted=False).count()
         # Breakdown by content type
         from django.db.models import Count
-        type_breakdown = Share.objects.filter(user=user, is_deleted=False) \
-            .values('content_type__model') \
-            .annotate(count=Count('id'))
+
+        type_breakdown = (
+            Share.objects.filter(user=user, is_deleted=False)
+            .values("content_type__model")
+            .annotate(count=Count("id"))
+        )
 
         return {
-            'total_shares': total_shares,
-            'type_breakdown': list(type_breakdown),
-            'first_share_date': Share.objects.filter(user=user)
-                .order_by('created_at').first().created_at if total_shares > 0 else None
+            "total_shares": total_shares,
+            "type_breakdown": list(type_breakdown),
+            "first_share_date": (
+                Share.objects.filter(user=user)
+                .order_by("created_at")
+                .first()
+                .created_at
+                if total_shares > 0
+                else None
+            ),
         }
-    
-
 
     @staticmethod
     def get_feed_shares(user: User, limit: int = 50, offset: int = 0) -> List[Share]:
@@ -194,10 +207,11 @@ class ShareService:
         """
         following = UserFollowService.get_following(user)
         # Get shares from followed users and own shares
-        queryset = Share.objects.filter(
-            Q(user__in=following) | Q(user=user),
-            is_deleted=False
-        ).select_related('user', 'content_type').order_by('-created_at')
+        queryset = (
+            Share.objects.filter(Q(user__in=following) | Q(user=user), is_deleted=False)
+            .select_related("user", "content_type")
+            .order_by("-created_at")
+        )
 
         shares = list(queryset[offset : offset + limit])
 
@@ -210,7 +224,9 @@ class ShareService:
             if post_ids:
                 # Fetch those Posts with prefetched media and variants
                 posts = Post.objects.filter(id__in=post_ids).prefetch_related(
-                    Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+                    Prefetch(
+                        "media", queryset=Media.objects.prefetch_related("variants")
+                    )
                 )
                 # Create a mapping from id to post
                 post_map = {p.id: p for p in posts}
@@ -220,7 +236,7 @@ class ShareService:
                         share._cached_content_object = post_map[share.object_id]
 
         return shares
-    
+
     @staticmethod
     def get_group_shares(group, requester=None, limit=20, offset=0):
         """
@@ -233,10 +249,14 @@ class ShareService:
         if requester and not GroupService.is_user_allowed_to_view(requester, group):
             return []
 
-        queryset = Share.objects.filter(
-            group=group,
-            is_deleted=False,
-            # Possibly filter by privacy if share has that field
-        ).select_related('user', 'content_type').order_by('-created_at')
+        queryset = (
+            Share.objects.filter(
+                group=group,
+                is_deleted=False,
+                # Possibly filter by privacy if share has that field
+            )
+            .select_related("user", "content_type")
+            .order_by("-created_at")
+        )
 
-        return list(queryset[offset:offset + limit])
+        return list(queryset[offset : offset + limit])

@@ -199,6 +199,5 @@ class UserImage(models.Model):
     metadata = models.JSONField(null=True, blank=True)
     class Meta:
         db_table = "user_images"
-        unique_together = ("user", "image_type")
         
         

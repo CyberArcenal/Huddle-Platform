@@ -70,10 +70,17 @@ class PostCreateSerializer(serializers.ModelSerializer):
     tag_users = serializers.PrimaryKeyRelatedField(
         queryset = User.objects.all(), required=False, allow_null=True
     )
+    mimeTypes = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="List of MIME types for each uploaded media file",
+    )
+
 
     class Meta:
         model = Post
-        fields = ["content", "group", "post_type", "privacy", "media", "tag_users"]
+        fields = ["content", "group", "post_type", "privacy", "media", "tag_users", "mimeTypes"]
 
     def validate(self, data):
         post_type = data.get("post_type", "text")
@@ -107,9 +114,10 @@ class PostCreateSerializer(serializers.ModelSerializer):
                 user=request.user,
                 content=validated_data.get("content", ""),
                 post_type=validated_data.get("post_type", "text"),
-                media=validated_data.get("media", []),
+                media_files=validated_data.get("media", []),
                 privacy=validated_data.get("privacy", "followers"),
-                group = validated_data.get("group", None),
+                tag_users=validated_data.get("tag_users", []),
+                group=validated_data.get("group", None),
             )
             return post
         except ValidationError as e:

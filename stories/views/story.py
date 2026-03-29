@@ -102,7 +102,9 @@ class StoryListView(APIView):
 
     @extend_schema(
         tags=["Storie's"],
-        request=StoryCreateSerializer,
+                 request={
+            'multipart/form-data': StoryCreateSerializer,
+        },
         responses={201: StorySerializer},
         examples=[
             OpenApiExample(

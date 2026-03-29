@@ -1,0 +1,64 @@
+### Following — ideya para sa mobile tab
+
+Gusto kong gawing **Following** tab na malinaw, kontrolado, at mabilis gamitin: lugar kung saan makikita ng user kung sino ang sinusundan nila, paano nakikipag‑interact ang mga sinundan, at anong mabilis na aksyon ang puwede gawin — lahat **walang bulk actions** at may per‑user control.
+
+---
+
+### Layout at pangunahing bahagi
+- **Header**: title **Following**, search icon, filter icon, quick count ng sinundan.  
+- **Top summary strip**: **Following count** at maliit na toggle para sa **Show only active** (online/recent activity).  
+- **Filter chips**: All; Active; Muted; Verified; Recently interacted.  
+- **List item**: avatar; **name** bold; subtitle na nagpapakita ng status tulad ng **Follows you** o **Last active 2h ago**; small activity indicator (post icon, story dot); actions: **Following** (toggle), **Message**, **More (⋯)**.  
+- **More menu**: **View profile; Mute; Remove follow; Block** (Block destructive, nasa dulo).  
+- **Empty state**: CTA **Find people** or **See suggestions**.
+
+---
+
+### Interactions at microflows
+- **Unfollow single user**  
+  - Tap **Following** → button shows spinner → optimistic toggle to **Follow** state → rollback on error with toast. No confirmation required for unfollow but show Undo snackbar for a few seconds.  
+- **Mute**  
+  - From More menu → toggle mute; show small toast “Muted — you won’t see posts”. Mute only affects feed visibility, not relationship.  
+- **Message**  
+  - Opens chat; if messaging requires mutual follow, show clear CTA.  
+- **View profile**  
+  - Opens profile or bottom sheet with recent posts and quick actions.  
+- **Block**  
+  - In More menu as destructive action; show confirmation dialog and Undo snackbar after block.  
+- **Realtime updates**  
+  - Show online dot or last active; update via push/socket; fallback to periodic refresh.
+
+---
+
+### Data model and API expectations
+- **Follower DTO**  
+  - `FollowingDto { id, user: UserSummary, last_active, muted: Boolean, notifications_enabled: Boolean }`  
+- **Essential endpoints**  
+  - `GET /following/?page=&filter=` → paginated list with activity flags  
+  - `POST /unfollow/ { user_id }` → unfollow single user  
+  - `POST /follow/ { user_id }` → follow back single user  
+  - `POST /following/mute/ { user_id }` → mute/unmute  
+  - `POST /blocks/block/ { user_id }` → block user  
+- **Client expectations**  
+  - Minimal payload for fast scrolling; include `last_active`, `muted`, and `mutual` flags; support pagination and badge counts.
+
+---
+
+### UX rules, safety, and edge cases
+- **No bulk actions** — per‑user only.  
+- **Optimistic updates with Undo** — for follow/unfollow/mute; rollback on API failure.  
+- **Rate limiting** — debounce repeated taps and show friendly message if limited.  
+- **Deleted or suspended accounts** — show “Account unavailable” and allow cleanup.  
+- **Privacy** — respect blocked users and user privacy settings; do not surface location unless consented.  
+- **Moderation** — report flow in More menu; log block events for moderation.
+
+---
+
+### Metrics and priorities
+- **KPIs**: unfollow rate, follow back rate, mute rate, message conversion, API error rate.  
+- **MVP priority**: list with per‑item Follow/Unfollow, Message, More menu (Mute, Block, View).  
+- **Next**: realtime presence, per‑user notification toggles, and small analytics dashboard.
+
+---
+
+Kung gusto mo, gagawa ako ng **Compose wireframe** ng Following screen o **ViewModel + Retrofit** scaffold para sa per‑item flows (follow/unfollow/mute/block) — pipiliin mo lang at ihahanda ko agad.

@@ -13,29 +13,38 @@ from users.serializers.user.minimal import UserMinimalSerializer
 from users.serializers.user_image import UserImageDisplaySerializer
 
 FEED_DATA_TYPES = [
-            "posts",
-            "reels",
-            "stories",
-            "suggested_users",
-            "match_users",
-            "recommended_groups",
-            "shares",
-            "events",
-            "post",
-            "share",
-            "reel",
-            "story",
-            "user_image",
-            "ad",
-            "ads",
-            "other",
-        ]
+    "posts",
+    "reels",
+    "stories",
+    "suggested_users",
+    "match_users",
+    "recommended_groups",
+    "shares",
+    "events",
+    "post",
+    "share",
+    "reel",
+    "story",
+    "user_image",
+    "ad",
+    "ads",
+    "other",
+    "user_story",
+]
+
 
 class StoryItemSerializer(serializers.Serializer):
     user = UserMinimalSerializer()
     stories = StorySerializer(many=True)
     has_viewed_all = serializers.BooleanField()
-    type = serializers.ChoiceField(choices=['following', 'own'])
+    type = serializers.ChoiceField(choices=["following", "own"])
+
+
+class StoryGroupSerializer(serializers.Serializer):
+    user = UserMinimalSerializer()
+    stories = StorySerializer(many=True)
+    story_count = serializers.IntegerField()
+    has_viewed_all = serializers.BooleanField()
 
 
 class SuggestedUserItemSerializer(serializers.Serializer):
@@ -56,7 +65,6 @@ class RecommendedGroupItemSerializer(serializers.Serializer):
     reason = serializers.CharField(allow_null=True, required=False)
 
 
-
 # Mapping from row_type to the serializer class for items
 ROW_TYPE_SERIALIZER = {
     "posts": PostFeedSerializer,
@@ -75,6 +83,7 @@ SINGLE_ITEM_SERIALIZER = {
     "reel": ReelDisplaySerializer,
     "story": StorySerializer,
     "user_image": UserImageDisplaySerializer,
+    "user_story": StoryFeedSerializer,
 }
 
 
@@ -86,9 +95,9 @@ class UnifiedContentItemSerializer(serializers.Serializer):
 
     def get_items(self, obj) -> list[Dict[str, Any]]:
         # Rows have 'row_type' and 'items'
-        if 'row_type' in obj and 'items' in obj:
-            row_type = obj['row_type']
-            items = obj['items']
+        if "row_type" in obj and "items" in obj:
+            row_type = obj["row_type"]
+            items = obj["items"]
             serializer_class = ROW_TYPE_SERIALIZER.get(row_type)
             if serializer_class:
                 return serializer_class(items, many=True, context=self.context).data
@@ -96,9 +105,9 @@ class UnifiedContentItemSerializer(serializers.Serializer):
 
     def get_item(self, obj) -> Dict[str, Any]:
         # Single items have 'type' and 'data'
-        if 'type' in obj and 'item' in obj:
-            content_type = obj['type']
-            data_obj = obj['item']
+        if "type" in obj and "item" in obj:
+            content_type = obj["type"]
+            data_obj = obj["item"]
             serializer_class = SINGLE_ITEM_SERIALIZER.get(content_type)
             if serializer_class:
                 return serializer_class(data_obj, context=self.context).data
@@ -106,23 +115,23 @@ class UnifiedContentItemSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         # Determine type and title based on input structure
-        if 'row_type' in instance and 'items' in instance:
-            type_val = instance.get('row_type')
-            title = instance.get('title', '')
-        elif 'type' in instance and 'item' in instance:
-            type_val = instance.get('type')
-            title = ''   # no title for single items
+        if "row_type" in instance and "items" in instance:
+            type_val = instance.get("row_type")
+            title = instance.get("title", "")
+        elif "type" in instance and "item" in instance:
+            type_val = instance.get("type")
+            title = ""  # no title for single items
         else:
-            type_val = 'other'
-            title = ''
+            type_val = "other"
+            title = ""
 
         # Use the methods to get the actual data
         items = self.get_items(instance)
         item = self.get_item(instance)
 
         return {
-            'type': type_val,
-            'title': title,
-            'items': items,
-            'item': item,
+            "type": type_val,
+            "title": title,
+            "items": items,
+            "item": item,
         }

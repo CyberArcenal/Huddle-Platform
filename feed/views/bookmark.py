@@ -1,4 +1,6 @@
-from rest_framework.views import APIView
+import logging
+
+from rest_framework.views import APIView, PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -14,12 +16,17 @@ from feed.serializers.book_mark import (
     BookmarkCreateSerializer,
     BookmarkStatisticsSerializer,
 )
+from django.db import transaction
 from global_utils.pagination import AnalyticsPagination
+
+logger = logging.getLogger(__name__)
 
 
 # ----- Input serializers for add/remove endpoints -----
 class BookmarkActionSerializer(serializers.Serializer):
-    target_type = serializers.CharField(help_text="Model name (e.g., 'post', 'comment')")
+    target_type = serializers.CharField(
+        help_text="Model name (e.g., 'post', 'comment')"
+    )
     target_id = serializers.IntegerField(help_text="Object ID")
 
 
@@ -63,9 +70,11 @@ class BookmarkListView(APIView):
         description="Get all bookmarks created by the current user.",
     )
     def get(self, request):
-        queryset = ObjectBookmark.objects.filter(user=request.user).select_related(
-            "user", "content_type"
-        ).order_by("-created_at")
+        queryset = (
+            ObjectBookmark.objects.filter(user=request.user)
+            .select_related("user", "content_type")
+            .order_by("-created_at")
+        )
 
         content_type_filter = request.query_params.get("content_type")
         if content_type_filter:
@@ -84,6 +93,12 @@ class BookmarkListView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
 
+class BookmarkResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BookmarkDisplaySerializer(required=False, allow_null=True)
+
+
 class BookmarkDetailView(APIView):
     """Add or remove a bookmark for a specific object."""
 
@@ -92,67 +107,209 @@ class BookmarkDetailView(APIView):
     @extend_schema(
         tags=["Bookmarks"],
         request=BookmarkActionSerializer,
-        responses={201: BookmarkDisplaySerializer},
+        responses={
+            201: BookmarkResponseSerializer,
+            400: BookmarkResponseSerializer,
+            403: BookmarkResponseSerializer,
+            404: BookmarkResponseSerializer,
+        },
         description="Create a bookmark for the given object.",
     )
+    @transaction.atomic
     def post(self, request):
         serializer = BookmarkActionSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": False, "message": "Invalid request data.", "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         target_type = serializer.validated_data["target_type"]
         target_id = serializer.validated_data["target_id"]
 
+        # Resolve ContentType: accept "app_label.model" or just "model"
         try:
-            ct = ContentType.objects.get(model=target_type)
-            obj = ct.get_object_for_this_type(pk=target_id)
+            if "." in target_type:
+                app_label, model = target_type.split(".", 1)
+                ct = ContentType.objects.get(app_label=app_label, model=model)
+            else:
+                ct = ContentType.objects.get(model=target_type)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:
+
+        # Retrieve the target object and handle not-found
+        try:
+            obj = ct.get_object_for_this_type(pk=target_id)
+        except Exception as e:
+            # Most model .get_object_for_this_type will raise the model's DoesNotExist
             return Response(
-                {"error": f"Object with ID {target_id} not found"},
+                {
+                    "status": False,
+                    "message": f"Object with ID {target_id} not found.",
+                    "data": None,
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        bookmark = BookmarkService.add_bookmark(user=request.user, obj=obj)
-        serializer = BookmarkDisplaySerializer(
+        # Create bookmark via service (service should handle duplicates/permissions)
+        try:
+            bookmark = BookmarkService.add_bookmark(user=request.user, obj=obj)
+        except PermissionDenied:
+            return Response(
+                {
+                    "status": False,
+                    "message": "You do not have permission to bookmark this object.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except ValidationError as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Failed to create bookmark.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception(
+                "Unexpected error creating bookmark for %s:%s - %s",
+                target_type,
+                target_id,
+                e,
+            )
+            return Response(
+                {
+                    "status": False,
+                    "message": "An unexpected error occurred.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        response_serializer = BookmarkDisplaySerializer(
             bookmark, context={"request": request}
         )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "status": True,
+                "message": "Bookmark created successfully.",
+                "data": response_serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    class BookmarkDeleteResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = serializers.JSONField(required=False, allow_null=True)
 
     @extend_schema(
         tags=["Bookmarks"],
         request=BookmarkActionSerializer,
-        responses={204: None},
+        responses={
+            200: BookmarkDeleteResponseSerializer,
+            400: BookmarkDeleteResponseSerializer,
+            403: BookmarkDeleteResponseSerializer,
+            404: BookmarkDeleteResponseSerializer,
+            500: BookmarkDeleteResponseSerializer,
+        },
         description="Remove a bookmark for the given object.",
     )
+    @transaction.atomic
     def delete(self, request):
         serializer = BookmarkActionSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": False, "message": "Invalid request data.", "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         target_type = serializer.validated_data["target_type"]
         target_id = serializer.validated_data["target_id"]
 
+        # Resolve ContentType: accept "app_label.model" or just "model"
         try:
-            ct = ContentType.objects.get(model=target_type)
-            obj = ct.get_object_for_this_type(pk=target_id)
+            if "." in target_type:
+                app_label, model = target_type.split(".", 1)
+                ct = ContentType.objects.get(app_label=app_label, model=model)
+            else:
+                ct = ContentType.objects.get(model=target_type)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:
-            # If the object doesn't exist, we can still remove bookmarks if any exist
-            # But we need to handle gracefully
-            # Actually, we need the content type to filter, but we can use the provided type
-            pass
 
-        BookmarkService.remove_bookmark(user=request.user, obj=obj)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        # Try to get the actual object; if not found, proceed to remove bookmarks by content_type + id
+        obj = None
+        try:
+            obj = ct.get_object_for_this_type(pk=target_id)
+        except Exception:
+            # Object not found; we'll still attempt to remove bookmarks by content type + id
+            obj = None
+
+        try:
+            if obj is not None:
+                # Service removes bookmark by object instance
+                BookmarkService.remove_bookmark(user=request.user, obj=obj)
+            else:
+                # Service removes bookmark by content_type and object_id
+                # Implement/remove_bookmark_by_target should be provided by your service layer
+                # Fallback: if not available, filter Bookmark model directly
+                try:
+                    BookmarkService.remove_bookmark_by_target(
+                        user=request.user, content_type=ct, object_id=target_id
+                    )
+                except AttributeError:
+                    # Fallback direct deletion (adjust model names/fields as needed)
+                    from feed.models import ObjectBookmark as _BookmarkModel
+
+                    _BookmarkModel.objects.filter(
+                        user=request.user, content_type=ct, object_id=target_id
+                    ).delete()
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Bookmark removed successfully.",
+                    "data": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except PermissionDenied:
+            return Response(
+                {
+                    "status": False,
+                    "message": "You do not have permission to remove this bookmark.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except Exception as e:
+            logger.exception(
+                "Failed to remove bookmark for %s:%s - %s", target_type, target_id, e
+            )
+            return Response(
+                {
+                    "status": False,
+                    "message": "Failed to remove bookmark.",
+                    "data": None,
+                },
+            )
 
 
 class BookmarkStatisticsView(APIView):
@@ -256,11 +413,13 @@ class BookmarkTopView(APIView):
             obj_id = item["object_id"]
             total = item["total"]
             # Optionally load the object if needed, but we'll just return the ids.
-            results.append({
-                "content_type": ContentType.objects.get_for_id(ct_id).model,
-                "object_id": obj_id,
-                "bookmark_count": total,
-            })
+            results.append(
+                {
+                    "content_type": ContentType.objects.get_for_id(ct_id).model,
+                    "object_id": obj_id,
+                    "bookmark_count": total,
+                }
+            )
 
         # Or we could serialize as BookmarkMinimalSerializer with dummy objects? Not ideal.
         # We'll just return a custom list.

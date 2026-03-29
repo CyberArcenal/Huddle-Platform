@@ -1,0 +1,40 @@
+### Buod
+Tama ka — **hindi dapat may “Bulk Accept”** dahil tao ang nasa likod ng bawat request at kailangan ng mas maingat na interaction. Tatanggalin ko ang bulk accept CTA at papalitan ng mas angkop na opsyon: **selection mode** para sa manual multi‑select at **smart suggestions** para sa mabilis pero responsable na pag‑accept.
+
+---
+
+### UI changes
+- **Segmented control**: Incoming | Outgoing (Incoming default).
+- **Selection mode**: maliit na toggle (Select) sa header; kapag naka‑on, lumilitaw checkboxes sa bawat card at isang compact action bar sa ibaba na may **Accept Selected** / **Decline Selected**; require explicit confirmation modal before processing multiple people.  
+- **Per‑item actions remain primary**: Accept (prominent) / Decline (secondary) / More (Block, View profile).  
+- **Undo snackbar**: para sa bawat action at para sa selection batch (may rollback window).
+
+---
+
+### UX flows
+- **Single Accept**: optimistic remove → Undo snackbar (5–8s) → API call → on failure rollback + error toast.  
+- **Selection Mode**: user manually checks 2–5 items → taps **Accept Selected** → show confirmation listing names count → process sequentially with progress indicator → show summary (success/fail) and Undo for the whole batch.  
+- **Why selection mode**: nagbibigay kontrol sa user (hindi one‑tap mass accept), pero pinapabilis ang workflow kapag intentional ang multi‑accept (e.g., nag‑meet sa event).  
+- **Decline**: immediate remove with optional short confirmation for each if message exists; Undo available.  
+- **View profile**: bottom sheet per user to inspect before Accept/Decline.
+
+---
+
+### API and data implications
+- **No new endpoints required** for single accept/decline (use existing `POST /friends/requests/{id}/accept/` and `decline/`).  
+- **Batch processing**: client can call single accept endpoint sequentially for each selected id; backend should handle idempotency and rate limits.  
+- **Client expectations**: API returns `FriendshipDto` on accept to insert into Connections; return clear error for already‑handled requests so client can skip/rollback.  
+- **Telemetry**: track selection mode usage and Undo rate to evaluate if selection mode is helpful.
+
+---
+
+### Implementation notes for Android
+- **UI**: add small Select toggle in TopAppBar; when active, show checkboxes in `LazyColumn` items and a bottom action bar.  
+- **ViewModel**: implement `selectionState: MutableStateFlow<Set<Long>>` and `processSelected()` that iterates selected ids, updates UI optimistically per item, and aggregates results for summary.  
+- **Optimistic + Undo**: store removed items in a short cache; if Undo tapped, cancel pending calls if possible or call decline/cancel to revert; otherwise reinsert locally.  
+- **Limits**: cap selection to a reasonable number (e.g., 10) to avoid accidental mass actions and server throttling; show hint when limit reached.  
+- **Accessibility**: ensure selection mode is announced and checkboxes are accessible.
+
+---
+
+Kung gusto, gagawin ko agad ang **Compose mockup** ng Requests screen na may Selection Mode at Undo snackbar, o ibibigay ko ang **ViewModel scaffold** para sa selection flow. Sabihin mo kung alin ang unahin at ihahanda ko.

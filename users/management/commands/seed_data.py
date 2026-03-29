@@ -760,9 +760,6 @@ class Command(BaseCommand):
                 is_deleted=False,
                 created_at=created,
                 updated_at=created + timedelta(hours=random.randint(1, 48)),
-                # Required fields from Post
-                post_type='share',
-                content=f"Shared {ct.model}: {object_id}",   # placeholder content
             )
             share.save()
             shares_created += 1

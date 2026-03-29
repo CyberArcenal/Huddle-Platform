@@ -1,0 +1,78 @@
+### Overview
+Gusto ko gawing **Friendship tab** na higit pa sa listahan — isang maliit na social hub para sa connection management, discovery, at mabilis na actions. Focus: **clarity**, **speed**, at **context** (bakit may request, anong relasyon, quick actions). Mobile‑first, minimal taps para matapos ang common tasks.
+
+---
+
+### Layout and Tabs
+- **Header**: search field; primary action **Add Friend**; badge for incoming requests.  
+- **Tab row**: **Connections | Requests | Suggestions**. Requests may default to **Incoming** with a segmented control for **Incoming / Outgoing**.  
+- **Persistent UI**: pinned/favorites carousel at top of Connections; bottom sheet for quick profile preview and actions.
+
+---
+
+### Key Screens and Components
+- **Connections**
+  - **Pinned carousel**: horizontal, shows `tag = pinned`.  
+  - **List item**: avatar; **name**; subtitle (mutuals or last active); **tag chip**; quick icons: Message, More.  
+  - **Empty state**: CTA to Suggestions.
+- **Requests**
+  - **Segmented control**: Incoming / Outgoing.  
+  - **Incoming item**: avatar, name, mutuals, message preview, **Accept** (primary), **Decline** (secondary), overflow (Block).  
+  - **Outgoing item**: avatar, name, status “Pending”, **Cancel**.  
+- **Suggestions**
+  - Cards with **reason** (3 mutuals, same interest), Add Friend button, optional filters (Nearby, Interests).
+- **Quick Profile Bottom Sheet**
+  - Recent activity, mutuals, actions: Message, Tag, Unfriend, Block.
+- **Search and Filters**
+  - Global search across Connections and Requests; filters: Online, Favorites, Recently added.
+
+---
+
+### User Flows and Microinteractions
+- **Accept Request**
+  - Optimistic UI: move to Connections immediately; show Undo snackbar; call API; rollback on error.  
+  - On success: animate item into Connections list; update badge count.
+- **Send Request**
+  - Disable Add Friend button after tap; show spinner; on success show in Outgoing. Handle duplicate gracefully.
+- **Tagging**
+  - Quick toggle (star/pin) updates local order (pinned to top) and calls `POST /friends/{id}/tag/`.
+- **Cancel / Decline**
+  - Confirm optional for Decline if message present; Cancel should be one tap with undo.
+- **Realtime**
+  - Push/WebSocket updates for incoming requests and online status; fallback to short polling.
+
+---
+
+### Data Needs and API Contract
+**DTOs**
+```json
+FriendshipDto { id, from_user, to_user, status, tag, created_at }
+UserSummaryDto { id, name, avatar_url, mutual_count, online }
+ApiResponse { status, message, data }
+```
+**Essential endpoints**
+- `GET /friends/?page=&filter=` → Connections  
+- `GET /friends/requests/pending/?type=incoming|outgoing` → Requests  
+- `POST /friends/requests/send/ { to_user_id }` → Send request  
+- `POST /friends/requests/{id}/accept/` → Accept  
+- `POST /friends/requests/{id}/decline/` → Decline  
+- `DELETE /friends/remove/ { friendship_id }` → Unfriend / Cancel  
+- `POST /friends/{id}/tag/ { tag }` → Update tag
+
+**Client expectations**
+- API returns full `FriendshipDto` on accept for easy insertion into Connections.  
+- Support pagination and badge counts.  
+- Consistent response shape for easy error handling.
+
+---
+
+### Roadmap and Priorities
+1. **MVP** Requests screen (Incoming/Outgoing) with Accept/Decline/Cancel and optimistic updates.  
+2. **Connections** list with tag toggles and pinned carousel.  
+3. **Suggestions** with Add Friend and filters.  
+4. **Polish**: search, bottom sheet profile preview, real‑time updates.  
+5. **Resilience**: offline queueing, retries, idempotency, analytics.
+
+---
+
+Kung gusto mo, gagawa ako ng **high‑fidelity wireframe** ng Requests screen o isang **Compose screen + ViewModel scaffold** para sa MVP. Sabihin mo kung alin ang unahin at gagawin ko agad.

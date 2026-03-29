@@ -83,36 +83,43 @@ class ReelListView(APIView):
         serializer = ReelDisplaySerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
 
+    class ReelCreateResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = ReelDisplaySerializer(required=False, allow_null=True)
+
+
     @extend_schema(
         tags=["Reel's"],
-        request=ReelCreateSerializer,
-        responses={201: ReelDisplaySerializer},
-        examples=[
-            OpenApiExample(
-                "Create reel",
-                value={
-                    "caption": "My first reel",
-                    "video": "(binary file)",
-                    "thumbnail": "(binary file, optional)",
-                    "audio": "(binary file, optional)",
-                    "duration": 15.5,
-                    "privacy": "public",
-                },
-                request_only=True,
-            )
-        ],
+                 request={
+            'multipart/form-data': ReelCreateSerializer,
+        },
+        responses={
+            201: ReelCreateResponseSerializer,
+            400: ReelCreateResponseSerializer,
+        },
         description="Create a new reel.",
     )
     @transaction.atomic
     def post(self, request):
+        logger.debug(f"Post request: {request.data}")
         serializer = ReelCreateSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             reel = serializer.save()
-            return Response(
-                ReelDisplaySerializer(reel, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            response = {
+                "status": True,
+                "message": "Reel created successfully.",
+                "data": ReelDisplaySerializer(reel, context={"request": request}).data,
+            }
+            return Response(response, status=status.HTTP_201_CREATED)
+
+        response = {
+            "status": False,
+            "message": "Failed to create reel.",
+            "data": None,
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class ReelDetailView(APIView):
@@ -312,8 +319,9 @@ class ReelStatisticsView(APIView):
     
     
 class ReelRestoreResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
     message = serializers.CharField()
-    reel = ReelDisplaySerializer()
+    data = ReelDisplaySerializer(required=False, allow_null=True)
 
 
 class ReelRestoreView(APIView):
@@ -322,29 +330,48 @@ class ReelRestoreView(APIView):
 
     @extend_schema(
         tags=["Reel's"],
-        responses={200: ReelRestoreResponseSerializer},
+        responses={
+            200: ReelRestoreResponseSerializer,
+            403: ReelRestoreResponseSerializer,
+            400: ReelRestoreResponseSerializer,
+            500: ReelRestoreResponseSerializer,
+        },
         description="Restore a soft‑deleted reel. Only owner can restore."
     )
+    @transaction.atomic
     def post(self, request, reel_id):
         reel = get_object_or_404(Reel, id=reel_id, is_deleted=True)
-        
+
         if request.user != reel.user:
             return Response(
-                {"error": "You do not have permission to restore this reel"},
-                status=status.HTTP_403_FORBIDDEN
+                {
+                    "status": False,
+                    "message": "You do not have permission to restore this reel.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         success = ReelService.restore_reel(reel)
         if success:
-            data = ReelDisplaySerializer(reel, context={'request': request}).data
-            return Response({
-                'message': 'Reel restored successfully',
-                'reel': data
-            })
+            return Response(
+                {
+                    "status": True,
+                    "message": "Reel restored successfully.",
+                    "data": ReelDisplaySerializer(reel, context={'request': request}).data,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         return Response(
-            {"error": "Failed to restore reel"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                "status": False,
+                "message": "Failed to restore reel.",
+                "data": None,
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
 
 
 class UserReelStatisticsView(APIView):

@@ -86,7 +86,10 @@ class StoryCreateSerializer(serializers.Serializer):
     content = serializers.CharField(required=False, allow_blank=True)
     media_file = serializers.FileField(
         required=False, allow_null=True
-    )  # <-- dati media_url
+    )
+    mimeTypes = serializers.CharField(
+        required=False, allow_blank=True, help_text="MIME type of the uploaded media file"
+    )
     expires_in_hours = serializers.IntegerField(default=24, min_value=1, max_value=168)
 
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:

@@ -2,7 +2,7 @@
 
 import logging
 
-from rest_framework.views import APIView
+from rest_framework.views import APIView, PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
@@ -108,10 +108,22 @@ class PostListView(APIView):
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    class PostCreateResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = PostDisplaySerializer(required=False, allow_null=True)
+
+
     @extend_schema(
         tags=["Post's"],
-        request=PostCreateSerializer,
-        responses={201: PostDisplaySerializer},
+           request={
+            'multipart/form-data': PostCreateSerializer,
+        },
+   
+        responses={
+            201: PostCreateResponseSerializer,
+            400: PostCreateResponseSerializer,
+        },
         description="Create a new post.",
     )
     @transaction.atomic
@@ -119,16 +131,26 @@ class PostListView(APIView):
         """Create a new post"""
         logger.debug(request.data)
         serializer = PostCreateSerializer(data=request.data, context={"request": request})
-        
 
-        if serializer.is_valid(raise_exception=True):
+        # Validate without raising so we can return a consistent response shape
+        if serializer.is_valid():
             post = serializer.save()
-            return Response(
-                PostDisplaySerializer(post, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            response = {
+                "status": True,
+                "message": "Post created successfully.",
+                "data": PostDisplaySerializer(post, context={"request": request}).data,
+            }
+            return Response(response, status=status.HTTP_201_CREATED)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Log validation errors for debugging, return consistent error shape
+        logger.debug("Post create validation errors: %s", serializer.errors)
+        response = {
+            "status": False,
+            "message": "Failed to create post.",
+            "data": None,
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class PostDetailView(APIView):
@@ -429,16 +451,18 @@ class PostRestoreView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    class PostRestoreResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = PostDisplaySerializer(required=False, allow_null=True)
+
+
     @extend_schema(
         tags=["Post's"],
         responses={
-            200: inline_serializer(
-                name="PostRestoreResponse",
-                fields={
-                    "message": serializers.CharField,
-                    "post": PostDisplaySerializer,
-                },
-            )
+            200: PostRestoreResponseSerializer,
+            403: PostRestoreResponseSerializer,
+            400: PostRestoreResponseSerializer,
         },
         description="Restore a soft-deleted post (only owner).",
     )
@@ -449,7 +473,11 @@ class PostRestoreView(APIView):
         # Check ownership
         if request.user != post.user:
             return Response(
-                {"error": "You do not have permission to restore this post"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to restore this post.",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -457,37 +485,61 @@ class PostRestoreView(APIView):
         if success:
             return Response(
                 {
-                    "message": "Post restored successfully",
-                    "post": PostDisplaySerializer(post, context={"request": request}).data,
-                }
+                    "status": True,
+                    "message": "Post restored successfully.",
+                    "data": PostDisplaySerializer(post, context={"request": request}).data,
+                },
+                status=status.HTTP_200_OK,
             )
 
         return Response(
-            {"error": "Post is not deleted or could not be restored"},
+            {
+                "status": False,
+                "message": "Post is not deleted or could not be restored.",
+                "data": None,
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
+
         
     
 
 class SharePostToGroupView(APIView):
     permission_classes = [IsAuthenticated]
 
+    class PostShareResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = PostDisplaySerializer(required=False, allow_null=True)
+
+
     @extend_schema(
         tags=["Post's"],
         request=inline_serializer(
             name="ShareToGroupRequest",
             fields={
-                'group_id': serializers.IntegerField(),
-                'caption': serializers.CharField(required=False, allow_blank=True),
-            }
+                "group_id": serializers.IntegerField(),
+                "caption": serializers.CharField(required=False, allow_blank=True),
+            },
         ),
-        responses={201: PostDisplaySerializer},
+        responses={
+            201: PostShareResponseSerializer,
+            400: PostShareResponseSerializer,
+            403: PostShareResponseSerializer,
+        },
         description="Share a post to a group, creating a new post in that group.",
     )
+    @transaction.atomic
     def post(self, request, post_id):
         post = get_object_or_404(Post, id=post_id, is_deleted=False)
-        group_id = request.data.get('group_id')
-        caption = request.data.get('caption', '')
+        group_id = request.data.get("group_id")
+        caption = request.data.get("caption", "")
+
+        if group_id is None:
+            return Response(
+                {"status": False, "message": "group_id is required.", "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         group = get_object_or_404(Group, id=group_id)
 
@@ -496,9 +548,27 @@ class SharePostToGroupView(APIView):
                 user=request.user,
                 original_post=post,
                 group=group,
-                caption=caption
+                caption=caption,
             )
-            serializer = PostDisplaySerializer(new_post, context={'request': request})
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            serializer = PostDisplaySerializer(new_post, context={"request": request})
+            return Response(
+                {"status": True, "message": "Post shared to group successfully.", "data": serializer.data},
+                status=status.HTTP_201_CREATED,
+            )
         except ValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"status": False, "message": "Failed to share post to group.", "data": None},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except PermissionDenied:
+            return Response(
+                {"status": False, "message": "You do not have permission to share to this group.", "data": None},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except Exception as e:
+            logger.exception("Unexpected error while sharing post %s to group %s: %s", post_id, group_id, e)
+            return Response(
+                {"status": False, "message": "An unexpected error occurred.", "data": None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+

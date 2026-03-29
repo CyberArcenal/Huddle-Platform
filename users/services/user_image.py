@@ -2,6 +2,7 @@
 from typing import List, Dict, Any, Tuple
 from django.db import models
 from django.db.models import Q
+from feed.models.post import Post
 from users.models import User
 from feed.models import Media, Reel
 from stories.models import Story
@@ -57,7 +58,7 @@ class UserImageService:
     def get_user_media(
         cls,
         user: User,
-        request = None,
+        request=None,
         requester: Optional[User] = None,
         page: int = 1,
         page_size: int = 20,
@@ -74,11 +75,9 @@ class UserImageService:
 
         # Fetch all media items from all sources (up to max_items)
         # 1. Post media
-        post_media_qs = (
-            Media.objects.filter(post__user=user, post__is_deleted=False)
-            .select_related("post")
-            .order_by("-post__created_at", "order")
-        )
+        post_media_qs = Media.objects.filter(
+            post__user=user, post__is_deleted=False
+        ).order_by("-post__created_at", "order")
         post_media = list(post_media_qs[:max_items])
 
         # 2. Reels
@@ -117,34 +116,51 @@ class UserImageService:
             combined.append(
                 {
                     "type": "post_media",
-                    "url": request.build_absolute_uri(media.file.url) if media.file else None,
+                    "url": (
+                        request.build_absolute_uri(media.file.url)
+                        if media.file
+                        else None
+                    ),
                     "thumbnail": None,  # posts may not have separate thumbnails
-                    "created_at": media.post.created_at,
-                    "content_id": media.post.id,
+                    "created_at": (
+                        media.content_object.created_at
+                        if isinstance(media.content_object, Post)
+                        else None
+                    ),
+                    "content_id": (
+                        media.content_object.id
+                        if isinstance(media.content_object, Post)
+                        else None
+                    ),
                     "content_type": "post",
                     "media_order": media.order,
                     "media_id": media.id,
                 }
             )
-
         for reel in reels:
-            combined.append(
-                {
-                    "type": "reel",
-                    "url": request.build_absolute_uri(reel.video.url) if reel.video else None,
-                    "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
-                    "created_at": reel.created_at,
-                    "content_id": reel.id,
-                    "content_type": "reel",
-                    "media_order": None,
-                }
-            )
+            # Retrieve the first Media instance for this reel (or None if none)
+            media_obj = reel.media.first()
+            media_url = request.build_absolute_uri(media_obj.file.url) if media_obj else None
+
+            combined.append({
+                "type": "reel",
+                "url": media_url,
+                "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
+                "created_at": reel.created_at,
+                "content_id": reel.id,
+                "content_type": "reel",
+                "media_order": None,
+            })
 
         for story in stories:
             combined.append(
                 {
                     "type": "story_media",
-                    "url": request.build_absolute_uri(story.media_url.url) if story.media_url else None,
+                    "url": (
+                        request.build_absolute_uri(story.media_url.url)
+                        if story.media_url
+                        else None
+                    ),
                     "thumbnail": None,
                     "created_at": story.created_at,
                     "content_id": story.id,
@@ -157,7 +173,11 @@ class UserImageService:
             combined.append(
                 {
                     "type": "user_image",
-                    "url": request.build_absolute_uri(user_image.image.url) if user_image.image else None,
+                    "url": (
+                        request.build_absolute_uri(user_image.image.url)
+                        if user_image.image
+                        else None
+                    ),
                     "thumbnail": None,
                     "created_at": user_image.created_at,
                     "content_id": user_image.id,
@@ -289,11 +309,15 @@ class UserImageService:
     @staticmethod
     def get_active_image(user: User, image_type: str) -> Optional[UserImage]:
         return user.images.filter(image_type=image_type, is_active=True).first()
-    
+
     @staticmethod
-    def get_active_image_url(image_type: str, build_url:bool=False, request=None) -> Optional[str]:
-        
-        user_image:UserImage = UserImage.objects.filter(image_type=image_type, is_active=True).first()
+    def get_active_image_url(
+        image_type: str, build_url: bool = False, request=None
+    ) -> Optional[str]:
+
+        user_image: UserImage = UserImage.objects.filter(
+            image_type=image_type, is_active=True
+        ).first()
         if user_image and request and build_url:
             return request.build_absolute_uri(user_image.image.url)
         return user_image

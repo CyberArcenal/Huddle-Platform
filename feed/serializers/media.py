@@ -48,10 +48,14 @@ class MediaMinimalSerializer(serializers.ModelSerializer):
 
 
 class MediaCreateSerializer(serializers.ModelSerializer):
+    mimeTypes = serializers.CharField(
+        required=False,
+        help_text="MIME type of the uploaded media file",
+    )
     """Used when creating media (usually part of post creation)."""
     class Meta:
         model = Media
-        fields = ['file', 'order']
+        fields = ['file', 'order', 'mimeTypes']
 
 class MediaUpdateSerializer(serializers.ModelSerializer):
     class Meta:

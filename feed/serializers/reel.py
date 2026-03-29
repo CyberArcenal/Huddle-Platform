@@ -7,6 +7,7 @@ import tempfile
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from feed.models import Reel
+from feed.models.post import POST_PRIVACY_TYPES
 from feed.models.reaction import ReactionType
 from feed.serializers.base import PostStatsSerializers, ReactionCountSerializer
 from feed.serializers.comment import CommentDisplaySerializer
@@ -48,11 +49,15 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_video_url(self, obj) -> str:
-        request = self.context.get("request")
-        if obj.media and request:
-            return request.build_absolute_uri(obj.media.url)
-        return ""
+    def get_video_url(self, obj) -> Optional[str]:
+        try:
+            request = self.context.get("request")
+            media = obj.media.all().first()
+            if media and request:
+                return request.build_absolute_uri(media.file.url)
+            return ""
+        except:
+            return None
 
     def get_thumbnail_url(self, obj) -> str:
         request = self.context.get("request")
@@ -65,6 +70,12 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
 
 
 class ReelCreateSerializer(serializers.ModelSerializer):
+    thumbnail = serializers.FileField(allow_null=True, required=False)
+    caption = serializers.CharField(help_text="Optional caption for the reel", allow_blank=True)
+    media = serializers.FileField(required=True, help_text="Video file for the reel (max 100MB, max duration 60s)")
+    audio = serializers.FileField(allow_null=True, required=False)
+    duration = serializers.IntegerField(help_text="Duration of the video in seconds (auto-validated, not user input)")
+    privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES)
     class Meta:
         model = Reel
         fields = ["caption", "media", "thumbnail", "audio", "duration", "privacy"]
@@ -215,11 +226,15 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
 
-    def get_video_url(self, obj) -> str:
-        request = self.context.get("request")
-        if obj.media and request:
-            return request.build_absolute_uri(obj.media.url)
-        return ""
+    def get_video_url(self, obj) -> Optional[str]:
+        try:
+            request = self.context.get("request")
+            media = obj.media.all().first()
+            if media and request:
+                return request.build_absolute_uri(media.file.url)
+            return ""
+        except:
+            return None
 
     def get_thumbnail_url(self, obj) -> str:
         request = self.context.get("request")

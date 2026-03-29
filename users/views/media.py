@@ -19,7 +19,9 @@ class ProfilePictureUploadView(APIView):
 
     @extend_schema(
         tags=["User Media"],
-        request=UserImageCreateSerializer,
+                 request={
+            'multipart/form-data': UserImageCreateSerializer,
+        },
         responses={200: UserImageDisplaySerializer},
         description="Upload or update the current user's profile picture.",
     )
@@ -41,7 +43,9 @@ class CoverPhotoUploadView(APIView):
 
     @extend_schema(
         tags=["User Media"],
-        request=UserImageCreateSerializer,
+                 request={
+            'multipart/form-data': UserImageCreateSerializer,
+        },
         responses={200: UserImageDisplaySerializer},
         description="Upload or update the current user's cover photo.",
     )

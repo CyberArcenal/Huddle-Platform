@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from events.serializers.event import EventListSerializer
 from feed.models import Share
+from feed.models.media import Media
 from feed.models.post import POST_PRIVACY_TYPES, Post
 from feed.models.reel import Reel
 from feed.serializers.base import (
@@ -15,6 +16,7 @@ from feed.serializers.base import (
     ShareContentObjectDetail,
 )
 from feed.serializers.comment import CommentDisplaySerializer
+from feed.serializers.media import MediaDisplaySerializer
 from feed.serializers.post import PostFeedSerializer
 from feed.serializers.reel import ReelDisplaySerializer
 from feed.services.comment import CommentService
@@ -256,6 +258,12 @@ class ShareFeedSerializer(serializers.ModelSerializer):
         # Example: user image or story
         if isinstance(content_object, UserImage):
             return UserImageDisplaySerializer(content_object, context=self.context).data
+        
+        if isinstance(content_object, Group):
+            return GroupMinimalSerializer(content_object, context=self.context).data
+        
+        if isinstance(content_object, Media):
+            return MediaDisplaySerializer(content_object, context=self.context).data
 
         # Fallback: minimal representation
         model_cls = content_object.__class__

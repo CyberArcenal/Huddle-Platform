@@ -115,36 +115,38 @@ class ShareListView(APIView):
         serializer = ShareFeedSerializer(page, many=True, context={"request": request})
         return paginator.get_paginated_response(serializer.data)
 
+    class ShareCreateResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = ShareDisplaySerializer(required=False, allow_null=True)
+
     @extend_schema(
         tags=["Share Post's"],
         request=ShareCreateSerializer,
-        responses={201: ShareDisplaySerializer},
-        examples=[
-            OpenApiExample(
-                "Share a post",
-                value={
-                    "content_type": "feed.post",
-                    "object_id": 123,
-                    "caption": "Check this out!",
-                    "privacy": "public",
-                },
-                request_only=True,
-            ),
-        ],
+        responses={201: ShareCreateResponseSerializer},
         description="Create a new share.",
     )
+    
     @transaction.atomic
     def post(self, request):
         serializer = ShareCreateSerializer(
             data=request.data, context={"request": request}
         )
+        response = {"status": False, "message": "Failed to share posts", "data": None}
+
         if serializer.is_valid(raise_exception=True):
             share = serializer.save()
+            response["status"] = True
+            response["data"] = ShareDisplaySerializer(
+                share, context={"request": request}
+            ).data
+            response["message"] = "Share Successfull"
             return Response(
-                ShareDisplaySerializer(share, context={"request": request}).data,
+                response,
                 status=status.HTTP_201_CREATED,
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ShareDetailView(APIView):
@@ -369,8 +371,9 @@ class ShareUserStatisticsView(APIView):
 
 
 class ShareRestoreResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
     message = serializers.CharField()
-    share = ShareDisplaySerializer()
+    data = ShareDisplaySerializer(required=False, allow_null=True)
 
 
 class ShareRestoreView(APIView):
@@ -380,7 +383,11 @@ class ShareRestoreView(APIView):
 
     @extend_schema(
         tags=["Share Post's"],
-        responses={200: ShareRestoreResponseSerializer},
+        responses={
+            200: ShareRestoreResponseSerializer,
+            403: ShareRestoreResponseSerializer,
+            400: ShareRestoreResponseSerializer,
+        },
         description="Restore a soft-deleted share (only owner).",
     )
     @transaction.atomic
@@ -389,7 +396,7 @@ class ShareRestoreView(APIView):
 
         if request.user != share.user:
             return Response(
-                {"error": "You do not have permission to restore this share."},
+                {"status": False, "message": "You do not have permission to restore this share.", "data": None},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -397,13 +404,15 @@ class ShareRestoreView(APIView):
         if success:
             return Response(
                 {
+                    "status": True,
                     "message": "Share restored successfully.",
-                    "share": ShareDisplaySerializer(
-                        share, context={"request": request}
-                    ).data,
-                }
+                    "data": ShareDisplaySerializer(share, context={"request": request}).data,
+                },
+                status=status.HTTP_200_OK,
             )
+
         return Response(
-            {"error": "Share is not deleted or could not be restored."},
+            {"status": False, "message": "Share is not deleted or could not be restored.", "data": None},
             status=status.HTTP_400_BAD_REQUEST,
         )
+

@@ -26,7 +26,9 @@ from users.models import User
 from users.services.user_follow import UserFollowService
 from ..models import Post, Media
 import uuid
+
 MAX_FEED_LIMIT = getattr(settings, "MAX_FEED_LIMIT", 100)
+
 
 class PostService:
     """Service for Post model operations"""
@@ -47,10 +49,10 @@ class PostService:
         valid_types = [choice[0] for choice in POST_TYPES]
         if post_type not in valid_types:
             raise ValidationError(f"Post type must be one of {valid_types}")
-        
+
         if group and not isinstance(group, Group):
             raise ValidationError(f"Group: {group} is not an instance")
-        
+
         if not isinstance(user, User):
             raise ValidationError(f"User: {user} is not an intance")
 
@@ -75,14 +77,17 @@ class PostService:
                 if media_files:
                     post_ct = ContentType.objects.get_for_model(post)
                     for order, file in enumerate(media_files):
-                        media = Media.objects.create(
+                        media_obj = Media.objects.create(
                             content_type=post_ct,
                             object_id=post.id,
                             file=file,
-                            order=order
+                            order=order,
                         )
-                        threading.Thread(target=MediaProcessingService.process_media, args=(media,)).start()
-                        process_media_task.delay(media.id)
+                        transaction.on_commit(
+                            lambda m=media_obj: threading.Thread(
+                                target=MediaProcessingService.process_media, args=(m,)
+                            ).start()
+                        )
                 # handle tagged users
                 if tag_users:
                     post.tag_users.set(tag_users)
@@ -120,7 +125,11 @@ class PostService:
 
     @staticmethod
     def get_user_posts(
-        user: User, include_deleted: bool = False, limit: int = 50, offset: int = 0
+        user: User,
+        requester: Optional[User] = None,
+        include_deleted: bool = False,
+        limit: int = 50,
+        offset: int = 0,
     ) -> List[Post]:
         """Get posts by a specific user"""
         queryset = Post.objects.filter(user=user)
@@ -129,10 +138,20 @@ class PostService:
             queryset = queryset.filter(is_deleted=False)
 
         queryset = queryset.prefetch_related(
-            Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
         ).order_by("-created_at")
+        if not include_deleted:
+            queryset = queryset.filter(is_deleted=False)
 
-        return list(queryset[offset : offset + limit])
+        # Apply privacy filtering if requester is not the owner
+        if requester and requester != user:
+            # Public shares only (we could also allow followers if share privacy = 'followers')
+            queryset = queryset.filter(privacy="public")
+        elif not requester:
+            # Anonymous: only public shares
+            queryset = queryset.filter(privacy="public")
+
+        return list(queryset.order_by("-created_at")[offset : offset + limit])
 
     @staticmethod
     def get_public_posts(
@@ -145,15 +164,10 @@ class PostService:
             queryset = queryset.exclude(user=exclude_user)
 
         queryset = queryset.prefetch_related(
-            Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
         ).order_by("-created_at")
 
         return list(queryset[offset : offset + limit])
-
-
-
-
-   
 
     @staticmethod
     def _to_id_list(maybe_qs_or_list: Iterable) -> List[int]:
@@ -196,14 +210,16 @@ class PostService:
         user_group_ids = PostService._to_id_list(user_groups_qs)
 
         # Build Q expressions with explicit grouping
-        non_group_posts_q = (Q(user__in=following_ids) | Q(user=user)) & Q(group__isnull=True)
+        non_group_posts_q = (Q(user__in=following_ids) | Q(user=user)) & Q(
+            group__isnull=True
+        )
         group_posts_q = Q(group__in=user_group_ids) & Q(group__isnull=False)
 
         qs: QuerySet = (
             Post.objects.filter((non_group_posts_q | group_posts_q), is_deleted=False)
             .select_related("user", "group")
             .prefetch_related(
-                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+                Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
             )
             .order_by("-created_at")
             .distinct()
@@ -211,8 +227,6 @@ class PostService:
 
         feed_posts = qs[offset : offset + limit]
         return list(feed_posts)
-
-
 
     @staticmethod
     def update_post(post: Post, update_data: Dict[str, Any]) -> Post:
@@ -279,7 +293,7 @@ class PostService:
             queryset = queryset.filter(post_type=post_type)
 
         return list(queryset.order_by("-created_at")[offset : offset + limit])
-        
+
     def get_post_statistics(serializer, obj) -> Dict[str, Any]:
         request = serializer.context.get("request")
         user = request.user if request and request.user.is_authenticated else None
@@ -288,13 +302,16 @@ class PostService:
         updated_at = None
         try:
             created_at = obj.created_at
-        except:pass
+        except:
+            pass
         try:
             updated_at = obj.updated_at
-        except:pass
+        except:
+            pass
         try:
             is_author = user.id == obj.user.id if user else False
-        except:pass
+        except:
+            pass
 
         return {
             "comment_count": CommentService.get_comment_count(obj),
@@ -305,23 +322,29 @@ class PostService:
                 many=True,
                 context=serializer.context,
             ).data,
-            "liked": ReactionService.has_liked(user=user, content_type=obj, object_id=obj.id) if user else False,
-            "current_reaction": ReactionService.get_user_reaction(user, obj, obj.id) if user else None,
+            "liked": (
+                ReactionService.has_liked(user=user, content_type=obj, object_id=obj.id)
+                if user
+                else False
+            ),
+            "current_reaction": (
+                ReactionService.get_user_reaction(user, obj, obj.id) if user else None
+            ),
             "share_count": ShareService.get_share_count(obj),
-
- 
             "view_count": ViewService.get_view_count(obj),
-            "moots_who_reacted": ReactionService.get_friends_who_reacted_to_post(user, post_id=obj.id, content_type=obj, limit=10),
+            "moots_who_reacted": ReactionService.get_friends_who_reacted_to_post(
+                user, post_id=obj.id, content_type=obj, limit=10
+            ),
             "unique_viewers": ViewService.get_unique_viewers(obj),
             "bookmark_count": BookmarkService.get_bookmark_count(obj),
-            "report_count": ReportedContentService.get_report_count(obj, object_id=obj.id),
-            
+            "report_count": ReportedContentService.get_report_count(
+                obj, object_id=obj.id
+            ),
             "trending_score": TrendScoreService.get_score(obj),
             "is_author": is_author,
             "created_at": created_at,
             "updated_at": updated_at,
         }
-
 
     @staticmethod
     def get_user_post_statistics(user: User) -> Dict[str, Any]:
@@ -426,7 +449,7 @@ class PostService:
                 return shared_post
         except IntegrityError as e:
             raise ValidationError(f"Failed to share post: {str(e)}")
-    
+
     @staticmethod
     def get_following_posts(user: User, limit: int = 20, offset: int = 0) -> List[Post]:
         """
@@ -441,19 +464,17 @@ class PostService:
         # Get posts from followed users (personal posts only, not group posts)
         following_posts = (
             Post.objects.filter(
-                user__in=following_users,
-                group__isnull=True,
-                is_deleted=False
+                user__in=following_users, group__isnull=True, is_deleted=False
             )
-            .select_related('user')
+            .select_related("user")
             .prefetch_related(
-                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+                Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
             )
-            .order_by('-created_at')
+            .order_by("-created_at")
         )
 
-        return list(following_posts[offset:offset + limit])
-    
+        return list(following_posts[offset : offset + limit])
+
     @staticmethod
     def get_friend_posts(user: User, limit: int = 20, offset: int = 0) -> List[Post]:
         """
@@ -471,26 +492,19 @@ class PostService:
             return []
 
         friend_posts = (
-            Post.objects.filter(
-                user__in=friends,
-                group__isnull=True,
-                is_deleted=False
-            )
-            .select_related('user')
+            Post.objects.filter(user__in=friends, group__isnull=True, is_deleted=False)
+            .select_related("user")
             .prefetch_related(
-                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+                Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
             )
-            .order_by('-created_at')
+            .order_by("-created_at")
         )
 
-        return list(friend_posts[offset:offset + limit])
-    
+        return list(friend_posts[offset : offset + limit])
+
     @staticmethod
     def get_user_posts_by_id(
-        user_id: int, 
-        requester: Optional[User] = None, 
-        limit: int = 10, 
-        offset: int = 0
+        user_id: int, requester: Optional[User] = None, limit: int = 10, offset: int = 0
     ) -> List[Post]:
         """
         Return posts of a specific user, filtered by privacy rules.
@@ -501,26 +515,26 @@ class PostService:
         # Apply privacy filtering
         if requester and requester.is_authenticated:
             if requester == target_user:
-                queryset = queryset.order_by('-created_at')
+                queryset = queryset.order_by("-created_at")
             else:
-                public_posts = queryset.filter(privacy='public')
-                followers_posts = queryset.filter(privacy='followers')
+                public_posts = queryset.filter(privacy="public")
+                followers_posts = queryset.filter(privacy="followers")
                 if not target_user.followers.filter(id=requester.id).exists():
                     followers_posts = queryset.none()
                 # Union of public and allowed followers posts
                 queryset = public_posts | followers_posts
-                queryset = queryset.order_by('-created_at')
+                queryset = queryset.order_by("-created_at")
         else:
             # Anonymous user: only see public posts
-            queryset = queryset.filter(privacy='public').order_by('-created_at')
+            queryset = queryset.filter(privacy="public").order_by("-created_at")
 
         # Add prefetch
         queryset = queryset.prefetch_related(
-            Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+            Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
         )
 
-        return list(queryset[offset:offset+limit])
-    
+        return list(queryset[offset : offset + limit])
+
     @staticmethod
     def get_group_posts(group_id: int, user: User, limit: int = 20, offset: int = 0):
         try:
@@ -533,9 +547,9 @@ class PostService:
 
         return list(
             Post.objects.filter(group=group, is_deleted=False)
-            .select_related('user', 'group')
+            .select_related("user", "group")
             .prefetch_related(
-                Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
+                Prefetch("media", queryset=Media.objects.prefetch_related("variants"))
             )
-            .order_by('-created_at')[offset:offset + limit]
+            .order_by("-created_at")[offset : offset + limit]
         )

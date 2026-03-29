@@ -4,7 +4,7 @@ Kung gagawa tayo ng **Friends Page**, maganda kung hindi lang siya simpleng list
 
 # 👥 Friends Page Screens
 
-### 🔺 1. **Friends List**
+### 🔺 1. **FriendShip**
 - Listahan ng lahat ng accepted friends.  
 - Avatar + name + status (online/offline).  
 - Quick actions: message, view profile, unfriend.  
@@ -22,21 +22,12 @@ Kung gagawa tayo ng **Friends Page**, maganda kung hindi lang siya simpleng list
 ### 🔺 3. **Suggested Friends**
 - Recommendations based on mutual friends, interests, or events attended.  
 - “Add Friend” button.  
-- Optional filters: Nearby, Same interests, Recently joined.  
+- Optional filters: Nearby, Same interests, Recently joined.
 
----
+### 🔺 4. **Followers**
 
-### 🔺 4. **Favorites**
-- Section para sa pinned friends (besties, close contacts).  
-- Always visible sa taas ng list.  
-- Shortcut to chat or profile.  
 
----
-
-### 🔺 5. **Search & Filters**
-- Search bar → hanapin specific friend.  
-- Filters → All / Online / Favorites / Recently added.  
-
+### 🔺 5. **Following**
 ---
 
 👉 In short:  
