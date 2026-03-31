@@ -25,6 +25,7 @@ FEED_DATA_TYPES = [
     "share",
     "reel",
     "story",
+    "event",
     "user_image",
     "ad",
     "ads",
@@ -82,6 +83,7 @@ SINGLE_ITEM_SERIALIZER = {
     "share": ShareFeedSerializer,
     "reel": ReelDisplaySerializer,
     "story": StorySerializer,
+    "event": EventListSerializer,
     "user_image": UserImageDisplaySerializer,
     "user_story": StoryFeedSerializer,
 }

@@ -28,6 +28,7 @@ class Event(models.Model):
     attending_count = models.IntegerField(default=0)
     maybe_count = models.IntegerField(default=0)
     declined_count = models.IntegerField(default=0)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

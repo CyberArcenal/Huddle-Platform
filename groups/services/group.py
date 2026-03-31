@@ -146,7 +146,12 @@ class GroupService:
         created_groups = Group.objects.filter(creator=user)
         
         # Groups where user is a member
-        member_groups_ids = GroupMemberService.get_user_groups(user).values_list('id', flat=True)
+        user_groups = GroupMemberService.get_user_groups(user)
+        if hasattr(user_groups, 'values_list'):
+            member_groups_ids = user_groups.values_list('id', flat=True)
+        else:
+            # user_groups is a list of Group objects
+            member_groups_ids = [group.id for group in user_groups]
         member_groups = Group.objects.filter(id__in=member_groups_ids)
         
         # Public groups
