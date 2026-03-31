@@ -71,6 +71,63 @@ class PaginatedGroupMemberSerializer(serializers.Serializer):
 
 # --------------------------------------------------------------
 
+class PaginatedMyGroupsSerializer(serializers.Serializer):
+    """Matches the custom pagination response from GroupsPagination for MyGroupsView"""
+
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = GroupMinimalSerializer(many=True)
+
+
+class MyGroupsView(APIView):
+    """View for listing groups the current user belongs to or created"""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Group"],
+        parameters=[
+            OpenApiParameter(
+                name="page", type=int, description="Page number", required=False
+            ),
+            OpenApiParameter(
+                name="page_size", type=int, description="Results per page", required=False
+            ),
+            OpenApiParameter(
+                name="include_private",
+                type=bool,
+                description="Include private groups (default: true)",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="include_secret",
+                type=bool,
+                description="Include secret groups (default: false)",
+                required=False,
+            ),
+        ],
+        responses={200: PaginatedMyGroupsSerializer},
+        description="List groups that the current user created or is a member of.",
+    )
+    def get(self, request):
+        include_private = request.query_params.get("include_private", "true").lower() == "true"
+        include_secret = request.query_params.get("include_secret", "false").lower() == "true"
+
+        groups = GroupService.get_user_groups(
+            user=request.user,
+            include_private=include_private,
+            include_secret=include_secret,
+        )
+
+        paginator = GroupsPagination()
+        page = paginator.paginate_queryset(groups, request)
+        serializer = GroupMinimalSerializer(page, many=True, context={"request": request})
+        return paginator.get_paginated_response(serializer.data)
+
 
 class GroupListView(APIView):
     """View for listing and creating groups"""

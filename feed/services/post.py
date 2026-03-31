@@ -77,16 +77,12 @@ class PostService:
                 if media_files:
                     post_ct = ContentType.objects.get_for_model(post)
                     for order, file in enumerate(media_files):
-                        media_obj = Media.objects.create(
+                        MediaProcessingService.create(
                             content_type=post_ct,
                             object_id=post.id,
                             file=file,
                             order=order,
-                        )
-                        transaction.on_commit(
-                            lambda m=media_obj: threading.Thread(
-                                target=MediaProcessingService.process_media, args=(m,)
-                            ).start()
+                            created_by=user,
                         )
                 # handle tagged users
                 if tag_users:

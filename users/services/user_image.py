@@ -139,18 +139,21 @@ class UserImageService:
             )
         for reel in reels:
             # Retrieve the first Media instance for this reel (or None if none)
-            media_obj = reel.media.first()
-            media_url = request.build_absolute_uri(media_obj.file.url) if media_obj else None
+            try:
+                media_obj = reel.media.first()
+                media_url = request.build_absolute_uri(media_obj.file.url) if media_obj else None
 
-            combined.append({
-                "type": "reel",
-                "url": media_url,
-                "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
-                "created_at": reel.created_at,
-                "content_id": reel.id,
-                "content_type": "reel",
-                "media_order": None,
-            })
+                combined.append({
+                    "type": "reel",
+                    "url": media_url,
+                    "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
+                    "created_at": reel.created_at,
+                    "content_id": reel.id,
+                    "content_type": "reel",
+                    "media_order": None,
+                })
+            except Exception as e:
+                pass
 
         for story in stories:
             combined.append(

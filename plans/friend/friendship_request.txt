@@ -1,11 +1,7 @@
 ### Buod
-Tama ka — **hindi dapat may “Bulk Accept”** dahil tao ang nasa likod ng bawat request at kailangan ng mas maingat na interaction. Tatanggalin ko ang bulk accept CTA at papalitan ng mas angkop na opsyon: **selection mode** para sa manual multi‑select at **smart suggestions** para sa mabilis pero responsable na pag‑accept.
-
----
 
 ### UI changes
 - **Segmented control**: Incoming | Outgoing (Incoming default).
-- **Selection mode**: maliit na toggle (Select) sa header; kapag naka‑on, lumilitaw checkboxes sa bawat card at isang compact action bar sa ibaba na may **Accept Selected** / **Decline Selected**; require explicit confirmation modal before processing multiple people.  
 - **Per‑item actions remain primary**: Accept (prominent) / Decline (secondary) / More (Block, View profile).  
 - **Undo snackbar**: para sa bawat action at para sa selection batch (may rollback window).
 
@@ -22,7 +18,6 @@ Tama ka — **hindi dapat may “Bulk Accept”** dahil tao ang nasa likod ng ba
 
 ### API and data implications
 - **No new endpoints required** for single accept/decline (use existing `POST /friends/requests/{id}/accept/` and `decline/`).  
-- **Batch processing**: client can call single accept endpoint sequentially for each selected id; backend should handle idempotency and rate limits.  
 - **Client expectations**: API returns `FriendshipDto` on accept to insert into Connections; return clear error for already‑handled requests so client can skip/rollback.  
 - **Telemetry**: track selection mode usage and Undo rate to evaluate if selection mode is helpful.
 

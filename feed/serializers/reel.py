@@ -11,6 +11,7 @@ from feed.models.post import POST_PRIVACY_TYPES
 from feed.models.reaction import ReactionType
 from feed.serializers.base import PostStatsSerializers, ReactionCountSerializer
 from feed.serializers.comment import CommentDisplaySerializer
+from feed.serializers.media import MediaDisplaySerializer
 from feed.services.comment import CommentService
 from feed.services.reel import ReelService
 from feed.services.reaction import ReactionService
@@ -147,7 +148,7 @@ class ReelCreateSerializer(serializers.ModelSerializer):
         try:
             return ReelService.create_reel(
                 user=user,
-                video=validated_data.get("video"),
+                video=validated_data.get("media"),
                 caption=validated_data.get("caption", ""),
                 thumbnail=validated_data.get("thumbnail") or thumbnail_file,  # use generated if not provided
                 audio=validated_data.get("audio"),
@@ -194,12 +195,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
     video_url = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     audio_url = serializers.SerializerMethodField()
-    like_count = serializers.SerializerMethodField()
-    comment_count = serializers.SerializerMethodField()
-    has_liked = serializers.SerializerMethodField()
-    comments = serializers.SerializerMethodField()  # first few comments
-    reaction_counts = serializers.SerializerMethodField()
-    user_reaction = serializers.SerializerMethodField()
+    media = MediaDisplaySerializer(many=True, read_only=True)
     statistics = serializers.SerializerMethodField()
 
     class Meta:
@@ -209,6 +205,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
             "user",
             "group",
             "caption",
+            "media",
             "video_url",
             "thumbnail_url",
             "audio_url",
@@ -216,12 +213,6 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
             "privacy",
             "created_at",
             "updated_at",
-            "like_count",
-            "comment_count",
-            "has_liked",
-            "comments",
-            "reaction_counts",
-            "user_reaction",
             "statistics",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
@@ -248,37 +239,6 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.audio.url)
         return ""
     
-    def get_reaction_counts(self, obj) -> ReactionCountSerializer:
-        return ReactionService.get_reaction_counts(obj, obj.id)
-    
-    def get_user_reaction(self, obj) -> ReactionType:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.get_user_reaction(request.user, obj, obj.id)
-        return None
-
-    def get_like_count(self, obj) -> int:
-        return ReactionService.get_like_count(obj, obj.id)
-
-    def get_comment_count(self, obj) -> int:
-        return CommentService.get_comment_count(obj)
-
-    def get_has_liked(self, obj) -> bool:
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return ReactionService.has_liked(
-                user=request.user, content_type=obj, object_id=obj.id
-            )
-        return False
-
-    def get_comments(self, obj) -> CommentDisplaySerializer(many=True):  # type: ignore
-
-        comments = CommentService.get_comments_for_object(
-            obj, include_replies=False, limit=3
-        )
-        return CommentDisplaySerializer(
-            comments, many=True, context=self.context
-        ).data
     def get_statistics(self, obj) -> PostStatsSerializers:
         from feed.services.post import PostService
         return PostService.get_post_statistics(serializer=self, obj=obj)

@@ -6,7 +6,9 @@ from typing import Optional, List, Dict, Any
 from django.db.models import Prefetch
 from django.db import models
 from feed.models.media import Media
+from feed.services import post
 from feed.services.comment import CommentService
+from feed.services.media import MediaProcessingService
 from feed.services.reaction import ReactionService
 from users.models import User
 from django.contrib.contenttypes.models import ContentType
@@ -44,13 +46,13 @@ class ReelService:
                 )
                 # Create media for the video
                 video_ct = ContentType.objects.get_for_model(reel)
-                video_media = Media.objects.create(
-                    content_type=video_ct,
-                    object_id=reel.id,
-                    file=video,
-                    order=0,
-                    created_by=user,
-                )
+                video_media = MediaProcessingService.create(
+                            content_type=video_ct,
+                            object_id=reel.id,
+                            file=video,
+                            order=0,
+                            created_by=user,
+                        )
                 # If a thumbnail was saved, we can add its path to the video media metadata
                 if reel.thumbnail:
                     video_media.metadata["thumbnail_path"] = reel.thumbnail.name

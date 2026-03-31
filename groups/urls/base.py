@@ -1,5 +1,6 @@
 from django.urls import path
 
+from groups.views.all_group_content import AllGroupsFeedView
 from groups.views.base import (
     GroupDetailView,
     GroupJoinView,
@@ -12,6 +13,7 @@ from groups.views.base import (
     GroupSearchMembersView,
     GroupStatisticsView,
     GroupTransferOwnershipView,
+    MyGroupsView,
 )
 from groups.views.feed import GroupFeedView
 from groups.views.group_suggestion import GroupSuggestionView
@@ -21,6 +23,8 @@ app_name = "groups"
 urlpatterns = [
     # Group CRUD operations
     path("", GroupListView.as_view(), name="group-list"),
+    path("mygroups/", MyGroupsView.as_view(), name="my-groups"),
+    path("groups/feed/all/", AllGroupsFeedView.as_view(), name="all-groups-feed"),
     path("<int:group_id>/", GroupDetailView.as_view(), name="group-detail"),
     # Group members management
     path("<int:group_id>/members/", GroupMembersView.as_view(), name="group-members"),

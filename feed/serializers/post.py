@@ -18,6 +18,7 @@ from users.serializers.user.minimal import UserMinimalSerializer
 from .comment import CommentDisplaySerializer
 from .media import MediaDisplaySerializer
 from users.models import User
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,13 +63,17 @@ class PostCreateSerializer(serializers.ModelSerializer):
 
     content = serializers.CharField(required=False, allow_blank=True)
     media = serializers.ListField(
-        child=serializers.FileField(), write_only=True, required=False, allow_empty=True
+        child=serializers.FileField(allow_empty_file=False),
+        required=False,
+        allow_empty=True,
+        min_length=0,
+        max_length=10,  # optional limit
     )
     group = serializers.PrimaryKeyRelatedField(
         queryset=Group.objects.all(), required=False, allow_null=True
     )
     tag_users = serializers.PrimaryKeyRelatedField(
-        queryset = User.objects.all(), required=False, allow_null=True
+        queryset=User.objects.all(), required=False, allow_null=True
     )
     mimeTypes = serializers.ListField(
         child=serializers.CharField(),
@@ -77,10 +82,17 @@ class PostCreateSerializer(serializers.ModelSerializer):
         help_text="List of MIME types for each uploaded media file",
     )
 
-
     class Meta:
         model = Post
-        fields = ["content", "group", "post_type", "privacy", "media", "tag_users", "mimeTypes"]
+        fields = [
+            "content",
+            "group",
+            "post_type",
+            "privacy",
+            "media",
+            "tag_users",
+            "mimeTypes",
+        ]
 
     def validate(self, data):
         post_type = data.get("post_type", "text")
@@ -207,9 +219,10 @@ class PostDisplaySerializer(serializers.ModelSerializer):
                 user=request.user, content_type=obj, object_id=obj.id
             )
         return False
-    
+
     def get_statistics(self, obj) -> PostStatsSerializers:
         from feed.services.post import PostService
+
         return PostService.get_post_statistics(serializer=self, obj=obj)
 
 
@@ -251,4 +264,5 @@ class PostFeedSerializer(serializers.ModelSerializer):
 
     def get_statistics(self, obj) -> PostStatsSerializers:
         from feed.services.post import PostService
+
         return PostService.get_post_statistics(serializer=self, obj=obj)
