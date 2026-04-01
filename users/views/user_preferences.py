@@ -5,7 +5,40 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from django.core.exceptions import ObjectDoesNotExist
 from typing import Type, List, Any
+from rest_framework import serializers
+import logging
 
+logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+class BaseUserPreferenceGetResponseData(serializers.Serializer):
+    available = serializers.ListField(child=serializers.DictField())
+    selected = serializers.ListField(child=serializers.DictField())
+
+
+class BaseUserPreferenceGetResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BaseUserPreferenceGetResponseData()
+
+
+class BaseUserPreferencePutResponseData(serializers.Serializer):
+    message = serializers.CharField()
+    selected = serializers.ListField(child=serializers.DictField())
+
+
+class BaseUserPreferencePutResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BaseUserPreferencePutResponseData()
+
+
+# ----------------------------------------------------------------------
+# Base view
+# ----------------------------------------------------------------------
 class BaseUserPreferenceView(APIView):
     """
     Base view for managing user M2M preferences (hobbies, interests, etc.)
@@ -27,43 +60,93 @@ class BaseUserPreferenceView(APIView):
         """Return the user's selected options for this relation."""
         return getattr(user, self.relation_name).all()
 
+    @extend_schema(
+        tags=["User Preferences"],
+        responses={200: BaseUserPreferenceGetResponseSerializer},
+        description="Get available options and the user's selected ones for this preference.",
+    )
     def get(self, request):
-        """GET: Return available options + user's selected ones."""
-        available = self.get_available_options()
-        user_selected = self.get_user_selected(request.user)
+        try:
+            available = self.get_available_options()
+            user_selected = self.get_user_selected(request.user)
 
-        available_serializer = self.serializer_class(available, many=True)
-        selected_serializer = self.serializer_class(user_selected, many=True)
+            available_serializer = self.serializer_class(available, many=True)
+            selected_serializer = self.serializer_class(user_selected, many=True)
 
-        return Response({
-            'available': available_serializer.data,
-            'selected': selected_serializer.data
-        })
-
-    def put(self, request):
-        """PUT: Replace the user's selected options with the provided IDs."""
-        # Input: list of IDs
-        ids = request.data.get('ids', [])
-        if not isinstance(ids, list):
             return Response(
-                {'error': 'ids must be a list of integers'},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": True,
+                    "message": f"{self.relation_name} retrieved.",
+                    "data": {
+                        "available": available_serializer.data,
+                        "selected": selected_serializer.data,
+                    },
+                }
+            )
+        except Exception as e:
+            logger.exception(f"Error retrieving {self.relation_name}")
+            return Response(
+                {
+                    "status": False,
+                    "message": str(e),
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    # ----- Input serializer for PUT -----
+    class PutInputSerializer(serializers.Serializer):
+        ids = serializers.ListField(
+            child=serializers.IntegerField(),
+            help_text="List of option IDs to set as the user's selection."
+        )
+
+    @extend_schema(
+        tags=["User Preferences"],
+        request=PutInputSerializer,
+        responses={200: BaseUserPreferencePutResponseSerializer},
+        description="Replace the user's selected options with the provided IDs.",
+    )
+    def put(self, request):
+        # Validate input using the nested serializer
+        input_serializer = self.PutInputSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": input_serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = input_serializer.validated_data['ids']
         # Validate that all IDs exist
         existing_ids = set(self.model_class.objects.filter(id__in=ids).values_list('id', flat=True))
         missing_ids = set(ids) - existing_ids
         if missing_ids:
             return Response(
-                {'error': f'Invalid IDs: {list(missing_ids)}'},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": False,
+                    "message": f"Invalid IDs: {list(missing_ids)}",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Set the new set
         relation = getattr(request.user, self.relation_name)
         relation.set(ids)
 
-        return Response({
-            'message': f'{self.relation_name} updated successfully',
-            'selected': self.serializer_class(relation.all(), many=True).data
-        })
+        # Return updated selection
+        selected_serializer = self.serializer_class(relation.all(), many=True)
+        return Response(
+            {
+                "status": True,
+                "message": f"{self.relation_name} updated successfully.",
+                "data": {
+                    "message": f"{self.relation_name} updated successfully",
+                    "selected": selected_serializer.data,
+                },
+            }
+        )
