@@ -19,8 +19,32 @@ from rest_framework import serializers
 logger = logging.getLogger(__name__)
 
 
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
+class UserContentResponseData(serializers.Serializer):
+    feed_type = serializers.CharField()
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    results = UnifiedContentItemSerializer(many=True)
+
+
+class UserContentResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserContentResponseData()
+
+
+# ----------------------------------------------------------------------
+# View
+# ----------------------------------------------------------------------
+
 class UserContentFeedView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
+
     @extend_schema(
         tags=["User Content"],
         parameters=[
@@ -37,7 +61,7 @@ class UserContentFeedView(APIView):
                 required=False,
             ),
         ],
-        responses={200: FeedResponseSerializer},
+        responses={200: UserContentResponseSerializer},
         description="Get a user's activity feed (posts, shares, reels, stories) in chronological order.",
     )
     def get(self, request, user_id=None):
@@ -45,7 +69,11 @@ class UserContentFeedView(APIView):
         if user_id is None:
             if not request.user.is_authenticated:
                 return Response(
-                    {"error": "Authentication required"},
+                    {
+                        "status": False,
+                        "message": "Authentication required",
+                        "data": None,
+                    },
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
             target_user = request.user
@@ -80,8 +108,8 @@ class UserContentFeedView(APIView):
         # Serialize
         serializer = UnifiedContentItemSerializer(page_obj.object_list, many=True, context={'request': request})
 
-        # Build response
-        pagination_data = {
+        # Build response data
+        response_data = {
             "feed_type": 'profile',
             "page": page_obj.number,
             "page_size": page_size,
@@ -89,5 +117,11 @@ class UserContentFeedView(APIView):
             "hasPrev": page_obj.has_previous(),
             "results": serializer.data,
         }
-        # logger.debug(pagination_data)
-        return Response(pagination_data)
+
+        return Response(
+            {
+                "status": True,
+                "message": "User content retrieved.",
+                "data": response_data,
+            }
+        )

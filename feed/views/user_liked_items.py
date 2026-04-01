@@ -1,4 +1,4 @@
-# feed/views/user_liked_items_view.py
+# feed/views/user_liked_items.py
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -6,11 +6,36 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.shortcuts import get_object_or_404
 from feed.services.user_liked_items import UserLikedItemsService
-from feed.views.feed import FeedResponseSerializer
 from users.models import User
 from feed.serializers.feed import UnifiedContentItemSerializer
 from global_utils.pagination import StandardResultsSetPagination
-from drf_spectacular.utils import extend_schema, OpenApiParameter
+from rest_framework import serializers
+
+
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
+class LikedItemsResponseData(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = UnifiedContentItemSerializer(many=True)
+
+
+class LikedItemsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LikedItemsResponseData()
+
+
+# ----------------------------------------------------------------------
+# View
+# ----------------------------------------------------------------------
+
 class UserLikedItemsView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
@@ -31,16 +56,22 @@ class UserLikedItemsView(APIView):
                 type=int,
                 location=OpenApiParameter.QUERY,
             ),
-            # If your route includes user_id as a path param, declare it in your urls.py and add it here as PATH.
         ],
-        responses={200: FeedResponseSerializer},
+        responses={200: LikedItemsResponseSerializer},
         description="Get items (posts, reels, comments, user images) that the user has reacted to. Returns feed-compatible rows using the same UnifiedContentItemSerializer structure.",
     )
     def get(self, request, user_id=None):
         # Determine target user
         if user_id is None:
             if not request.user.is_authenticated:
-                return Response({"error": "Authentication required"}, status=401)
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Authentication required",
+                        "data": None,
+                    },
+                    status=401,
+                )
             target_user = request.user
         else:
             target_user = get_object_or_404(User, id=user_id)
@@ -69,7 +100,7 @@ class UserLikedItemsView(APIView):
         serializer = UnifiedContentItemSerializer(items, many=True, context={'request': request})
         serialized_items = serializer.data
 
-        response = {
+        response_data = {
             "count": total,
             "page": page,
             "hasNext": (page * page_size) < total,
@@ -78,4 +109,11 @@ class UserLikedItemsView(APIView):
             "previous": None,
             "results": serialized_items,
         }
-        return Response(response)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Liked items retrieved.",
+                "data": response_data,
+            }
+        )

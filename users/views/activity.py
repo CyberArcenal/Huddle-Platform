@@ -1,7 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, serializers
 from django.shortcuts import get_object_or_404
+from django.db.models import Count
+from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
@@ -12,15 +16,17 @@ from ..services.user_activity import UserActivityService
 from ..serializers.activity import (
     UserActivitySerializer,
     ActivitySummarySerializer,
-    ActivitySummaryResponseSerializer,
-    LogActivityResponseSerializer,
 )
 from ..models import User, UserActivity
-from rest_framework import serializers
-from django.db import transaction
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-# ----- Input serializer for LogActivityView -----
+# ----------------------------------------------------------------------
+# Input serializer for LogActivityView
+# ----------------------------------------------------------------------
 class LogActivityInputSerializer(serializers.Serializer):
     action = serializers.ChoiceField(
         choices=[choice[0] for choice in ACTION_TYPES],
@@ -37,25 +43,76 @@ class LogActivityInputSerializer(serializers.Serializer):
     )
 
 
-# ----- Paginated response serializer -----
-class PaginatedUserActivitySerializer(serializers.Serializer):
-    count = serializers.IntegerField()
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_activities(paginator, page, request):
+    """
+    Construct a paginated data dict that matches PaginatedActivityData.
+    """
+    serializer = UserActivitySerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
+
+class PaginatedActivityData(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = UserActivitySerializer(many=True)
 
 
-class UserActivityListView(APIView):
-    """View for listing user activities"""
+class ActivityListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedActivityData()
 
+
+class ActivitySummaryResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    summary = ActivitySummarySerializer()
+
+
+class ActivitySummaryResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ActivitySummaryResponseData()
+
+
+class LogActivityResponseData(serializers.Serializer):
+    activity = UserActivitySerializer()
+
+
+class LogActivityResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LogActivityResponseData()
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
+
+class UserActivityListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User Activity"],
-        
         parameters=[
             OpenApiParameter(
                 name="action",
@@ -73,7 +130,7 @@ class UserActivityListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedUserActivitySerializer},
+        responses={200: ActivityListResponseSerializer},
         description="Get a paginated list of the current user's activities, optionally filtered by action.",
     )
     def get(self, request):
@@ -84,22 +141,32 @@ class UserActivityListView(APIView):
             )
             paginator = UsersPagination()
             page = paginator.paginate_queryset(activities, request)
-            serializer = UserActivitySerializer(
-                page, many=True, context={"request": request}
+            paginated_data = wrap_paginated_activities(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "User activities retrieved.",
+                    "data": paginated_data,
+                }
             )
-            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Error retrieving user activities")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class FollowingActivityView(APIView):
-    """View for getting activities from followed users"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User Activity"],
-        
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -111,7 +178,7 @@ class FollowingActivityView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedUserActivitySerializer},
+        responses={200: ActivityListResponseSerializer},
         description="Get a paginated list of activities from users that the current user follows.",
     )
     def get(self, request):
@@ -119,31 +186,37 @@ class FollowingActivityView(APIView):
             activities = UserActivityService.get_following_activities(user=request.user)
             paginator = UsersPagination()
             page = paginator.paginate_queryset(activities, request)
-            serializer = UserActivitySerializer(
-                page, many=True, context={"request": request}
+            paginated_data = wrap_paginated_activities(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Following activities retrieved.",
+                    "data": paginated_data,
+                }
             )
-            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Error retrieving following activities")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ActivitySummaryView(APIView):
-    """View for getting activity summary/statistics"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User Activity"],
-        
         responses={200: ActivitySummaryResponseSerializer},
         description="Get a summary of the current user's activity (total counts, last activity, breakdown by type).",
     )
     def get(self, request):
         try:
-            from django.db.models import Count
-            from django.utils import timezone
-            from datetime import timedelta
-
             now = timezone.now()
             today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             week_start = now - timedelta(days=now.weekday())
@@ -178,25 +251,33 @@ class ActivitySummaryView(APIView):
                 "activities_this_week": activities_this_week,
             }
 
-            serializer = ActivitySummarySerializer(summary_data)
-
-            return Response({
-                "user_id": request.user.id,
-                "summary": serializer.data,
-            })
-
+            return Response(
+                {
+                    "status": True,
+                    "message": "Activity summary retrieved.",
+                    "data": {
+                        "user_id": request.user.id,
+                        "summary": summary_data,
+                    },
+                }
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Error retrieving activity summary")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class RecentActivitiesView(APIView):
-    """View for getting recent activities across all users"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User Activity"],
-        
         parameters=[
             OpenApiParameter(
                 name="action",
@@ -220,7 +301,7 @@ class RecentActivitiesView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedUserActivitySerializer},
+        responses={200: ActivityListResponseSerializer},
         description="Get recent activities (public or from followed users) with optional filters and pagination.",
     )
     def get(self, request):
@@ -236,22 +317,32 @@ class RecentActivitiesView(APIView):
             )
             paginator = UsersPagination()
             page = paginator.paginate_queryset(activities, request)
-            serializer = UserActivitySerializer(
-                page, many=True, context={"request": request}
+            paginated_data = wrap_paginated_activities(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Recent activities retrieved.",
+                    "data": paginated_data,
+                }
             )
-            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Error retrieving recent activities")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class LogActivityView(APIView):
-    """View for logging user activities (for internal use)"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User Activity"],
-        
         request=LogActivityInputSerializer,
         responses={201: LogActivityResponseSerializer},
         examples=[
@@ -267,17 +358,20 @@ class LogActivityView(APIView):
             OpenApiExample(
                 "Log activity response",
                 value={
+                    "status": True,
                     "message": "Activity logged successfully",
-                    "activity": {
-                        "id": 1,
-                        "user": 1,
-                        "action": "login",
-                        "description": "User logged in",
-                        "ip_address": "192.168.1.1",
-                        "user_agent": "Mozilla/5.0",
-                        "timestamp": "2025-03-07T12:34:56Z",
-                        "location": None,
-                        "metadata": {"device": "mobile"},
+                    "data": {
+                        "activity": {
+                            "id": 1,
+                            "user": 1,
+                            "action": "login",
+                            "description": "User logged in",
+                            "ip_address": "192.168.1.1",
+                            "user_agent": "Mozilla/5.0",
+                            "timestamp": "2025-03-07T12:34:56Z",
+                            "location": None,
+                            "metadata": {"device": "mobile"},
+                        }
                     },
                 },
                 response_only=True,
@@ -289,27 +383,46 @@ class LogActivityView(APIView):
     def post(self, request):
         serializer = LogActivityInputSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         data = serializer.validated_data
-        activity = UserActivityService.log_activity(
-            user=request.user,
-            action=data["action"],
-            description=data.get("description", ""),
-            ip_address=request.META.get("REMOTE_ADDR"),
-            user_agent=request.META.get("HTTP_USER_AGENT"),
-            location=data.get("location"),
-            metadata=data.get("metadata", {}),
-        )
+        try:
+            activity = UserActivityService.log_activity(
+                user=request.user,
+                action=data["action"],
+                description=data.get("description", ""),
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT"),
+                location=data.get("location"),
+                metadata=data.get("metadata", {}),
+            )
 
-        output_serializer = UserActivitySerializer(
-            activity, context={"request": request}
-        )
+            output_serializer = UserActivitySerializer(
+                activity, context={"request": request}
+            )
 
-        return Response(
-            {
-                "message": "Activity logged successfully",
-                "activity": output_serializer.data,
-            },
-            status=status.HTTP_201_CREATED,
-        )
+            return Response(
+                {
+                    "status": True,
+                    "message": "Activity logged successfully",
+                    "data": {"activity": output_serializer.data},
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        except Exception as e:
+            logger.exception("Error logging activity")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

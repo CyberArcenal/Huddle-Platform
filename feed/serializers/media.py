@@ -1,8 +1,6 @@
 from typing import Optional
-
 from django.conf import settings
 from rest_framework import serializers
-
 from feed.models.media import MEDIA_VARIANT_TYPES, Media, MediaVariant
 
 
@@ -62,6 +60,15 @@ class MediaCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Media
         fields = ["file", "order", "mimeTypes"]
+
+    # --- Added size validation ---
+    def validate_file(self, value):
+        max_size = getattr(settings, "MAX_MEDIA_SIZE", 20 * 1024 * 1024)  # 20 MB default
+        if value.size > max_size:
+            raise serializers.ValidationError(
+                f"File size exceeds limit ({max_size // (1024 * 1024)} MB)."
+            )
+        return value
 
 
 class MediaUpdateSerializer(serializers.ModelSerializer):

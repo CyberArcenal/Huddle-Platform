@@ -27,8 +27,34 @@ from groups.services import GroupMemberService
 from rest_framework import serializers
 from events.serializers.event_attendance import EventAttendanceWithUserSerializer
 
+import logging
 
-# ----- Input serializers for endpoints with raw request data -----
+logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_attendance(paginator, page, request, serializer_class):
+    """
+    Construct a paginated data dict that matches the expected structure.
+    """
+    serializer = serializer_class(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Input serializers
+# ----------------------------------------------------------------------
 class RSVPInputSerializer(serializers.Serializer):
     status = serializers.ChoiceField(
         choices=["going", "maybe", "declined"], default="going", help_text="RSVP status"
@@ -49,13 +75,11 @@ class SendRemindersInputSerializer(serializers.Serializer):
     )
 
 
-# ----------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
 
-
-# ----- Paginated response serializer for drf-spectacular -----
-class PaginatedEventAttendanceWithUserSerializer(serializers.Serializer):
-    """Matches the custom pagination response from EventsPagination"""
-
+class PaginatedEventAttendanceWithUserData(serializers.Serializer):
     count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -65,12 +89,130 @@ class PaginatedEventAttendanceWithUserSerializer(serializers.Serializer):
     results = EventAttendanceWithUserSerializer(many=True)
 
 
-# --------------------------------------------------------------
+class EventAttendanceListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedEventAttendanceWithUserData()
 
+
+class EventAttendanceCreateResponseData(serializers.Serializer):
+    attendance = EventAttendanceSerializer()
+
+
+class EventAttendanceCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventAttendanceCreateResponseData()
+
+
+class EventAttendanceDetailResponseData(serializers.Serializer):
+    attendance = EventAttendanceSerializer()
+
+
+class EventAttendanceDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventAttendanceDetailResponseData()
+
+
+class EventAttendanceUpdateResponseData(serializers.Serializer):
+    attendance = EventAttendanceSerializer()
+
+
+class EventAttendanceUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventAttendanceUpdateResponseData()
+
+
+class EventAttendanceDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class PaginatedEventListData(serializers.Serializer):
+    count = serializers.IntegerField()
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = EventListSerializer(many=True)
+
+
+class UserEventsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedEventListData()
+
+
+class UserAttendanceStatisticsResponseData(serializers.Serializer):
+    statistics = UserAttendanceStatisticsSerializer()
+
+
+class UserAttendanceStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserAttendanceStatisticsResponseData()
+
+
+class MutualAttendeeUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    name = serializers.CharField()
+
+
+class MutualAttendeeSerializer(serializers.Serializer):
+    user = MutualAttendeeUserSerializer()
+    is_following = serializers.BooleanField()
+    is_followed_by = serializers.BooleanField()
+    is_mutual = serializers.BooleanField()
+
+
+class MutualAttendeesResponseData(serializers.Serializer):
+    attendees = MutualAttendeeSerializer(many=True)
+
+
+class MutualAttendeesResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = MutualAttendeesResponseData()
+
+
+class AttendanceTrendData(serializers.Serializer):
+    hour = serializers.DateTimeField()
+    count = serializers.IntegerField()
+
+
+class AttendanceTrendResponseData(serializers.Serializer):
+    trend = AttendanceTrendData(many=True)
+
+
+class AttendanceTrendResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = AttendanceTrendResponseData()
+
+
+class SendRemindersResponseData(serializers.Serializer):
+    event_id = serializers.IntegerField()
+    hours_before = serializers.IntegerField()
+    reminders_sent = serializers.IntegerField()
+    attendees_to_remind = serializers.ListField(child=serializers.DictField())
+
+
+class SendRemindersResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = SendRemindersResponseData()
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 class EventAttendanceListView(APIView):
-    """List attendees for an event"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -92,34 +234,56 @@ class EventAttendanceListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventAttendanceWithUserSerializer},
+        responses={200: EventAttendanceListResponseSerializer},
         description="List all attendees for an event, optionally filtered by status.",
     )
     def get(self, request, event_id):
-        event = get_object_or_404(Event, id=event_id)
+        try:
+            event = get_object_or_404(Event, id=event_id)
+            has_access, message = EventService.check_user_access(event, request.user)
+            if not has_access:
+                return Response(
+                    {
+                        "status": False,
+                        "message": message,
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        has_access, message = EventService.check_user_access(event, request.user)
-        if not has_access:
-            raise PermissionDenied(detail=message)
+            status_filter = request.query_params.get("status")
+            attendees = EventAttendanceService.get_event_attendees(
+                event=event, status=status_filter
+            )
 
-        status_filter = request.query_params.get("status")
+            paginator = EventsPagination()
+            page = paginator.paginate_queryset(attendees, request)
+            paginated_data = wrap_paginated_attendance(
+                paginator, page, request, EventAttendanceWithUserSerializer
+            )
 
-        # Service returns full queryset
-        attendees = EventAttendanceService.get_event_attendees(
-            event=event, status=status_filter
-        )
-
-        paginator = EventsPagination()
-        page = paginator.paginate_queryset(attendees, request)
-        serializer = EventAttendanceWithUserSerializer(
-            page, many=True, context={"request": request}
-        )
-        return paginator.get_paginated_response(serializer.data)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Attendees retrieved.",
+                    "data": paginated_data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error listing attendees for event %s", event_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Event Attendance"],
         request=EventAttendanceCreateSerializer,
-        responses={201: EventAttendanceSerializer},
+        responses={201: EventAttendanceCreateResponseSerializer},
         examples=[
             OpenApiExample(
                 "RSVP request", value={"status": "going"}, request_only=True
@@ -127,11 +291,17 @@ class EventAttendanceListView(APIView):
             OpenApiExample(
                 "RSVP response",
                 value={
-                    "id": 1,
-                    "event": 1,
-                    "user": 5,
-                    "status": "going",
-                    "joined_at": "2025-03-07T12:34:56Z",
+                    "status": True,
+                    "message": "RSVP successful.",
+                    "data": {
+                        "attendance": {
+                            "id": 1,
+                            "event": 1,
+                            "user": 5,
+                            "status": "going",
+                            "joined_at": "2025-03-07T12:34:56Z",
+                        }
+                    },
                 },
                 response_only=True,
             ),
@@ -140,87 +310,118 @@ class EventAttendanceListView(APIView):
     )
     @transaction.atomic
     def post(self, request, event_id):
-        """RSVP to an event"""
         try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
-
-        # Add event to request data
-        data = request.data.copy()
-        data["event"] = event.id
-
-        serializer = EventAttendanceCreateSerializer(
-            data=data, context={"request": request}
-        )
-
-        if serializer.is_valid():
-            try:
+            event = get_object_or_404(Event, id=event_id)
+            data = request.data.copy()
+            data["event"] = event.id
+            serializer = EventAttendanceCreateSerializer(
+                data=data, context={"request": request}
+            )
+            if serializer.is_valid():
                 attendance = serializer.save()
+                response_data = EventAttendanceSerializer(
+                    attendance, context={"request": request}
+                ).data
                 return Response(
-                    EventAttendanceSerializer(
-                        attendance, context={"request": request}
-                    ).data,
+                    {
+                        "status": True,
+                        "message": "RSVP successful.",
+                        "data": {"attendance": response_data},
+                    },
                     status=status.HTTP_201_CREATED,
                 )
-            except DjangoValidationError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error creating RSVP for event %s", event_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class EventAttendanceDetailView(APIView):
-    """Retrieve, update or delete an attendance record"""
-
     permission_classes = [IsAuthenticated]
 
     def get_object(self, event_id, user_id=None):
-        """Get attendance object"""
-        try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
-
+        event = get_object_or_404(Event, id=event_id)
         if user_id is None:
-            # Get current user's attendance
             user = self.request.user
         else:
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                raise NotFound(detail="User not found")
-
+            user = get_object_or_404(User, id=user_id)
         attendance = EventAttendanceService.get_attendance(event, user)
         if not attendance:
-            raise NotFound(detail="Attendance record not found")
-
+            raise NotFound("Attendance record not found")
         return attendance
 
     @extend_schema(
         tags=["Event Attendance"],
-        responses={200: EventAttendanceSerializer},
+        responses={200: EventAttendanceDetailResponseSerializer},
         description="Retrieve a specific attendance record.",
     )
     def get(self, request, event_id, user_id=None):
-        """Get attendance record"""
-        attendance = self.get_object(event_id, user_id)
-
-        # Check permission (user can view their own or organizer can view any)
-        if (
-            attendance.user != request.user
-            and attendance.event.organizer != request.user
-        ):
-            raise PermissionDenied(
-                detail="You don't have permission to view this attendance"
+        try:
+            attendance = self.get_object(event_id, user_id)
+            if attendance.user != request.user and attendance.event.organizer != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You don't have permission to view this attendance",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            data = EventAttendanceSerializer(attendance, context={"request": request}).data
+            return Response(
+                {
+                    "status": True,
+                    "message": "Attendance record retrieved.",
+                    "data": {"attendance": data},
+                }
             )
-
-        serializer = EventAttendanceSerializer(attendance, context={"request": request})
-        return Response(serializer.data)
+        except NotFound as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except Exception as e:
+            logger.exception("Error retrieving attendance")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Event Attendance"],
         request=EventAttendanceUpdateSerializer,
-        responses={200: EventAttendanceSerializer},
+        responses={200: EventAttendanceUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update status", value={"status": "maybe"}, request_only=True
@@ -230,30 +431,63 @@ class EventAttendanceDetailView(APIView):
     )
     @transaction.atomic
     def put(self, request, event_id, user_id=None):
-        """Update attendance status"""
-        attendance = self.get_object(event_id, user_id)
+        try:
+            attendance = self.get_object(event_id, user_id)
+            if attendance.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only update your own attendance",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        # Check permission (user can update their own)
-        if attendance.user != request.user:
-            raise PermissionDenied(detail="You can only update your own attendance")
-
-        serializer = EventAttendanceUpdateSerializer(
-            attendance, data=request.data, partial=False, context={"request": request}
-        )
-
-        if serializer.is_valid():
-            try:
-                serializer.save()
-                return Response(serializer.data)
-            except DjangoValidationError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer = EventAttendanceUpdateSerializer(
+                attendance, data=request.data, partial=False, context={"request": request}
+            )
+            if serializer.is_valid():
+                attendance = serializer.save()
+                data = EventAttendanceSerializer(attendance, context={"request": request}).data
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Attendance updated.",
+                        "data": {"attendance": data},
+                    }
+                )
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error updating attendance")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Event Attendance"],
         request=EventAttendanceUpdateSerializer,
-        responses={200: EventAttendanceSerializer},
+        responses={200: EventAttendanceUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update status", value={"status": "declined"}, request_only=True
@@ -262,53 +496,114 @@ class EventAttendanceDetailView(APIView):
         description="Partially update attendance status.",
     )
     def patch(self, request, event_id, user_id=None):
-        """Partial update attendance status"""
-        attendance = self.get_object(event_id, user_id)
+        try:
+            attendance = self.get_object(event_id, user_id)
+            if attendance.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only update your own attendance",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        # Check permission (user can update their own)
-        if attendance.user != request.user:
-            raise PermissionDenied(detail="You can only update your own attendance")
-
-        serializer = EventAttendanceUpdateSerializer(
-            attendance, data=request.data, partial=True, context={"request": request}
-        )
-
-        if serializer.is_valid():
-            try:
-                serializer.save()
-                return Response(serializer.data)
-            except DjangoValidationError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer = EventAttendanceUpdateSerializer(
+                attendance, data=request.data, partial=True, context={"request": request}
+            )
+            if serializer.is_valid():
+                attendance = serializer.save()
+                data = EventAttendanceSerializer(attendance, context={"request": request}).data
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Attendance partially updated.",
+                        "data": {"attendance": data},
+                    }
+                )
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error patching attendance")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
-        tags=["Event Attendance"],responses={204: None}, description="Remove attendance (un‑RSVP).")
+        tags=["Event Attendance"],
+        responses={204: EventAttendanceDeleteResponseSerializer},
+        description="Remove attendance (un‑RSVP).",
+    )
     @transaction.atomic
     def delete(self, request, event_id, user_id=None):
-        """Remove attendance/RSVP"""
-        attendance = self.get_object(event_id, user_id)
-
-        # Check permission (user can delete their own)
-        if attendance.user != request.user:
-            raise PermissionDenied(detail="You can only remove your own attendance")
-
         try:
+            attendance = self.get_object(event_id, user_id)
+            if attendance.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only remove your own attendance",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             EventAttendanceService.remove_attendance(attendance.event, attendance.user)
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Attendance removed.",
+                    "data": None,
+                },
+                status=status.HTTP_204_NO_CONTENT,
+            )
         except DjangoValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error deleting attendance")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class EventRSVPView(APIView):
-    """RSVP to an event (alternative endpoint)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Event Attendance"],
         request=RSVPInputSerializer,
-        responses={201: EventAttendanceSerializer},
+        responses={201: EventAttendanceCreateResponseSerializer},
         examples=[
             OpenApiExample("RSVP request", value={"status": "going"}, request_only=True)
         ],
@@ -316,50 +611,63 @@ class EventRSVPView(APIView):
     )
     @transaction.atomic
     def post(self, request, event_id):
-        """RSVP to event"""
         try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
-
-        serializer = RSVPInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        status = serializer.validated_data["status"]
-
-        try:
+            event = get_object_or_404(Event, id=event_id)
+            serializer = RSVPInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Validation error.",
+                        "data": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            status = serializer.validated_data["status"]
             created, attendance = EventAttendanceService.rsvp_to_event(
                 event=event, user=request.user, status=status
             )
-
-            if created:
-                return Response(
-                    EventAttendanceSerializer(
-                        attendance, context={"request": request}
-                    ).data,
-                    status=status.HTTP_201_CREATED,
-                )
-            else:
-                return Response(
-                    EventAttendanceSerializer(
-                        attendance, context={"request": request}
-                    ).data,
-                    status=status.HTTP_200_OK,
-                )
+            response_data = EventAttendanceSerializer(
+                attendance, context={"request": request}
+            ).data
+            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            message = "RSVP created." if created else "RSVP updated."
+            return Response(
+                {
+                    "status": True,
+                    "message": message,
+                    "data": {"attendance": response_data},
+                },
+                status=status_code,
+            )
         except DjangoValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error in RSVP for event %s", event_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UpdateAttendanceStatusView(APIView):
-    """Update attendance status (alternative endpoint)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Event Attendance"],
         request=UpdateStatusInputSerializer,
-        responses={200: EventAttendanceSerializer},
+        responses={200: EventAttendanceUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update request", value={"status": "maybe"}, request_only=True
@@ -368,33 +676,54 @@ class UpdateAttendanceStatusView(APIView):
         description="Update attendance status.",
     )
     def patch(self, request, event_id):
-        """Update attendance status"""
         try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
-
-        serializer = UpdateStatusInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        new_status = serializer.validated_data["status"]
-
-        try:
+            event = get_object_or_404(Event, id=event_id)
+            serializer = UpdateStatusInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Validation error.",
+                        "data": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            new_status = serializer.validated_data["status"]
             attendance = EventAttendanceService.update_attendance_status(
                 event=event, user=request.user, new_status=new_status
             )
-
+            response_data = EventAttendanceSerializer(
+                attendance, context={"request": request}
+            ).data
             return Response(
-                EventAttendanceSerializer(attendance, context={"request": request}).data
+                {
+                    "status": True,
+                    "message": "Attendance status updated.",
+                    "data": {"attendance": response_data},
+                }
             )
         except DjangoValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error updating attendance status")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserEventsView(APIView):
-    """Get events that a user is attending"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -440,78 +769,95 @@ class UserEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventAttendanceWithUserSerializer},
+        responses={200: UserEventsResponseSerializer},
         description="Get events a user is attending, with optional filters.",
     )
     def get(self, request, user_id=None):
-        if user_id is None:
-            user_id = request.query_params.get("user_id")
+        try:
+            if user_id is None:
+                user_id = request.query_params.get("user_id")
+            if not user_id:
+                user = request.user
+            else:
+                user = get_object_or_404(User, id=user_id)
 
-        if not user_id:
-            user = request.user
-            if not user.is_authenticated:
-                raise PermissionDenied(detail="Authentication required")
-        else:
-            user = get_object_or_404(User, id=user_id)
+            status_filter = request.query_params.get("status")
+            upcoming_only = (
+                request.query_params.get("upcoming_only", "true").lower() == "true"
+            )
 
-        status_filter = request.query_params.get("status")
-        upcoming_only = (
-            request.query_params.get("upcoming_only", "true").lower() == "true"
-        )
+            start_date_str = request.query_params.get("start_date")
+            end_date_str = request.query_params.get("end_date")
+            start_date = None
+            end_date = None
+            if start_date_str:
+                try:
+                    start_date = timezone.datetime.fromisoformat(
+                        start_date_str.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": "Invalid start_date format. Use ISO format.",
+                            "data": None,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if end_date_str:
+                try:
+                    end_date = timezone.datetime.fromisoformat(
+                        end_date_str.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": "Invalid end_date format. Use ISO format.",
+                            "data": None,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        start_date_str = request.query_params.get("start_date")
-        end_date_str = request.query_params.get("end_date")
-        start_date = None
-        end_date = None
+            events = EventAttendanceService.get_user_events(
+                user=user,
+                status=status_filter,
+                upcoming_only=upcoming_only,
+                start_date=start_date,
+                end_date=end_date,
+            )
 
-        if start_date_str:
-            try:
-                start_date = timezone.datetime.fromisoformat(
-                    start_date_str.replace("Z", "+00:00")
-                )
-            except ValueError:
-                return Response(
-                    {"error": "Invalid start_date format. Use ISO format."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        if end_date_str:
-            try:
-                end_date = timezone.datetime.fromisoformat(
-                    end_date_str.replace("Z", "+00:00")
-                )
-            except ValueError:
-                return Response(
-                    {"error": "Invalid end_date format. Use ISO format."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            accessible_events = []
+            for event in events:
+                has_access, _ = EventService.check_user_access(event, request.user)
+                if has_access or event.event_type == "public":
+                    accessible_events.append(event)
 
-        # Service returns full queryset
-        events = EventAttendanceService.get_user_events(
-            user=user,
-            status=status_filter,
-            upcoming_only=upcoming_only,
-            start_date=start_date,
-            end_date=end_date,
-        )
-
-        # Filter accessible events
-        accessible_events = []
-        for event in events:
-            has_access, _ = EventService.check_user_access(event, request.user)
-            if has_access or event.event_type == "public":
-                accessible_events.append(event)
-
-        paginator = EventsPagination()
-        page = paginator.paginate_queryset(accessible_events, request)
-        from ..serializers import EventListSerializer
-
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+            paginator = EventsPagination()
+            page = paginator.paginate_queryset(accessible_events, request)
+            paginated_data = wrap_paginated_attendance(
+                paginator, page, request, EventListSerializer
+            )
+            return Response(
+                {
+                    "status": True,
+                    "message": "User events retrieved.",
+                    "data": paginated_data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving user events")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserAttendanceStatisticsView(APIView):
-    """Get user's event attendance statistics"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -524,17 +870,23 @@ class UserAttendanceStatisticsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: UserAttendanceStatisticsSerializer},
+        responses={200: UserAttendanceStatisticsResponseSerializer},
         examples=[
             OpenApiExample(
                 "Statistics response",
                 value={
-                    "total_rsvps": 12,
-                    "status_breakdown": {"going": 8, "maybe": 3, "declined": 1},
-                    "upcoming_events": 5,
-                    "past_events_attended": 7,
-                    "events_organized": 2,
-                    "attendance_rate": 87.5,
+                    "status": True,
+                    "message": "Statistics retrieved.",
+                    "data": {
+                        "statistics": {
+                            "total_rsvps": 12,
+                            "status_breakdown": {"going": 8, "maybe": 3, "declined": 1},
+                            "upcoming_events": 5,
+                            "past_events_attended": 7,
+                            "events_organized": 2,
+                            "attendance_rate": 87.5,
+                        }
+                    },
                 },
                 response_only=True,
             )
@@ -542,122 +894,131 @@ class UserAttendanceStatisticsView(APIView):
         description="Get attendance statistics for a user.",
     )
     def get(self, request, user_id=None):
-        """Get user's attendance statistics"""
-        if user_id is None:
-            user_id = request.query_params.get("user_id")
+        try:
+            if user_id is None:
+                user_id = request.query_params.get("user_id")
+            if not user_id:
+                user = request.user
+                if not user.is_authenticated:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": "Authentication required",
+                            "data": None,
+                        },
+                        status=status.HTTP_401_UNAUTHORIZED,
+                    )
+            else:
+                user = get_object_or_404(User, id=user_id)
 
-        if not user_id:
-            # Get current user's statistics
-            user = request.user
-            if not user.is_authenticated:
-                raise PermissionDenied(detail="Authentication required")
-        else:
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
+            if user != request.user:
                 return Response(
-                    {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+                    {
+                        "status": False,
+                        "message": "You can only view your own statistics",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
 
-        # Check permission (user can view their own or friends can view)
-        if user != request.user:
-            # Add friend check here if needed
-            raise PermissionDenied(detail="You can only view your own statistics")
-
-        statistics = EventAttendanceService.get_user_attendance_statistics(user)
-        serializer = UserAttendanceStatisticsSerializer(statistics)
-        return Response(serializer.data)
-
-
-
-
-
-# ------------------ Response Serializers ------------------
-class MutualAttendeeUserSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    username = serializers.CharField()
-    name = serializers.CharField()
-
-
-class MutualAttendeeSerializer(serializers.Serializer):
-    user = MutualAttendeeUserSerializer()
-    is_following = serializers.BooleanField()
-    is_followed_by = serializers.BooleanField()
-    is_mutual = serializers.BooleanField()
+            statistics = EventAttendanceService.get_user_attendance_statistics(user)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Statistics retrieved.",
+                    "data": {"statistics": statistics},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving attendance statistics")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
-# ------------------ API View ------------------
 class MutualAttendeesView(APIView):
-    """Get mutual connections attending an event"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Event Attendance"],
-        responses={200: MutualAttendeeSerializer(many=True)},
+        responses={200: MutualAttendeesResponseSerializer},
         examples=[
             OpenApiExample(
                 "Mutual attendees response",
-                value=[
-                    {
-                        "user": {"id": 2, "username": "alice", "name": "Alice Smith"},
-                        "is_following": True,
-                        "is_followed_by": True,
-                        "is_mutual": True,
-                    }
-                ],
+                value={
+                    "status": True,
+                    "message": "Mutual attendees retrieved.",
+                    "data": {
+                        "attendees": [
+                            {
+                                "user": {"id": 2, "username": "alice", "name": "Alice Smith"},
+                                "is_following": True,
+                                "is_followed_by": True,
+                                "is_mutual": True,
+                            }
+                        ]
+                    },
+                },
                 response_only=True,
             )
         ],
         description="Get list of attendees that the current user has a follow relationship with.",
     )
     def get(self, request, event_id):
-        """Get mutual attendees for an event"""
         try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
+            event = get_object_or_404(Event, id=event_id)
+            has_access, message = EventService.check_user_access(event, request.user)
+            if not has_access:
+                return Response(
+                    {
+                        "status": False,
+                        "message": message,
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        # Check access
-        has_access, message = EventService.check_user_access(event, request.user)
-        if not has_access:
-            raise PermissionDenied(detail=message)
-
-        mutual_attendees = EventAttendanceService.get_mutual_attendees(
-            event, request.user
-        )
-
-        formatted_attendees = [
-            {
-                "user": {
-                    "id": attendee["user"].id,
-                    "username": attendee["user"].username,
-                    "name": attendee["user"].get_full_name(),
+            mutual_attendees = EventAttendanceService.get_mutual_attendees(
+                event, request.user
+            )
+            formatted_attendees = [
+                {
+                    "user": {
+                        "id": attendee["user"].id,
+                        "username": attendee["user"].username,
+                        "name": attendee["user"].get_full_name(),
+                    },
+                    "is_following": attendee["is_following"],
+                    "is_followed_by": attendee["is_followed_by"],
+                    "is_mutual": attendee["is_mutual"],
+                }
+                for attendee in mutual_attendees
+            ]
+            return Response(
+                {
+                    "status": True,
+                    "message": "Mutual attendees retrieved.",
+                    "data": {"attendees": formatted_attendees},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving mutual attendees")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
                 },
-                "is_following": attendee["is_following"],
-                "is_followed_by": attendee["is_followed_by"],
-                "is_mutual": attendee["is_mutual"],
-            }
-            for attendee in mutual_attendees
-        ]
-
-        serializer = MutualAttendeeSerializer(formatted_attendees, many=True)
-        return Response(serializer.data)
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
-
-
-
-# ------------------ Response Serializer ------------------
-class AttendanceTrendSerializer(serializers.Serializer):
-    hour = serializers.DateTimeField()
-    count = serializers.IntegerField()
-
-
-# ------------------ API View ------------------
 class AttendanceTrendView(APIView):
-    """Get attendance trend for an event"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -670,61 +1031,60 @@ class AttendanceTrendView(APIView):
                 required=False,
             ),
         ],
-        responses={200: AttendanceTrendSerializer(many=True)},
+        responses={200: AttendanceTrendResponseSerializer},
         examples=[
             OpenApiExample(
                 "Attendance trend example",
-                value=[
-                    {"hour": "2026-03-19T10:00:00Z", "count": 5},
-                    {"hour": "2026-03-19T11:00:00Z", "count": 8},
-                    {"hour": "2026-03-19T12:00:00Z", "count": 12},
-                ],
+                value={
+                    "status": True,
+                    "message": "Attendance trend retrieved.",
+                    "data": {
+                        "trend": [
+                            {"hour": "2026-03-19T10:00:00Z", "count": 5},
+                            {"hour": "2026-03-19T11:00:00Z", "count": 8},
+                            {"hour": "2026-03-19T12:00:00Z", "count": 12},
+                        ]
+                    },
+                },
                 response_only=True,
             )
         ],
         description="Get RSVP trend (counts per hour) for an event. Only event organizer can access.",
     )
     def get(self, request, event_id):
-        """Get attendance trend"""
         try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
-
-        # Check if user is organizer
-        if event.organizer != request.user:
-            raise PermissionDenied(
-                detail="Only event organizer can view attendance trend"
+            event = get_object_or_404(Event, id=event_id)
+            if event.organizer != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Only event organizer can view attendance trend",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            hours_before = int(request.query_params.get("hours_before", 48))
+            trend = EventAttendanceService.get_attendance_trend(event, hours_before)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Attendance trend retrieved.",
+                    "data": {"trend": trend},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving attendance trend")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        hours_before = int(request.query_params.get("hours_before", 48))
 
-        trend = EventAttendanceService.get_attendance_trend(event, hours_before)
-        serializer = AttendanceTrendSerializer(trend, many=True)
-        return Response(serializer.data)
-
-
-
-
-
-# ------------------ Response Serializers ------------------
-class AttendeeReminderSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField()
-    username = serializers.CharField()
-    email = serializers.EmailField()
-
-
-class SendRemindersResponseSerializer(serializers.Serializer):
-    event_id = serializers.IntegerField()
-    hours_before = serializers.IntegerField()
-    reminders_sent = serializers.IntegerField()
-    attendees_to_remind = AttendeeReminderSerializer(many=True)
-
-
-# ------------------ API View ------------------
 class SendRemindersView(APIView):
-    """Send reminders to event attendees"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -735,12 +1095,16 @@ class SendRemindersView(APIView):
             OpenApiExample(
                 "Reminder response",
                 value={
-                    "event_id": 1,
-                    "hours_before": 24,
-                    "reminders_sent": 3,
-                    "attendees_to_remind": [
-                        {"user_id": 5, "username": "john", "email": "john@example.com"}
-                    ],
+                    "status": True,
+                    "message": "Reminders sent.",
+                    "data": {
+                        "event_id": 1,
+                        "hours_before": 24,
+                        "reminders_sent": 3,
+                        "attendees_to_remind": [
+                            {"user_id": 5, "username": "john", "email": "john@example.com"}
+                        ],
+                    },
                 },
                 response_only=True,
             )
@@ -749,37 +1113,57 @@ class SendRemindersView(APIView):
     )
     @transaction.atomic
     def post(self, request, event_id):
-        """Send reminders"""
         try:
-            event = Event.objects.get(id=event_id)
-        except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
+            event = get_object_or_404(Event, id=event_id)
+            if event.organizer != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Only event organizer can send reminders",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        # Check if user is organizer
-        if event.organizer != request.user:
-            raise PermissionDenied(detail="Only event organizer can send reminders")
-
-        serializer = SendRemindersInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        hours_before = serializer.validated_data["hours_before"]
-
-        reminders = EventAttendanceService.send_reminders(event, hours_before)
-
-        response_data = {
-            "event_id": event_id,
-            "hours_before": hours_before,
-            "reminders_sent": len(reminders),
-            "attendees_to_remind": [
+            serializer = SendRemindersInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Validation error.",
+                        "data": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            hours_before = serializer.validated_data["hours_before"]
+            reminders = EventAttendanceService.send_reminders(event, hours_before)
+            response_data = {
+                "event_id": event_id,
+                "hours_before": hours_before,
+                "reminders_sent": len(reminders),
+                "attendees_to_remind": [
+                    {
+                        "user_id": r["user"].id,
+                        "username": r["user"].username,
+                        "email": r["email"],
+                    }
+                    for r in reminders
+                ],
+            }
+            return Response(
                 {
-                    "user_id": r["user"].id,
-                    "username": r["user"].username,
-                    "email": r["email"],
+                    "status": True,
+                    "message": "Reminders sent.",
+                    "data": response_data,
                 }
-                for r in reminders
-            ],
-        }
-
-        response_serializer = SendRemindersResponseSerializer(response_data)
-        return Response(response_serializer.data)
+            )
+        except Exception as e:
+            logger.exception("Error sending reminders")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

@@ -1,12 +1,11 @@
 import logging
 from django.core.cache import cache
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from global_utils.logger import log_audit_event
-from global_utils.response import CustomPagination, _error, _success
+from global_utils.response import CustomPagination
 from global_utils.security import get_client_ip
-
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.db import transaction
 
@@ -17,11 +16,91 @@ from notifications.serializers.email_template import (
 )
 
 # Constants for caching
-CACHE_TTL = 60 * 60 * 24  # 5 minutes
+CACHE_TTL = 60 * 60 * 24  # 24 hours
 CACHE_PREFIX = "api:emailtemplate:"
 
 logger = logging.getLogger(__name__)
 
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_templates(paginator, page, request):
+    """
+    Construct a paginated data dict that matches the expected structure.
+    """
+    serializer = EmailTemplateDisplaySerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
+
+class PaginatedEmailTemplateData(serializers.Serializer):
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = EmailTemplateDisplaySerializer(many=True)
+
+
+class EmailTemplateListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedEmailTemplateData()
+
+
+class EmailTemplateDetailResponseData(serializers.Serializer):
+    template = EmailTemplateDisplaySerializer()
+
+
+class EmailTemplateDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EmailTemplateDetailResponseData()
+
+
+class EmailTemplateCreateResponseData(serializers.Serializer):
+    template = EmailTemplateDisplaySerializer()
+
+
+class EmailTemplateCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EmailTemplateCreateResponseData()
+
+
+class EmailTemplateUpdateResponseData(serializers.Serializer):
+    template = EmailTemplateDisplaySerializer()
+
+
+class EmailTemplateUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EmailTemplateUpdateResponseData()
+
+
+class EmailTemplateDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 class EmailTemplateCRUD(APIView):
     pagination_class = CustomPagination
@@ -33,13 +112,17 @@ class EmailTemplateCRUD(APIView):
         return EmailTemplate.objects.none()
 
     def _get_list_cache_key(self, request):
-        """Generate cache key for email template list based on full path and staff status."""
         path = request.get_full_path()
         return f"{CACHE_PREFIX}list:staff={request.user.is_staff}:{path}"
 
     def _get_detail_cache_key(self, identifier, is_staff):
-        """Generate cache key for a single email template (by id)."""
         return f"{CACHE_PREFIX}detail:{identifier}:staff={is_staff}"
+
+    def invalidate_cache(self):
+        try:
+            cache.delete_pattern(f"{CACHE_PREFIX}*")
+        except AttributeError:
+            cache.clear()
 
     @extend_schema(
         tags=["email template's"],
@@ -58,14 +141,22 @@ class EmailTemplateCRUD(APIView):
                 required=False,
             ),
         ],
-        responses={200: EmailTemplateDisplaySerializer},
+        responses={
+            200: EmailTemplateListResponseSerializer,
+            200: EmailTemplateDetailResponseSerializer,  # For single
+        },
         description="List email templates. Staff only.",
     )
     def get(self, request, id=None):
         user = request.user
         if not user.is_staff:
-            return _error(
-                {"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+            return Response(
+                {
+                    "status": False,
+                    "message": "Permission denied.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         client_ip = get_client_ip(request)
@@ -90,13 +181,18 @@ class EmailTemplateCRUD(APIView):
                         ip_address=client_ip,
                         user_agent=user_agent,
                     )
-                    return _success(cached_data, status=status.HTTP_200_OK)
+                    return Response(
+                        {
+                            "status": True,
+                            "message": "Template retrieved.",
+                            "data": {"template": cached_data},
+                        },
+                        status=status.HTTP_200_OK,
+                    )
 
                 # Cache miss
                 obj = self.get_queryset().get(pk=id)
-                serializer = EmailTemplateDisplaySerializer(
-                    obj, context={"request": request}
-                )
+                serializer = EmailTemplateDisplaySerializer(obj, context={"request": request})
                 data = serializer.data
                 cache.set(cache_key, data, timeout=CACHE_TTL)
 
@@ -110,7 +206,14 @@ class EmailTemplateCRUD(APIView):
                     ip_address=client_ip,
                     user_agent=user_agent,
                 )
-                return _success(data, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Template retrieved.",
+                        "data": {"template": data},
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
             # List view
             cache_key = self._get_list_cache_key(request)
@@ -128,8 +231,14 @@ class EmailTemplateCRUD(APIView):
                     ip_address=client_ip,
                     user_agent=user_agent,
                 )
-                # Return as DRF Response to preserve pagination structure
-                return Response(cached_response, status=status.HTTP_200_OK)
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Templates retrieved.",
+                        "data": cached_response,
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
             # Cache miss: build queryset and paginate
             qs = self.get_queryset()
@@ -139,14 +248,10 @@ class EmailTemplateCRUD(APIView):
 
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(qs, request)
-            serializer = EmailTemplateDisplaySerializer(
-                page, many=True, context={"request": request}
-            )
-            paginated_response = paginator.get_paginated_response(serializer.data)
-            response_data = paginated_response.data
+            paginated_data = wrap_paginated_templates(paginator, page, request)
 
             # Cache the response data
-            cache.set(cache_key, response_data, timeout=CACHE_TTL)
+            cache.set(cache_key, paginated_data, timeout=CACHE_TTL)
 
             log_audit_event(
                 request=request,
@@ -158,7 +263,14 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return paginated_response
+            return Response(
+                {
+                    "status": True,
+                    "message": "Templates retrieved.",
+                    "data": paginated_data,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except EmailTemplate.DoesNotExist:
             log_audit_event(
@@ -171,8 +283,13 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error(
-                {"detail": "Template not found."}, status=status.HTTP_404_NOT_FOUND
+            return Response(
+                {
+                    "status": False,
+                    "message": "Template not found.",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
             logger.exception("EmailTemplate retrieval error")
@@ -186,22 +303,31 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error(
-                {"detail": "An error occurred."},
+            return Response(
+                {
+                    "status": False,
+                    "message": "An error occurred.",
+                    "data": None,
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @extend_schema(
         tags=["email template's"],
         request=EmailTemplateCreateSerializer,
-        responses={201: EmailTemplateDisplaySerializer},
+        responses={201: EmailTemplateCreateResponseSerializer},
         description="Create an email template. Staff only.",
     )
     def post(self, request):
         user = request.user
         if not user.is_staff:
-            return _error(
-                {"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+            return Response(
+                {
+                    "status": False,
+                    "message": "Permission denied.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         client_ip = get_client_ip(request)
@@ -226,10 +352,12 @@ class EmailTemplateCRUD(APIView):
                     ip_address=client_ip,
                     user_agent=user_agent,
                 )
-                return _success(
-                    EmailTemplateDisplaySerializer(
-                        obj, context={"request": request}
-                    ).data,
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Template created.",
+                        "data": {"template": EmailTemplateDisplaySerializer(obj, context={"request": request}).data},
+                    },
                     status=status.HTTP_201_CREATED,
                 )
         except Exception as e:
@@ -244,19 +372,31 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(
         tags=["email template's"],
         request=EmailTemplateCreateSerializer,
-        responses={200: EmailTemplateDisplaySerializer},
+        responses={200: EmailTemplateUpdateResponseSerializer},
         description="Full update of an email template. Staff only.",
     )
     def put(self, request, id):
         user = request.user
         if not user.is_staff:
-            return _error(
-                {"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+            return Response(
+                {
+                    "status": False,
+                    "message": "Permission denied.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         client_ip = get_client_ip(request)
@@ -265,9 +405,7 @@ class EmailTemplateCRUD(APIView):
 
         try:
             obj = self.get_queryset().get(pk=id)
-            original = EmailTemplateDisplaySerializer(
-                obj, context={"request": request}
-            ).data
+            original = EmailTemplateDisplaySerializer(obj, context={"request": request}).data
         except EmailTemplate.DoesNotExist:
             log_audit_event(
                 request=request,
@@ -279,8 +417,13 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error(
-                {"detail": "Template not found."}, status=status.HTTP_404_NOT_FOUND
+            return Response(
+                {
+                    "status": False,
+                    "message": "Template not found.",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         serializer = EmailTemplateCreateSerializer(
@@ -301,10 +444,12 @@ class EmailTemplateCRUD(APIView):
                     ip_address=client_ip,
                     user_agent=user_agent,
                 )
-                return _success(
-                    EmailTemplateDisplaySerializer(
-                        updated, context={"request": request}
-                    ).data,
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Template updated.",
+                        "data": {"template": EmailTemplateDisplaySerializer(updated, context={"request": request}).data},
+                    },
                     status=status.HTTP_200_OK,
                 )
         except Exception as e:
@@ -319,19 +464,31 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(
         tags=["email template's"],
         request=EmailTemplateCreateSerializer,
-        responses={200: EmailTemplateDisplaySerializer},
+        responses={200: EmailTemplateUpdateResponseSerializer},
         description="Partial update of an email template. Staff only.",
     )
     def patch(self, request, id):
         user = request.user
         if not user.is_staff:
-            return _error(
-                {"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+            return Response(
+                {
+                    "status": False,
+                    "message": "Permission denied.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         client_ip = get_client_ip(request)
@@ -340,9 +497,7 @@ class EmailTemplateCRUD(APIView):
 
         try:
             obj = self.get_queryset().get(pk=id)
-            original = EmailTemplateDisplaySerializer(
-                obj, context={"request": request}
-            ).data
+            original = EmailTemplateDisplaySerializer(obj, context={"request": request}).data
         except EmailTemplate.DoesNotExist:
             log_audit_event(
                 request=request,
@@ -354,8 +509,13 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error(
-                {"detail": "Template not found."}, status=status.HTTP_404_NOT_FOUND
+            return Response(
+                {
+                    "status": False,
+                    "message": "Template not found.",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         serializer = EmailTemplateCreateSerializer(
@@ -380,10 +540,12 @@ class EmailTemplateCRUD(APIView):
                     ip_address=client_ip,
                     user_agent=user_agent,
                 )
-                return _success(
-                    EmailTemplateDisplaySerializer(
-                        updated, context={"request": request}
-                    ).data,
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Template partially updated.",
+                        "data": {"template": EmailTemplateDisplaySerializer(updated, context={"request": request}).data},
+                    },
                     status=status.HTTP_200_OK,
                 )
         except Exception as e:
@@ -398,18 +560,30 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @extend_schema(
         tags=["email template's"],
-        responses={204: None},
+        responses={204: EmailTemplateDeleteResponseSerializer},
         description="Delete an email template. Staff only.",
     )
     def delete(self, request, id):
         user = request.user
         if not user.is_staff:
-            return _error(
-                {"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+            return Response(
+                {
+                    "status": False,
+                    "message": "Permission denied.",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         client_ip = get_client_ip(request)
@@ -419,9 +593,7 @@ class EmailTemplateCRUD(APIView):
         try:
             with transaction.atomic():
                 obj = self.get_queryset().get(pk=id)
-                obj_data = EmailTemplateDisplaySerializer(
-                    obj, context={"request": request}
-                ).data
+                obj_data = EmailTemplateDisplaySerializer(obj, context={"request": request}).data
                 obj.delete()
                 self.invalidate_cache()
                 log_audit_event(
@@ -434,7 +606,14 @@ class EmailTemplateCRUD(APIView):
                     ip_address=client_ip,
                     user_agent=user_agent,
                 )
-                return _success(status=status.HTTP_204_NO_CONTENT)
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Template deleted.",
+                        "data": None,
+                    },
+                    status=status.HTTP_204_NO_CONTENT,
+                )
         except EmailTemplate.DoesNotExist:
             log_audit_event(
                 request=request,
@@ -446,14 +625,31 @@ class EmailTemplateCRUD(APIView):
                 ip_address=client_ip,
                 user_agent=user_agent,
             )
-            return _error(
-                {"detail": "Template not found."}, status=status.HTTP_404_NOT_FOUND
+            return Response(
+                {
+                    "status": False,
+                    "message": "Template not found.",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
-
-    def invalidate_cache(self):
-        try:
-            # Clear all cache keys with our prefix
-            cache.delete_pattern(f"{CACHE_PREFIX}*")
-        except AttributeError:
-            # Fallback for backends that don't support delete_pattern
-            cache.clear()
+        except Exception as e:
+            logger.exception("EmailTemplate deletion error")
+            log_audit_event(
+                request=request,
+                user=user,
+                action_type=action_type,
+                model_name="EmailTemplate",
+                object_id=str(id),
+                changes={"error": str(e)},
+                ip_address=client_ip,
+                user_agent=user_agent,
+            )
+            return Response(
+                {
+                    "status": False,
+                    "message": "An error occurred.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

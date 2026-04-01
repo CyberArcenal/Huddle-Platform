@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from typing import Dict, Any, Optional
+from django.conf import settings
 
 from feed.serializers.base import PostStatsSerializers
 from feed.services.view import ViewService
@@ -93,7 +94,7 @@ class StoryCreateSerializer(serializers.Serializer):
     expires_in_hours = serializers.IntegerField(default=24, min_value=1, max_value=168)
 
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate story creation data"""
+        """Validate story creation data and file size"""
         story_type = data.get("story_type")
         content = data.get("content")
         media_file = data.get("media_file")
@@ -108,6 +109,21 @@ class StoryCreateSerializer(serializers.Serializer):
                 {"media_file": f"{story_type.capitalize()} stories require media"}
             )
 
+        # --- Added file size validation ---
+        if media_file:
+            if story_type == "image":
+                max_size = getattr(settings, "STORY_IMAGE_MAX_SIZE", 10 * 1024 * 1024)  # 10 MB default
+                if media_file.size > max_size:
+                    raise serializers.ValidationError(
+                        {"media_file": f"Image file too large (max {max_size // (1024 * 1024)} MB)."}
+                    )
+            elif story_type == "video":
+                max_size = getattr(settings, "STORY_VIDEO_MAX_SIZE", 50 * 1024 * 1024)  # 50 MB default
+                if media_file.size > max_size:
+                    raise serializers.ValidationError(
+                        {"media_file": f"Video file too large (max {max_size // (1024 * 1024)} MB)."}
+                    )
+
         return data
 
     def create(self, validated_data: Dict[str, Any]) -> Story:
@@ -119,7 +135,7 @@ class StoryCreateSerializer(serializers.Serializer):
             user=user,
             story_type=validated_data["story_type"],
             content=validated_data.get("content"),
-            media_file=validated_data.get("media_file"),  # <-- updated
+            media_file=validated_data.get("media_file"),
             expires_in_hours=validated_data.get("expires_in_hours", 24),
         )
 

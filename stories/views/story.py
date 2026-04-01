@@ -2,7 +2,7 @@ import logging
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -28,12 +28,12 @@ from stories.serializers.story import (
 from django.db import transaction
 from stories.services.story import StoryService
 from stories.services.story_feed import StoryFeedService
-from rest_framework import serializers
-from stories.serializers.story import StorySerializer
 from users.models.user import User
 
 
-# ----- New input serializers for endpoints that previously used raw dicts -----
+# ----------------------------------------------------------------------
+# Input serializers
+# ----------------------------------------------------------------------
 class ExtendStoryInputSerializer(serializers.Serializer):
     additional_hours = serializers.IntegerField(
         default=24,
@@ -50,30 +50,209 @@ class CleanupStoriesInputSerializer(serializers.Serializer):
     )
 
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_stories(paginator, page, request):
+    """
+    Construct a paginated data dict that matches PaginatedStoryData.
+    """
+    serializer = StorySerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
 
 
-# ----- Paginated response serializers for drf-spectacular -----
-class PaginatedStorySerializer(serializers.Serializer):
-    """Matches the custom pagination response from StoriesPagination"""
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
 
-    count = serializers.IntegerField()
+class PaginatedStoryData(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = StorySerializer(many=True)
 
 
-# --------------------------------------------------------------
+class StoryListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedStoryData()
+
+
+class StoryCreateResponseData(serializers.Serializer):
+    story = StorySerializer()
+
+
+class StoryCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryCreateResponseData()
+
+
+class StoryDetailResponseData(serializers.Serializer):
+    story = StorySerializer()
+
+
+class StoryDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryDetailResponseData()
+
+
+class StoryUpdateResponseData(serializers.Serializer):
+    story = StorySerializer()
+
+
+class StoryUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryUpdateResponseData()
+
+
+class StoryDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class StoryFeedListResponseData(serializers.Serializer):
+    feed = StoryFeedSerializer(many=True)
+
+
+class StoryFeedListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryFeedListResponseData()
+
+
+class StoryStatsResponseData(serializers.Serializer):
+    stats = StoryStatsSerializer()
+
+
+class StoryStatsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryStatsResponseData()
+
+
+class StoryViewCountResponseData(serializers.Serializer):
+    story_id = serializers.IntegerField()
+    view_count = serializers.IntegerField()
+    unique_viewers = serializers.IntegerField()
+
+
+class StoryViewCountResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryViewCountResponseData()
+
+
+class StoryDeactivateResponseData(serializers.Serializer):
+    status = serializers.CharField()
+
+
+class StoryDeactivateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryDeactivateResponseData()
+
+
+class StoryExtendResponseData(serializers.Serializer):
+    status = serializers.CharField()
+
+
+class StoryExtendResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryExtendResponseData()
+
+
+class StoryHighlightsResponseData(serializers.Serializer):
+    highlights = StoryHighlightSerializer(many=True)
+
+
+class StoryHighlightsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryHighlightsResponseData()
+
+
+class StoryRecommendationsResponseData(serializers.Serializer):
+    recommendations = StoryRecommendationSerializer(many=True)
+
+
+class StoryRecommendationsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryRecommendationsResponseData()
+
+
+class StoryCleanupResponseData(serializers.Serializer):
+    deactivated = serializers.IntegerField()
+    deleted = serializers.IntegerField()
+
+
+class StoryCleanupResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryCleanupResponseData()
+
+
+class MutualStoryViewsResponseData(serializers.Serializer):
+    total_views_by_me = serializers.IntegerField()
+    total_views_by_other = serializers.IntegerField()
+    mutual_stories_viewed = serializers.IntegerField()
+    my_unique_stories_viewed = serializers.IntegerField()
+    other_unique_stories_viewed = serializers.IntegerField()
+
+
+class MutualStoryViewsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = MutualStoryViewsResponseData()
+
+
+class PopularStorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    story_type = serializers.CharField()
+    content = serializers.CharField(allow_null=True, required=False)
+    media_url = serializers.CharField(allow_null=True, required=False)
+    created_at = serializers.DateTimeField()
+    expires_at = serializers.DateTimeField()
+    total_views = serializers.IntegerField()
+
+
+class PopularStoriesResponseData(serializers.Serializer):
+    stories = PopularStorySerializer(many=True)
+
+
+class PopularStoriesResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PopularStoriesResponseData()
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 logger = logging.getLogger(__name__)
 
 
 class StoryListView(APIView):
-    """Get active stories or create new story"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -89,23 +268,40 @@ class StoryListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedStorySerializer},
+        responses={200: StoryListResponseSerializer},
         description="Retrieve a paginated list of active stories (including those of followed users and public stories).",
     )
     def get(self, request):
-        """Get active stories"""
-        stories = StoryService.get_active_stories(user=request.user)
-        paginator = StoriesPagination()
-        page = paginator.paginate_queryset(stories, request)
-        serializer = StorySerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        try:
+            stories = StoryService.get_active_stories(user=request.user)
+            paginator = StoriesPagination()
+            page = paginator.paginate_queryset(stories, request)
+            paginated_data = wrap_paginated_stories(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Stories retrieved.",
+                    "data": paginated_data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error listing stories")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Storie's"],
-                 request={
+        request={
             'multipart/form-data': StoryCreateSerializer,
         },
-        responses={201: StorySerializer},
+        responses={201: StoryCreateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Create image story",
@@ -126,25 +322,31 @@ class StoryListView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        """Create new story"""
-        logger.debug(request.data)
         serializer = StoryCreateSerializer(
             data=request.data, context={"request": request}
         )
-        if serializer.is_valid(raise_exception=True):
-            story = serializer.save()
-            data = StorySerializer(story, context={"request": request}).data
-            # logger.debug(data)
+        if not serializer.is_valid():
             return Response(
-                data,
-                status=status.HTTP_201_CREATED,
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        story = serializer.save()
+        data = StorySerializer(story, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "Story created.",
+                "data": {"story": data},
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class StoryDetailView(APIView):
-    """Get, update, or delete a specific story"""
-
     permission_classes = [IsAuthenticated]
 
     def get_object(self, story_id):
@@ -155,21 +357,44 @@ class StoryDetailView(APIView):
 
     @extend_schema(
         tags=["Storie's"],
-        responses={200: StorySerializer}, description="Retrieve a single story by ID."
+        responses={200: StoryDetailResponseSerializer},
+        description="Retrieve a single story by ID.",
     )
     def get(self, request, story_id):
-        story = self.get_object(story_id)
-        if not story:
+        try:
+            story = self.get_object(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            data = StorySerializer(story, context={"request": request}).data
             return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": True,
+                    "message": "Story retrieved.",
+                    "data": {"story": data},
+                }
             )
-        serializer = StorySerializer(story, context={"request": request})
-        return Response(serializer.data)
+        except Exception as e:
+            logger.exception("Error retrieving story %s", story_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Storie's"],
         request=StoryUpdateSerializer,
-        responses={200: StorySerializer},
+        responses={200: StoryUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update story", value={"content": "Updated caption"}, request_only=True
@@ -179,54 +404,112 @@ class StoryDetailView(APIView):
     )
     @transaction.atomic
     def put(self, request, story_id):
-        story = self.get_object(story_id)
-        if not story:
-            return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        if story.user != request.user:
-            return Response(
-                {"error": "You can only update your own stories"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        serializer = StoryUpdateSerializer(data=request.data)
-        if serializer.is_valid():
+        try:
+            story = self.get_object(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if story.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only update your own stories",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            serializer = StoryUpdateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Validation error.",
+                        "data": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             updated_story = serializer.update(story, serializer.validated_data)
+            data = StorySerializer(updated_story, context={"request": request}).data
             return Response(
-                StorySerializer(updated_story, context={"request": request}).data
+                {
+                    "status": True,
+                    "message": "Story updated.",
+                    "data": {"story": data},
+                }
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception("Error updating story %s", story_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Storie's"],
-        responses={
-            200: {"type": "object", "properties": {"status": {"type": "string"}}}
-        },
+        responses={200: StoryDeleteResponseSerializer},
         description="Permanently delete a story. Only the owner can delete.",
     )
     @transaction.atomic
     def delete(self, request, story_id):
-        story = self.get_object(story_id)
-        if not story:
+        try:
+            story = self.get_object(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if story.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only delete your own stories",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if StoryService.delete_story(story):
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Story deleted.",
+                        "data": None,
+                    }
+                )
             return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": False,
+                    "message": "Failed to delete story",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        if story.user != request.user:
+        except Exception as e:
+            logger.exception("Error deleting story %s", story_id)
             return Response(
-                {"error": "You can only delete your own stories"},
-                status=status.HTTP_403_FORBIDDEN,
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        if StoryService.delete_story(story):
-            return Response({"status": "Story deleted"})
-        return Response(
-            {"error": "Failed to delete story"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
 
 
 class StoryFeedView(APIView):
-    """Get personalized story feed (structured, not paginated)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -251,105 +534,173 @@ class StoryFeedView(APIView):
                 required=False,
             ),
         ],
-        responses={200: StoryFeedSerializer(many=True)},
+        responses={200: StoryFeedListResponseSerializer},
         description="Generate a personalized story feed grouped by user.",
     )
     def get(self, request):
-        include_own = request.query_params.get("include_own", "true").lower() == "true"
-        limit_per_user = int(request.query_params.get("limit_per_user", 3))
-        max_users = int(request.query_params.get("max_users", 20))
+        try:
+            include_own = request.query_params.get("include_own", "true").lower() == "true"
+            limit_per_user = int(request.query_params.get("limit_per_user", 3))
+            max_users = int(request.query_params.get("max_users", 20))
 
-        feed = StoryFeedService.generate_story_feed(
-            user=request.user,
-            include_own_stories=include_own,
-            limit_per_user=limit_per_user,
-            max_users=max_users,
-        )
+            feed = StoryFeedService.generate_story_feed(
+                user=request.user,
+                include_own_stories=include_own,
+                limit_per_user=limit_per_user,
+                max_users=max_users,
+            )
 
-        serializer = StoryFeedSerializer(feed, many=True, context={'request': request})
-        return Response(serializer.data)
+            serializer = StoryFeedSerializer(feed, many=True, context={'request': request})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Story feed retrieved.",
+                    "data": {"feed": serializer.data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error generating story feed")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoryStatsView(APIView):
-    """Get story statistics"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Storie's"],
-        responses={200: StoryStatsSerializer},
+        responses={200: StoryStatsResponseSerializer},
         description="Get statistics about the current user's stories (total, views, etc.).",
     )
     def get(self, request):
-        stats = StoryService.get_story_stats(request.user)
-        serializer = StoryStatsSerializer(stats)
-        return Response(serializer.data)
+        try:
+            stats = StoryService.get_story_stats(request.user)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Story statistics retrieved.",
+                    "data": {"stats": stats},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving story stats")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoryViewCountView(APIView):
-    """Get view count for a story"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Storie's"],
-        responses={200: StoryViewCountSerializer},
+        responses={200: StoryViewCountResponseSerializer},
         description="Get total view count and unique viewers for a story. Accessible if the story is visible to the user.",
     )
     def get(self, request, story_id):
-        story = StoryService.get_story_by_id(story_id)
-        if not story:
+        try:
+            story = StoryService.get_story_by_id(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            data = {
+                "story_id": story.id,
+                "view_count": ViewService.get_view_count(story),
+                "unique_viewers": ViewService.get_unique_viewers(story),
+            }
             return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": True,
+                    "message": "Story view count retrieved.",
+                    "data": data,
+                }
             )
-        data = {
-            "story_id": story.id,
-            "view_count": ViewService.get_view_count(story),
-            "unique_viewers": ViewService.get_unique_viewers(story),
-        }
-        serializer = StoryViewCountSerializer(data)
-        return Response(serializer.data)
+        except Exception as e:
+            logger.exception("Error retrieving view count for story %s", story_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoryDeactivateView(APIView):
-    """Deactivate a story (soft delete)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Storie's"],
-        responses={
-            200: {"type": "object", "properties": {"status": {"type": "string"}}}
-        },
+        responses={200: StoryDeactivateResponseSerializer},
         description="Deactivate a story (soft delete). The story will no longer appear in feeds. Only the owner can deactivate.",
     )
     @transaction.atomic
     def post(self, request, story_id):
-        story = StoryService.get_story_by_id(story_id)
-        if not story:
+        try:
+            story = StoryService.get_story_by_id(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if story.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only deactivate your own stories",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            StoryService.deactivate_story(story)
             return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": True,
+                    "message": "Story deactivated.",
+                    "data": {"status": "deactivated"},
+                }
             )
-        if story.user != request.user:
+        except Exception as e:
+            logger.exception("Error deactivating story %s", story_id)
             return Response(
-                {"error": "You can only deactivate your own stories"},
-                status=status.HTTP_403_FORBIDDEN,
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        StoryService.deactivate_story(story)
-        return Response({"status": "Story deactivated"})
 
 
 class StoryExtendView(APIView):
-    """Extend story expiration"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Storie's"],
-        request=ExtendStoryInputSerializer,  # ✅ Now using proper serializer
-        responses={
-            200: {"type": "object", "properties": {"status": {"type": "string"}}}
-        },
+        request=ExtendStoryInputSerializer,
+        responses={200: StoryExtendResponseSerializer},
         examples=[
             OpenApiExample(
                 "Extend request", value={"additional_hours": 12}, request_only=True
@@ -359,29 +710,60 @@ class StoryExtendView(APIView):
     )
     @transaction.atomic
     def post(self, request, story_id):
-        story = StoryService.get_story_by_id(story_id)
-        if not story:
-            return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        if story.user != request.user:
-            return Response(
-                {"error": "You can only extend your own stories"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        try:
+            story = StoryService.get_story_by_id(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            if story.user != request.user:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You can only extend your own stories",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-        serializer = ExtendStoryInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer = ExtendStoryInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Validation error.",
+                        "data": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        additional_hours = serializer.validated_data["additional_hours"]
-        StoryService.extend_story_life(story, additional_hours=additional_hours)
-        return Response({"status": f"Story extended by {additional_hours} hours"})
+            additional_hours = serializer.validated_data["additional_hours"]
+            StoryService.extend_story_life(story, additional_hours=additional_hours)
+            return Response(
+                {
+                    "status": True,
+                    "message": f"Story extended by {additional_hours} hours.",
+                    "data": {"status": f"Story extended by {additional_hours} hours"},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error extending story %s", story_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserStoriesView(APIView):
-    """Get stories for a specific user"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -403,32 +785,45 @@ class UserStoriesView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedStorySerializer},
+        responses={200: StoryListResponseSerializer},
         description="Retrieve stories posted by a specific user (paginated).",
     )
     def get(self, request, user_id=None):
-        target_user_id = user_id or request.user.id
-        from users.models import User
-        from django.shortcuts import get_object_or_404
+        try:
+            target_user_id = user_id or request.user.id
+            user = get_object_or_404(User, id=target_user_id)
 
-        user = get_object_or_404(User, id=target_user_id)
+            include_expired = (
+                request.query_params.get("include_expired", "false").lower() == "true"
+            )
 
-        include_expired = (
-            request.query_params.get("include_expired", "false").lower() == "true"
-        )
+            stories = StoryService.get_user_stories(
+                user=user, include_expired=include_expired
+            )
+            paginator = StoriesPagination()
+            page = paginator.paginate_queryset(stories, request)
+            paginated_data = wrap_paginated_stories(paginator, page, request)
 
-        stories = StoryService.get_user_stories(
-            user=user, include_expired=include_expired
-        )
-        paginator = StoriesPagination()
-        page = paginator.paginate_queryset(stories, request)
-        serializer = StorySerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+            return Response(
+                {
+                    "status": True,
+                    "message": "User stories retrieved.",
+                    "data": paginated_data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving user stories for user %s", user_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class FollowingStoriesView(APIView):
-    """Get stories from followed users (structured feed, not paginated)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -441,20 +836,34 @@ class FollowingStoriesView(APIView):
                 required=False,
             ),
         ],
-        responses={200: StoryFeedSerializer(many=True)},
+        responses={200: StoryFeedListResponseSerializer},
         description="Get a list of stories from users followed by the current user, grouped by user.",
     )
     def get(self, request):
-        limit = int(request.query_params.get("limit", 50))
-
-        stories = StoryService.get_following_stories(user=request.user, limit=limit)
-        serializer = StoryFeedSerializer(stories, many=True)
-        return Response(serializer.data)
+        try:
+            limit = int(request.query_params.get("limit", 50))
+            stories = StoryService.get_following_stories(user=request.user, limit=limit)
+            serializer = StoryFeedSerializer(stories, many=True, context={'request': request})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Following stories retrieved.",
+                    "data": {"feed": serializer.data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving following stories")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoryHighlightsView(APIView):
-    """Get story highlights (limited list, not paginated)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -473,23 +882,38 @@ class StoryHighlightsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: StoryHighlightSerializer(many=True)},
+        responses={200: StoryHighlightsResponseSerializer},
         description="Get highlighted stories (most viewed) for the current user.",
     )
     def get(self, request):
-        days = int(request.query_params.get("days", 7))
-        limit = int(request.query_params.get("limit", 10))
+        try:
+            days = int(request.query_params.get("days", 7))
+            limit = int(request.query_params.get("limit", 10))
 
-        highlights = StoryFeedService.get_story_highlights(
-            user=request.user, days=days, limit=limit
-        )
-        serializer = StoryHighlightSerializer(highlights, many=True)
-        return Response(serializer.data)
+            highlights = StoryFeedService.get_story_highlights(
+                user=request.user, days=days, limit=limit
+            )
+            serializer = StoryHighlightSerializer(highlights, many=True, context={'request': request})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Story highlights retrieved.",
+                    "data": {"highlights": serializer.data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving story highlights")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoryRecommendationsView(APIView):
-    """Get story recommendations (limited list, not paginated)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -502,27 +926,42 @@ class StoryRecommendationsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: StoryRecommendationSerializer(many=True)},
+        responses={200: StoryRecommendationsResponseSerializer},
         description="Get personalized story recommendations for the current user.",
     )
     def get(self, request):
-        limit = int(request.query_params.get("limit", 5))
+        try:
+            limit = int(request.query_params.get("limit", 5))
 
-        recommendations = StoryFeedService.get_story_recommendations(
-            user=request.user, limit=limit
-        )
-        serializer = StoryRecommendationSerializer(recommendations, many=True)
-        return Response(serializer.data)
+            recommendations = StoryFeedService.get_story_recommendations(
+                user=request.user, limit=limit
+            )
+            serializer = StoryRecommendationSerializer(recommendations, many=True, context={'request': request})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Story recommendations retrieved.",
+                    "data": {"recommendations": serializer.data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving story recommendations")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoryCleanupView(APIView):
-    """Cleanup expired stories (admin only)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Storie's"],
-        request=CleanupStoriesInputSerializer,  # ✅ Now using proper serializer
+        request=CleanupStoriesInputSerializer,
         responses={200: StoryCleanupResponseSerializer},
         examples=[
             OpenApiExample(
@@ -535,25 +974,50 @@ class StoryCleanupView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        if not request.user.is_staff:
+        try:
+            if not request.user.is_staff:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Only staff can perform cleanup",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            serializer = CleanupStoriesInputSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Validation error.",
+                        "data": serializer.errors,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            deactivate_only = serializer.validated_data["deactivate_only"]
+            stats = StoryService.cleanup_expired_stories(deactivate_only=deactivate_only)
             return Response(
-                {"error": "Only staff can perform cleanup"},
-                status=status.HTTP_403_FORBIDDEN,
+                {
+                    "status": True,
+                    "message": "Cleanup completed.",
+                    "data": stats,
+                }
             )
-
-        serializer = CleanupStoriesInputSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        deactivate_only = serializer.validated_data["deactivate_only"]
-        stats = StoryService.cleanup_expired_stories(deactivate_only=deactivate_only)
-        output_serializer = StoryCleanupResponseSerializer(stats)
-        return Response(output_serializer.data)
+        except Exception as e:
+            logger.exception("Error cleaning up stories")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class StoriesByTypeView(APIView):
-    """Get stories by type"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -575,43 +1039,39 @@ class StoriesByTypeView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedStorySerializer},
+        responses={200: StoryListResponseSerializer},
         description="Retrieve stories filtered by type (image, video, text), with optional active filter and pagination.",
     )
     def get(self, request, story_type):
-        active_only = request.query_params.get("active_only", "true").lower() == "true"
+        try:
+            active_only = request.query_params.get("active_only", "true").lower() == "true"
+            stories = StoryService.get_stories_by_type(
+                story_type=story_type, active_only=active_only
+            )
+            paginator = StoriesPagination()
+            page = paginator.paginate_queryset(stories, request)
+            paginated_data = wrap_paginated_stories(paginator, page, request)
 
-        stories = StoryService.get_stories_by_type(
-            story_type=story_type, active_only=active_only
-        )
-        paginator = StoriesPagination()
-        page = paginator.paginate_queryset(stories, request)
-        serializer = StorySerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Stories retrieved.",
+                    "data": paginated_data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving stories by type %s", story_type)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
-# ------------------ Response Serializer ------------------
-class StoryViewStatsResponseSerializer(serializers.Serializer):
-    total_views = serializers.IntegerField()
-    unique_creators_viewed = serializers.IntegerField()
-    total_stories_viewed = serializers.IntegerField()
-    active_stories_viewed = serializers.IntegerField()
-    expired_stories_viewed = serializers.IntegerField()
-
-
-# ------------------ Response Serializer ------------------
-class MutualStoryViewsResponseSerializer(serializers.Serializer):
-    total_views_by_me = serializers.IntegerField()
-    total_views_by_other = serializers.IntegerField()
-    mutual_stories_viewed = serializers.IntegerField()
-    my_unique_stories_viewed = serializers.IntegerField()
-    other_unique_stories_viewed = serializers.IntegerField()
-
-
-# ------------------ API View ------------------
 class MutualStoryViewsView(APIView):
-    """Get mutual story viewing statistics between two users"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -620,30 +1080,29 @@ class MutualStoryViewsView(APIView):
         description="Get mutual story viewing data between the current user and another user.",
     )
     def get(self, request, other_user_id):
-        other_user = get_object_or_404(User, id=other_user_id)
-        stats = ViewService.get_mutual_story_views(request.user, other_user)
-        serializer = MutualStoryViewsResponseSerializer(stats)
-        return Response(serializer.data)
+        try:
+            other_user = get_object_or_404(User, id=other_user_id)
+            stats = ViewService.get_mutual_story_views(request.user, other_user)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Mutual story views retrieved.",
+                    "data": stats,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving mutual story views for user %s", other_user_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
-
-# ------------------ Response Serializer ------------------
-class PopularStorySerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    user_id = serializers.IntegerField()
-    username = serializers.CharField()
-    story_type = serializers.CharField()
-    content = serializers.CharField(allow_null=True, required=False)
-    media_url = serializers.CharField(allow_null=True, required=False)
-    created_at = serializers.DateTimeField()
-    expires_at = serializers.DateTimeField()
-    total_views = serializers.IntegerField()
-
-
-# ------------------ API View ------------------
 class PopularStoriesView(APIView):
-    """Get popular stories (limited list, not paginated)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -662,14 +1121,30 @@ class PopularStoriesView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PopularStorySerializer(many=True)},
+        responses={200: PopularStoriesResponseSerializer},
         description="Get the most viewed stories in the last N hours.",
     )
     def get(self, request):
-        hours = int(request.query_params.get("hours", 24))
-        limit = int(request.query_params.get("limit", 20))
+        try:
+            hours = int(request.query_params.get("hours", 24))
+            limit = int(request.query_params.get("limit", 20))
 
-        popular_stories = StoryService.get_popular_stories(hours=hours, limit=limit)
-        serializer = PopularStorySerializer(popular_stories, many=True)
-        return Response(serializer.data)
-
+            popular_stories = StoryService.get_popular_stories(hours=hours, limit=limit)
+            serializer = PopularStorySerializer(popular_stories, many=True, context={'request': request})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Popular stories retrieved.",
+                    "data": {"stories": serializer.data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving popular stories")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

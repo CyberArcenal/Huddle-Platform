@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, serializers
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate
 from django.db import transaction
@@ -24,20 +24,173 @@ from ..serializers.user.base import (
     UserStatusSerializer,
 )
 from ..models import User, UserStatus
-from rest_framework import serializers
 
-# ----- Paginated response serializers for drf-spectacular -----
-class PaginatedUserListSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_users(paginator, page, request):
+    """
+    Construct a paginated data dict that matches PaginatedUserListData.
+    """
+    serializer = UserMinimalSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
+
+class PaginatedUserListData(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = UserMinimalSerializer(many=True)
 
 
-# ----- New input serializer for UserDeactivateView -----
+class UserRegisterResponseData(serializers.Serializer):
+    message = serializers.CharField()
+    user_id = serializers.IntegerField()
+
+
+class UserRegisterResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserRegisterResponseData(allow_null=True)
+
+
+class UserProfileResponseData(serializers.Serializer):
+    user = UserProfileSerializer()
+
+
+class UserProfileResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserProfileResponseData()
+
+
+class UserUpdateResponseData(serializers.Serializer):
+    user = UserProfileSerializer()
+
+
+class UserUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserUpdateResponseData()
+
+
+class UserDetailResponseData(serializers.Serializer):
+    user = UserProfileSerializer()
+
+
+class UserDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserDetailResponseData(allow_null=True)
+
+
+class UserSearchResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedUserListData()
+
+
+class UserStatusUpdateResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    status = serializers.CharField()
+
+
+class UserStatusUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserStatusUpdateResponseData()
+
+
+class UserDeactivateResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    status = serializers.CharField()
+
+
+class UserDeactivateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserDeactivateResponseData()
+
+
+class VerifyUserResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    is_verified = serializers.BooleanField()
+
+
+class VerifyUserResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = VerifyUserResponseData()
+
+
+class CheckUsernameResponseData(serializers.Serializer):
+    available = serializers.BooleanField()
+    username = serializers.CharField()
+    message = serializers.CharField()
+
+
+class CheckUsernameResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = CheckUsernameResponseData()
+
+
+class CheckEmailResponseData(serializers.Serializer):
+    available = serializers.BooleanField()
+    email = serializers.CharField()
+    message = serializers.CharField()
+
+
+class CheckEmailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = CheckEmailResponseData()
+
+
+class ResendVerificationResponseData(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class ResendVerificationResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ResendVerificationResponseData(allow_null=True)
+
+
+class EmailVerificationResponseData(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class EmailVerificationResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EmailVerificationResponseData()
+
+
+# ----------------------------------------------------------------------
+# Input serializers
+# ----------------------------------------------------------------------
 class UserDeactivateInputSerializer(serializers.Serializer):
     password = serializers.CharField(
         write_only=True, help_text="Current password for confirmation"
@@ -45,21 +198,24 @@ class UserDeactivateInputSerializer(serializers.Serializer):
     confirm = serializers.BooleanField(help_text="Must be true to confirm deactivation")
 
 
-# -------------------------------------------------------
-class UserRegisterResponse(serializers.Serializer):
-    message = serializers.StringRelatedField()
-    user = UserProfileSerializer(read_only=True)
+class ResendSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=False)
+    user_id = serializers.IntegerField(required=False)
+
+    def validate(self, attrs):
+        if not attrs.get('email') and not attrs.get('user_id'):
+            raise serializers.ValidationError("Either email or user_id is required")
+        return attrs
 
 
-# users/views/user.py
+class VerifyEmailSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(required=True)
+    otp_code = serializers.CharField(max_length=6, min_length=6, required=True)
 
-from users.services.otp_request import OtpRequestService
-from notifications.services.notification_queue import NotificationQueueService
 
-from users.services.otp_request import OtpRequestService
-from notifications.services.notification_queue import NotificationQueueService
-
-# users/views/user.py
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 class UserRegisterView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -67,7 +223,7 @@ class UserRegisterView(APIView):
     @extend_schema(
         tags=["User's"],
         request=UserRegisterSerializer,
-        responses={201: serializers.DictField()},
+        responses={201: UserRegisterResponseSerializer, 200: UserRegisterResponseSerializer},
         description="Register a new user or resend verification for inactive accounts.",
     )
     @transaction.atomic
@@ -78,6 +234,9 @@ class UserRegisterView(APIView):
         # Handle existing inactive user (resend OTP)
         if existing_user and not existing_user.is_active:
             try:
+                from users.services.otp_request import OtpRequestService
+                from notifications.services.notification_queue import NotificationQueueService
+
                 otp_request = OtpRequestService.create_otp_request(
                     user=existing_user,
                     email=email,
@@ -93,22 +252,31 @@ class UserRegisterView(APIView):
                 )
                 return Response(
                     {
+                        "status": True,
                         "message": "Account not yet verified. A new verification email has been sent.",
-                        "user_id": existing_user.id,
+                        "data": {"message": "Verification email sent", "user_id": existing_user.id},
                     },
                     status=status.HTTP_200_OK
                 )
             except Exception as e:
-                LOGGER.exception("Failed to resend OTP for inactive user")
+                logger.exception("Failed to resend OTP for inactive user")
                 return Response(
-                    {"error": "Failed to send verification email. Please try again later."},
+                    {
+                        "status": False,
+                        "message": "Failed to send verification email. Please try again later.",
+                        "data": None,
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
 
         # If existing user is active, return error
         if existing_user and existing_user.is_active:
             return Response(
-                {"error": "Email already registered."},
+                {
+                    "status": False,
+                    "message": "Email already registered.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -117,6 +285,9 @@ class UserRegisterView(APIView):
         if serializer.is_valid():
             try:
                 with transaction.atomic():
+                    from users.services.otp_request import OtpRequestService
+                    from notifications.services.notification_queue import NotificationQueueService
+
                     user = serializer.save()
                     otp_request = OtpRequestService.create_otp_request(
                         user=user,
@@ -133,48 +304,67 @@ class UserRegisterView(APIView):
                     )
                     return Response(
                         {
+                            "status": True,
                             "message": "Verification email sent. Please check your inbox.",
-                            "user_id": user.id,
+                            "data": {"message": "Verification email sent", "user_id": user.id},
                         },
                         status=status.HTTP_201_CREATED,
                     )
             except Exception as e:
-                LOGGER.exception("Registration failed for new user")
+                logger.exception("Registration failed for new user")
                 return Response(
-                    {"error": "Registration failed. Please try again later."},
+                    {
+                        "status": False,
+                        "message": "Registration failed. Please try again later.",
+                        "data": None,
+                    },
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         else:
             # Validation errors from the serializer
             return Response(
-                {"error": "Validation failed", "details": serializer.errors},
+                {
+                    "status": False,
+                    "message": "Validation failed",
+                    "data": serializer.errors,
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
 
-class UserProfileResponse(serializers.Serializer):
-    message = serializers.StringRelatedField()
-    user = UserProfileSerializer(read_only=True)
-
-
 class UserProfileView(APIView):
-    """View for user profile operations"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User's"],
-        responses={200: UserProfileSerializer},
+        responses={200: UserProfileResponseSerializer},
         description="Get the profile of the currently authenticated user.",
     )
     def get(self, request):
-        serializer = UserProfileSerializer(request.user, context={"request": request})
-        return Response(serializer.data)
+        try:
+            serializer = UserProfileSerializer(request.user, context={"request": request})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Profile retrieved.",
+                    "data": {"user": serializer.data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving user profile")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["User's"],
         request=UserProfileSchemaUpdateSerializer,
-        responses={200: UserProfileResponse},
+        responses={200: UserUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update profile",
@@ -189,7 +379,6 @@ class UserProfileView(APIView):
         serializer = UserUpdateSerializer(
             request.user, data=request.data, partial=True, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 user = serializer.save()
@@ -205,51 +394,74 @@ class UserProfileView(APIView):
                 )
 
                 data = UserProfileSerializer(user, context={"request": request}).data
-
                 return Response(
                     {
+                        "status": True,
                         "message": "Profile updated successfully",
-                        "user": data,
+                        "data": {"user": data},
                     }
                 )
-
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+                logger.exception("Error updating profile")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class UserDetailView(APIView):
-    """View for retrieving specific user profiles"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User's"],
-        responses={200: UserProfileSerializer},
+        responses={200: UserDetailResponseSerializer},
         description="Retrieve a user's public profile by ID.",
     )
     def get(self, request, user_id):
         try:
             user = UserService.get_user_by_id(user_id)
-
             if not user or user.status != UserStatus.ACTIVE:
                 return Response(
-                    {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
+                    {
+                        "status": False,
+                        "message": "User not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
                 )
-
             serializer = UserProfileSerializer(user, context={"request": request})
-            return Response(serializer.data)
-
+            return Response(
+                {
+                    "status": True,
+                    "message": "User profile retrieved.",
+                    "data": {"user": serializer.data},
+                }
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Error retrieving user detail")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserSearchView(APIView):
-    """View for searching users"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -271,43 +483,52 @@ class UserSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedUserListSerializer},
+        responses={200: UserSearchResponseSerializer},
         description="Search users by username, first name, or last name.",
     )
     def get(self, request):
         query = request.query_params.get("q", "").strip()
         if not query or len(query) < 2:
             return Response(
-                {"error": "Search query must be at least 2 characters"},
+                {
+                    "status": False,
+                    "message": "Search query must be at least 2 characters",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             users = UserService.search_users(query)
             paginator = UsersPagination()
             page = paginator.paginate_queryset(users, request)
-            serializer = UserMinimalSerializer(
-                page, many=True, context={"request": request}
+            paginated_data = wrap_paginated_users(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Search results retrieved.",
+                    "data": paginated_data,
+                }
             )
-            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class UserStatusUpdateResponse(serializers.Serializer):
-    message = serializers.StringRelatedField()
-    user_id = serializers.IntegerField()
-    status = serializers.StringRelatedField()
+            logger.exception("Error searching users")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class UserStatusUpdateView(APIView):
-    """View for updating user status (admin/self)"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User's"],
         request=UserStatusSerializer,
-        responses={200: UserStatusUpdateResponse},
+        responses={200: UserStatusUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update status",
@@ -320,16 +541,18 @@ class UserStatusUpdateView(APIView):
     @transaction.atomic
     def post(self, request):
         serializer = UserStatusSerializer(data=request.data)
-
         if serializer.is_valid():
             try:
                 user_id = request.data.get("user_id", request.user.id)
-
                 if user_id != request.user.id and not request.user.is_staff:
                     return Response(
-                        {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
+                        {
+                            "status": False,
+                            "message": "Permission denied",
+                            "data": None,
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
                     )
-
                 if user_id == request.user.id:
                     user = request.user
                 else:
@@ -347,29 +570,41 @@ class UserStatusUpdateView(APIView):
 
                 return Response(
                     {
+                        "status": True,
                         "message": f"User status updated to {updated_user.status}",
-                        "user_id": updated_user.id,
-                        "status": updated_user.status,
+                        "data": {
+                            "user_id": updated_user.id,
+                            "status": updated_user.status,
+                        },
                     }
                 )
-
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+                logger.exception("Error updating user status")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class UserDeactivateView(APIView):
-    """View for deactivating user account"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User's"],
         request=UserDeactivateInputSerializer,
-        responses={200: UserStatusUpdateResponse},
+        responses={200: UserDeactivateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Deactivate request",
@@ -383,7 +618,14 @@ class UserDeactivateView(APIView):
     def post(self, request):
         input_serializer = UserDeactivateInputSerializer(data=request.data)
         if not input_serializer.is_valid():
-            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": input_serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         data = input_serializer.validated_data
         password = data["password"]
@@ -391,48 +633,61 @@ class UserDeactivateView(APIView):
 
         if not request.user.check_password(password):
             return Response(
-                {"error": "Invalid password"}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": False,
+                    "message": "Invalid password",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not confirm:
             return Response(
-                {"error": "Please confirm deactivation"},
+                {
+                    "status": False,
+                    "message": "Please confirm deactivation",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = UserService.deactivate_user(request.user)
-
-        SecurityLogService.create_log(
-            user=user,
-            event_type="account_deactivated",
-            ip_address=request.META.get("REMOTE_ADDR"),
-            user_agent=request.META.get("HTTP_USER_AGENT"),
-            details="User deactivated account",
-        )
-
-        return Response(
-            {
-                "message": "Account deactivated successfully",
-                "user_id": user.id,
-                "status": user.status,
-            }
-        )
-
-
-class VerifyUserResponse(serializers.Serializer):
-    message = serializers.StringRelatedField()
-    user_id = serializers.IntegerField()
-    is_verified = serializers.BooleanField()
+        try:
+            user = UserService.deactivate_user(request.user)
+            SecurityLogService.create_log(
+                user=user,
+                event_type="account_deactivated",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT"),
+                details="User deactivated account",
+            )
+            return Response(
+                {
+                    "status": True,
+                    "message": "Account deactivated successfully",
+                    "data": {
+                        "user_id": user.id,
+                        "status": user.status,
+                    },
+                }
+            )
+        except Exception as e:
+            logger.exception("Error deactivating user")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class VerifyUserView(APIView):
-    """View for verifying user account"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User's"],
-        responses={200: VerifyUserResponse},
+        responses={200: VerifyUserResponseSerializer},
         description="Mark the current user's account as verified. (Typically called after email confirmation.)",
     )
     @transaction.atomic
@@ -450,25 +705,27 @@ class VerifyUserView(APIView):
 
             return Response(
                 {
+                    "status": True,
                     "message": "Account verified successfully",
-                    "user_id": user.id,
-                    "is_verified": user.is_verified,
+                    "data": {
+                        "user_id": user.id,
+                        "is_verified": user.is_verified,
+                    },
                 }
             )
-
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class CheckUsernameResponse(serializers.Serializer):
-    available = serializers.BooleanField()
-    username = serializers.StringRelatedField()
-    message = serializers.StringRelatedField()
+            logger.exception("Error verifying user")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class CheckUsernameView(APIView):
-    """View for checking username availability"""
-
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
@@ -481,23 +738,31 @@ class CheckUsernameView(APIView):
                 required=True,
             ),
         ],
-        responses={200: CheckUsernameResponse},
+        responses={200: CheckUsernameResponseSerializer},
         examples=[
             OpenApiExample(
                 "Username available",
                 value={
-                    "available": True,
-                    "username": "newuser",
+                    "status": True,
                     "message": "Username is available",
+                    "data": {
+                        "available": True,
+                        "username": "newuser",
+                        "message": "Username is available",
+                    },
                 },
                 response_only=True,
             ),
             OpenApiExample(
                 "Username taken",
                 value={
-                    "available": False,
-                    "username": "existing",
+                    "status": True,
                     "message": "Username is taken",
+                    "data": {
+                        "available": False,
+                        "username": "existing",
+                        "message": "Username is taken",
+                    },
                 },
                 response_only=True,
             ),
@@ -506,56 +771,73 @@ class CheckUsernameView(APIView):
     )
     def get(self, request):
         username = request.query_params.get("username", "").strip().lower()
-
         if not username:
             return Response(
-                {"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": False,
+                    "message": "Username is required",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if len(username) < 3:
             return Response(
                 {
-                    "available": False,
+                    "status": True,
                     "message": "Username must be at least 3 characters",
+                    "data": {
+                        "available": False,
+                        "username": username,
+                        "message": "Username must be at least 3 characters",
+                    },
                 }
             )
 
         if len(username) > 30:
             return Response(
-                {"available": False, "message": "Username cannot exceed 30 characters"}
+                {
+                    "status": True,
+                    "message": "Username cannot exceed 30 characters",
+                    "data": {
+                        "available": False,
+                        "username": username,
+                        "message": "Username cannot exceed 30 characters",
+                    },
+                }
             )
 
         if not username.replace("_", "").replace(".", "").isalnum():
             return Response(
                 {
-                    "available": False,
+                    "status": True,
                     "message": "Username can only contain letters, numbers, underscores and dots",
+                    "data": {
+                        "available": False,
+                        "username": username,
+                        "message": "Username can only contain letters, numbers, underscores and dots",
+                    },
                 }
             )
 
         user = UserService.get_user_by_username(username)
         available = user is None
+        message = "Username is available" if available else "Username is taken"
 
         return Response(
             {
-                "available": available,
-                "username": username,
-                "message": (
-                    "Username is available" if available else "Username is taken"
-                ),
+                "status": True,
+                "message": message,
+                "data": {
+                    "available": available,
+                    "username": username,
+                    "message": message,
+                },
             }
         )
 
 
-class CheckEmailResponse(serializers.Serializer):
-    available = serializers.BooleanField()
-    email = serializers.StringRelatedField()
-    message = serializers.StringRelatedField()
-
-
 class CheckEmailView(APIView):
-    """View for checking email availability"""
-
     permission_classes = [permissions.AllowAny]
 
     @extend_schema(
@@ -565,23 +847,31 @@ class CheckEmailView(APIView):
                 name="email", type=str, description="Email to check", required=True
             ),
         ],
-        responses={200: CheckEmailResponse},
+        responses={200: CheckEmailResponseSerializer},
         examples=[
             OpenApiExample(
                 "Email available",
                 value={
-                    "available": True,
-                    "email": "new@example.com",
+                    "status": True,
                     "message": "Email is available",
+                    "data": {
+                        "available": True,
+                        "email": "new@example.com",
+                        "message": "Email is available",
+                    },
                 },
                 response_only=True,
             ),
             OpenApiExample(
                 "Email taken",
                 value={
-                    "available": False,
-                    "email": "existing@example.com",
+                    "status": True,
                     "message": "Email is already registered",
+                    "data": {
+                        "available": False,
+                        "email": "existing@example.com",
+                        "message": "Email is already registered",
+                    },
                 },
                 response_only=True,
             ),
@@ -590,60 +880,66 @@ class CheckEmailView(APIView):
     )
     def get(self, request):
         email = request.query_params.get("email", "").strip().lower()
-
         if not email:
             return Response(
-                {"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": False,
+                    "message": "Email is required",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if "@" not in email or "." not in email:
-            return Response({"available": False, "message": "Invalid email format"})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Invalid email format",
+                    "data": {
+                        "available": False,
+                        "email": email,
+                        "message": "Invalid email format",
+                    },
+                }
+            )
 
         user = UserService.get_user_by_email(email)
         available = user is None
+        message = "Email is available" if available else "Email is already registered"
 
         return Response(
             {
-                "available": available,
-                "email": email,
-                "message": (
-                    "Email is available" if available else "Email is already registered"
-                ),
+                "status": True,
+                "message": message,
+                "data": {
+                    "available": available,
+                    "email": email,
+                    "message": message,
+                },
             }
         )
-
-
-
 
 
 class ResendVerificationView(APIView):
     permission_classes = [permissions.AllowAny]
 
-    class ResendSerializer(serializers.Serializer):
-        email = serializers.EmailField(required=False)
-        user_id = serializers.IntegerField(required=False)
-
-        def validate(self, attrs):
-            if not attrs.get('email') and not attrs.get('user_id'):
-                raise serializers.ValidationError("Either email or user_id is required")
-            return attrs
-    
-    class ResendVerificationResponse(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.StringRelatedField(allow_null=True)
-        error = serializers.StringRelatedField(allow_null=True)
-
-
     @extend_schema(
         tags=["User's"],
         request=ResendSerializer,
-        responses={200: ResendVerificationResponse},
+        responses={200: ResendVerificationResponseSerializer},
     )
     @transaction.atomic
     def post(self, request):
-        serializer = self.ResendSerializer(data=request.data)
+        serializer = ResendSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         email = serializer.validated_data.get('email')
         user_id = serializer.validated_data.get('user_id')
@@ -654,53 +950,81 @@ class ResendVerificationView(APIView):
             else:
                 user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"status": False, "error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "status": False,
+                    "message": "User not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         if user.is_active:
-            return Response({"status": False, "error": "User already active"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "User already active",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Create new OTP request
-        otp_request = OtpRequestService.create_otp_request(
-            user=user,
-            email=user.email,
-            expires_in_minutes=10,
-            otp_type="email"
-        )
+        try:
+            from users.services.otp_request import OtpRequestService
+            from notifications.services.notification_queue import NotificationQueueService
 
-        # Queue notification
-        NotificationQueueService.queue_notification(
-            channel="email",
-            recipient=user.email,
-            subject="Email Verification",
-            message=f"Your verification code is: {otp_request.otp_code}",
-            metadata={"otp_code": otp_request.otp_code, "user_id": user.id}
-        )
-
-        return Response({"status": True, "message": "Verification email sent"})
+            otp_request = OtpRequestService.create_otp_request(
+                user=user,
+                email=user.email,
+                expires_in_minutes=10,
+                otp_type="email"
+            )
+            NotificationQueueService.queue_notification(
+                channel="email",
+                recipient=user.email,
+                subject="Email Verification",
+                message=f"Your verification code is: {otp_request.otp_code}",
+                metadata={"otp_code": otp_request.otp_code, "user_id": user.id}
+            )
+            return Response(
+                {
+                    "status": True,
+                    "message": "Verification email sent",
+                    "data": {"message": "Verification email sent"},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error resending verification email")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Failed to send verification email",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class EmailVerificationView(APIView):
     permission_classes = [permissions.AllowAny]
 
-    class VerifyEmailSerializer(serializers.Serializer):
-        user_id = serializers.IntegerField(required=True)
-        otp_code = serializers.CharField(max_length=6, min_length=6, required=True)
-    
-    class VerifyEmailResponse(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.StringRelatedField(allow_null=True)
-        error = serializers.StringRelatedField(allow_null=True)
-
     @extend_schema(
         tags=["User's"],
         request=VerifyEmailSerializer,
-        responses={200: VerifyEmailResponse},
+        responses={200: EmailVerificationResponseSerializer},
         description="Verify email using OTP sent during registration.",
     )
     def post(self, request):
-        serializer = self.VerifyEmailSerializer(data=request.data)
+        serializer = VerifyEmailSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response({"status": False, "error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Invalid credentials",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         user_id = serializer.validated_data['user_id']
         otp_code = serializer.validated_data['otp_code']
@@ -708,25 +1032,38 @@ class EmailVerificationView(APIView):
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"status": False, "error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "status": False,
+                    "message": "User not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        # Validate OTP
+        from users.services.otp_request import OtpRequestService
+        from notifications.services.notification_queue import NotificationQueueService
+
         otp_request = OtpRequestService.validate_otp(
             otp_code=otp_code,
             user=user,
         )
         if not otp_request:
-            return Response({"status": False, "error": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Invalid or expired OTP",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Mark OTP as used
         OtpRequestService.mark_otp_used(otp_request)
 
-        # Activate user
         user.is_active = True
         user.is_verified = True
         user.save()
 
-        # Optionally, send welcome email
         NotificationQueueService.queue_notification(
             channel="email",
             recipient=user.email,
@@ -734,4 +1071,10 @@ class EmailVerificationView(APIView):
             message="Your account has been successfully activated.",
         )
 
-        return Response({"status": True, "message": "Email verified successfully"})
+        return Response(
+            {
+                "status": True,
+                "message": "Email verified successfully",
+                "data": {"message": "Email verified successfully"},
+            }
+        )

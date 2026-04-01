@@ -2,11 +2,10 @@ import logging
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, serializers
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import inline_serializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
-from rest_framework import serializers
 from global_utils.pagination import UsersPagination
 from users.serializers.session import BulkTerminateSessionsSerializer, LoginSessionSerializer, TerminateSessionSerializer
 
@@ -34,36 +33,207 @@ from ..serializers.security import (
 )
 from django.db import transaction
 from ..models import UserSecuritySettings, SecurityLog, LoginSession
-from rest_framework import serializers
-from ..serializers.security import SecurityLogSerializer
-
+from ..services.user_activity import UserActivityService
 
 logger = logging.getLogger(__name__)
 
 
-class PaginatedSecurityLogSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_security_logs(paginator, page, request):
+    """
+    Construct a paginated data dict for SecurityLogSerializer.
+    """
+    serializer = SecurityLogSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+def wrap_paginated_sessions(paginator, page, request):
+    """
+    Construct a paginated data dict for LoginSessionSerializer.
+    """
+    serializer = LoginSessionSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
+
+class PaginatedSecurityLogData(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = SecurityLogSerializer(many=True)
 
 
-class PaginatedLoginSessionSerializer(serializers.Serializer):
+class PaginatedSecurityLogResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedSecurityLogData()
+
+
+class ChangePasswordResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+
+
+class ChangePasswordResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ChangePasswordResponseData()
+
+
+class Enable2FAResponseData(serializers.Serializer):
+    two_factor_enabled = serializers.BooleanField()
+    user_id = serializers.IntegerField()
+
+
+class Enable2FAResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = Enable2FAResponseData()
+
+
+class Disable2FAResponseData(serializers.Serializer):
+    two_factor_enabled = serializers.BooleanField()
+    user_id = serializers.IntegerField()
+
+
+class Disable2FAResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = Disable2FAResponseData()
+
+
+class SecuritySettingsGetResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    settings = UpdateSecuritySettingsSerializer()
+
+
+class SecuritySettingsGetResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = SecuritySettingsGetResponseData()
+
+
+class SecuritySettingsUpdateResponseData(serializers.Serializer):
+    settings = UpdateSecuritySettingsSerializer()
+
+
+class SecuritySettingsUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = SecuritySettingsUpdateResponseData()
+
+
+class FailedLoginAttemptsResponseData(serializers.Serializer):
     count = serializers.IntegerField()
+    hours = serializers.IntegerField()
+    attempts = SecurityLogSerializer(many=True)
+
+
+class FailedLoginAttemptsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = FailedLoginAttemptsResponseData()
+
+
+class SuspiciousActivitiesResponseData(serializers.Serializer):
+    count = serializers.IntegerField()
+    activities = SecurityLogSerializer(many=True)
+
+
+class SuspiciousActivitiesResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = SuspiciousActivitiesResponseData()
+
+
+class PaginatedLoginSessionData(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = LoginSessionSerializer(many=True)
 
 
-class ChangePasswordView(APIView):
-    """View for changing user password"""
+class PaginatedLoginSessionResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedLoginSessionData()
 
+
+class TerminateSessionResponseData(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class TerminateSessionResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TerminateSessionResponseData()
+
+
+class BulkTerminateSessionsResponseData(serializers.Serializer):
+    message = serializers.CharField()
+    result = serializers.DictField()
+
+
+class BulkTerminateSessionsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BulkTerminateSessionsResponseData()
+
+
+class TerminateAllSessionsResponseData(serializers.Serializer):
+    message = serializers.CharField()
+
+
+class TerminateAllSessionsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TerminateAllSessionsResponseData()
+
+
+class Check2FAStatusResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    two_factor_enabled = serializers.BooleanField()
+
+
+class Check2FAStatusResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = Check2FAStatusResponseData()
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
+
+class ChangePasswordView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -82,7 +252,11 @@ class ChangePasswordView(APIView):
             ),
             OpenApiExample(
                 "Success response",
-                value={"message": "Password changed successfully", "user_id": 1},
+                value={
+                    "status": True,
+                    "message": "Password changed successfully",
+                    "data": {"user_id": 1},
+                },
                 response_only=True,
             ),
         ],
@@ -93,23 +267,37 @@ class ChangePasswordView(APIView):
         serializer = ChangePasswordSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 user = serializer.save()
                 return Response(
-                    {"message": "Password changed successfully", "user_id": user.id}
+                    {
+                        "status": True,
+                        "message": "Password changed successfully",
+                        "data": {"user_id": user.id},
+                    }
                 )
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                logger.exception("ChangePasswordView error")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class Enable2FAView(APIView):
-    """View for enabling two-factor authentication"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -125,9 +313,9 @@ class Enable2FAView(APIView):
             OpenApiExample(
                 "Success response",
                 value={
+                    "status": True,
                     "message": "Two-factor authentication enabled successfully",
-                    "two_factor_enabled": True,
-                    "user_id": 1,
+                    "data": {"two_factor_enabled": True, "user_id": 1},
                 },
                 response_only=True,
             ),
@@ -139,27 +327,40 @@ class Enable2FAView(APIView):
         serializer = EnableTwoFactorSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 settings = serializer.save()
                 return Response(
                     {
+                        "status": True,
                         "message": "Two-factor authentication enabled successfully",
-                        "two_factor_enabled": settings.two_factor_enabled,
-                        "user_id": request.user.id,
+                        "data": {
+                            "two_factor_enabled": settings.two_factor_enabled,
+                            "user_id": request.user.id,
+                        },
                     }
                 )
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                logger.exception("Enable2FAView error")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class Disable2FAView(APIView):
-    """View for disabling two-factor authentication"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -175,9 +376,9 @@ class Disable2FAView(APIView):
             OpenApiExample(
                 "Success response",
                 value={
+                    "status": True,
                     "message": "Two-factor authentication disabled successfully",
-                    "two_factor_enabled": False,
-                    "user_id": 1,
+                    "data": {"two_factor_enabled": False, "user_id": 1},
                 },
                 response_only=True,
             ),
@@ -189,27 +390,40 @@ class Disable2FAView(APIView):
         serializer = DisableTwoFactorSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 settings = serializer.save()
                 return Response(
                     {
+                        "status": True,
                         "message": "Two-factor authentication disabled successfully",
-                        "two_factor_enabled": settings.two_factor_enabled,
-                        "user_id": request.user.id,
+                        "data": {
+                            "two_factor_enabled": settings.two_factor_enabled,
+                            "user_id": request.user.id,
+                        },
                     }
                 )
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                logger.exception("Disable2FAView error")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class SecuritySettingsView(APIView):
-    """View for managing security settings"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -221,9 +435,23 @@ class SecuritySettingsView(APIView):
         try:
             settings = UserSecuritySettingsService.get_or_create_settings(request.user)
             serializer = UpdateSecuritySettingsSerializer(settings)
-            return Response({"user_id": request.user.id, "settings": serializer.data})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Security settings retrieved.",
+                    "data": {"user_id": request.user.id, "settings": serializer.data},
+                }
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("SecuritySettingsView GET error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["User Security"],
@@ -247,7 +475,6 @@ class SecuritySettingsView(APIView):
         serializer = UpdateSecuritySettingsSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 settings = UserSecuritySettingsService.get_or_create_settings(
@@ -256,24 +483,35 @@ class SecuritySettingsView(APIView):
                 updated_settings = serializer.update(
                     settings, serializer.validated_data
                 )
+                output_serializer = UpdateSecuritySettingsSerializer(updated_settings)
                 return Response(
                     {
+                        "status": True,
                         "message": "Security settings updated successfully",
-                        "settings": UpdateSecuritySettingsSerializer(
-                            updated_settings
-                        ).data,
+                        "data": {"settings": output_serializer.data},
                     }
                 )
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                logger.exception("SecuritySettingsView PUT error")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class SecurityLogsView(APIView):
-    """View for accessing security logs"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -295,7 +533,7 @@ class SecurityLogsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedSecurityLogSerializer},
+        responses={200: PaginatedSecurityLogResponseSerializer},
         description="Get paginated security logs for the current user.",
     )
     def get(self, request):
@@ -306,16 +544,28 @@ class SecurityLogsView(APIView):
             )
             paginator = UsersPagination()
             page = paginator.paginate_queryset(logs, request)
-            serializer = SecurityLogSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+            paginated_data = wrap_paginated_security_logs(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Security logs retrieved.",
+                    "data": paginated_data,
+                }
+            )
         except Exception as e:
-            logger.debug(e)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("SecurityLogsView error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class FailedLoginAttemptsView(APIView):
-    """View for checking failed login attempts"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -325,51 +575,65 @@ class FailedLoginAttemptsView(APIView):
             OpenApiExample(
                 "Response",
                 value={
-                    "count": 3,
-                    "hours": 24,
-                    "attempts": [
-                        {
-                            "id": 1,
-                            "event_type": "failed_login",
-                            "created_at": "2025-03-07T12:34:56Z",
-                        },
-                        {
-                            "id": 2,
-                            "event_type": "failed_login",
-                            "created_at": "2025-03-07T12:35:10Z",
-                        },
-                    ],
+                    "status": True,
+                    "message": "Failed login attempts retrieved.",
+                    "data": {
+                        "count": 3,
+                        "hours": 24,
+                        "attempts": [
+                            {
+                                "id": 1,
+                                "event_type": "failed_login",
+                                "created_at": "2025-03-07T12:34:56Z",
+                            },
+                            {
+                                "id": 2,
+                                "event_type": "failed_login",
+                                "created_at": "2025-03-07T12:35:10Z",
+                            },
+                        ],
+                    },
                 },
                 response_only=True,
             )
         ],
-        description="...",
+        description="Get failed login attempts for the current user.",
     )
     def get(self, request):
         try:
             hours = int(request.query_params.get("hours", 24))
-
             attempts = SecurityLogService.get_failed_login_attempts(
                 user=request.user, hours=hours
             )
-
             count = SecurityLogService.count_failed_login_attempts(
                 user=request.user, hours=hours
             )
-
             serializer = SecurityLogSerializer(attempts, many=True)
 
             return Response(
-                {"count": count, "hours": hours, "attempts": serializer.data}
+                {
+                    "status": True,
+                    "message": "Failed login attempts retrieved.",
+                    "data": {
+                        "count": count,
+                        "hours": hours,
+                        "attempts": serializer.data,
+                    },
+                }
             )
-
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("FailedLoginAttemptsView error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class SuspiciousActivitiesView(APIView):
-    """View for checking suspicious activities"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -388,27 +652,38 @@ class SuspiciousActivitiesView(APIView):
     def get(self, request):
         try:
             limit = int(request.query_params.get("limit", 20))
-
             activities = SecurityLogService.get_suspicious_activities(
                 user=request.user, limit=limit
             )
-
             serializer = SecurityLogSerializer(activities, many=True)
 
-            return Response({"count": len(activities), "activities": serializer.data})
-
+            return Response(
+                {
+                    "status": True,
+                    "message": "Suspicious activities retrieved.",
+                    "data": {
+                        "count": len(activities),
+                        "activities": serializer.data,
+                    },
+                }
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("SuspiciousActivitiesView error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ActiveSessionsView(APIView):
-    """View for managing active login sessions"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
         tags=["User Security"],
-        
         parameters=[
             OpenApiParameter(
                 name="page", type=int, description="Page number", required=False
@@ -420,7 +695,7 @@ class ActiveSessionsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedLoginSessionSerializer},
+        responses={200: PaginatedLoginSessionResponseSerializer},
         description="Get all active login sessions for the current user.",
     )
     def get(self, request):
@@ -428,18 +703,28 @@ class ActiveSessionsView(APIView):
             sessions = LoginSessionService.get_active_user_sessions(request.user)
             paginator = UsersPagination()
             page = paginator.paginate_queryset(sessions, request)
-            serializer = LoginSessionSerializer(
-                page, many=True, context={"request": request}
+            paginated_data = wrap_paginated_sessions(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Active sessions retrieved.",
+                    "data": paginated_data,
+                }
             )
-            return paginator.get_paginated_response(serializer.data)
         except Exception as e:
-            logger.debug(e)
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("ActiveSessionsView error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TerminateSessionView(APIView):
-    """View for terminating a specific login session"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -460,27 +745,47 @@ class TerminateSessionView(APIView):
         serializer = TerminateSessionSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 success = serializer.terminate()
                 if success:
-                    return Response({"message": "Session terminated successfully"})
+                    return Response(
+                        {
+                            "status": True,
+                            "message": "Session terminated successfully",
+                            "data": {"message": "Session terminated successfully"},
+                        }
+                    )
                 else:
                     return Response(
-                        {"error": "Failed to terminate session"},
+                        {
+                            "status": False,
+                            "message": "Failed to terminate session",
+                            "data": None,
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                logger.exception("TerminateSessionView error")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class BulkTerminateSessionsView(APIView):
-    """View for terminating multiple sessions"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -501,26 +806,40 @@ class BulkTerminateSessionsView(APIView):
         serializer = BulkTerminateSessionsSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 result = serializer.terminate()
                 return Response(
                     {
+                        "status": True,
                         "message": f'Terminated {result["terminated_count"]} sessions',
-                        "result": result,
+                        "data": {
+                            "message": f'Terminated {result["terminated_count"]} sessions',
+                            "result": result,
+                        },
                     }
                 )
             except Exception as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                logger.exception("BulkTerminateSessionsView error")
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         return Response(
-            {"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class TerminateAllSessionsView(APIView):
-    """View for terminating all sessions except current"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -533,8 +852,6 @@ class TerminateAllSessionsView(APIView):
         try:
             LoginSessionService.deactivate_all_user_sessions(request.user)
 
-            from ..services.user_activity import UserActivityService
-
             UserActivityService.log_activity(
                 user=request.user,
                 action="logout_all_devices",
@@ -543,15 +860,26 @@ class TerminateAllSessionsView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT"),
             )
 
-            return Response({"message": "All other sessions terminated successfully"})
-
+            return Response(
+                {
+                    "status": True,
+                    "message": "All other sessions terminated successfully",
+                    "data": {"message": "All other sessions terminated successfully"},
+                }
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("TerminateAllSessionsView error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class Check2FAStatusView(APIView):
-    """View for checking 2FA status"""
-
     permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(
@@ -563,7 +891,22 @@ class Check2FAStatusView(APIView):
         try:
             is_enabled = UserSecuritySettingsService.is_2fa_enabled(request.user)
             return Response(
-                {"user_id": request.user.id, "two_factor_enabled": is_enabled}
+                {
+                    "status": True,
+                    "message": "2FA status retrieved.",
+                    "data": {
+                        "user_id": request.user.id,
+                        "two_factor_enabled": is_enabled,
+                    },
+                }
             )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.exception("Check2FAStatusView error")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

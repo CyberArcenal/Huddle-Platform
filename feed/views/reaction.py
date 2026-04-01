@@ -1,4 +1,4 @@
-# feed/views/like_views.py
+# feed/views/reaction.py
 
 import logging
 
@@ -30,8 +30,31 @@ from users.serializers.user.minimal import UserMinimalSerializer
 logger = logging.getLogger(__name__)
 
 
-# ----- Paginated response serializer for drf-spectacular -----
-class PaginatedLikeSerializer(serializers.Serializer):
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_data(paginator, page, request, serializer_class):
+    """
+    Construct a paginated data dict that matches the paginated response structure.
+    """
+    serializer = serializer_class(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers
+# ----------------------------------------------------------------------
+
+class PaginatedReactionSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
@@ -41,27 +64,161 @@ class PaginatedLikeSerializer(serializers.Serializer):
     results = ReactionDisplaySerializer(many=True)
 
 
-class LikeCheckResponseSerializer(serializers.Serializer):
-    has_liked = serializers.BooleanField()
-    user_reaction = serializers.ChoiceField(choices=REACTION_TYPES)
-    like_count = serializers.IntegerField()
-    counts = ReactionCountSerializer()
+class LikeListResponseData(serializers.Serializer):
+    pagination = PaginatedReactionSerializer()
+
+
+class LikeListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LikeListResponseData(allow_null=True)
+
+
+class LikeCreateResponseData(serializers.Serializer):
+    reaction = ReactionDisplaySerializer()
+
+
+class LikeCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LikeCreateResponseData(allow_null=True)
+
+
+class ReactionResponseData(serializers.Serializer):
+    object_id = serializers.IntegerField()
     content_type = serializers.CharField()
-    object_id = serializers.IntegerField()
-
-
-class ReactionResponseSerializer(serializers.Serializer):
-    """Response serializer for ReactionView."""
-    object_id = serializers.IntegerField()
-    content_type = serializers.StringRelatedField()
     reacted = serializers.BooleanField()
     reaction_type = serializers.ChoiceField(choices=REACTION_TYPES, allow_null=True)
     reaction_count = serializers.IntegerField()
     counts = ReactionCountSerializer()
 
 
-# --------------------------------------------------------------
+class ReactionResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ReactionResponseData()
 
+
+class LikeToggleResponseData(serializers.Serializer):
+    liked = serializers.BooleanField()
+    like_count = serializers.IntegerField()
+
+
+class LikeToggleResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LikeToggleResponseData()
+
+
+class LikeDetailResponseData(serializers.Serializer):
+    reaction = ReactionDisplaySerializer()
+
+
+class LikeDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LikeDetailResponseData(allow_null=True)
+
+
+class LikeDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class ObjectLikesResponseData(serializers.Serializer):
+    pagination = PaginatedReactionSerializer()
+
+
+class ObjectLikesResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ObjectLikesResponseData(allow_null=True)
+
+
+class LikeCheckResponseData(serializers.Serializer):
+    has_liked = serializers.BooleanField()
+    like_count = serializers.IntegerField()
+    user_reaction = serializers.ChoiceField(choices=REACTION_TYPES, allow_null=True)
+    counts = ReactionCountSerializer()
+    content_type = serializers.CharField()
+    object_id = serializers.IntegerField()
+
+
+class LikeCheckResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = LikeCheckResponseData()
+
+
+class RecentLikersResponseData(serializers.Serializer):
+    content_type = serializers.CharField()
+    object_id = serializers.IntegerField()
+    recent_likers = UserMinimalSerializer(many=True)
+
+
+class RecentLikersResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = RecentLikersResponseData()
+
+
+class MostLikedContentItemSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    object_id = serializers.IntegerField()
+    like_count = serializers.IntegerField()
+    post = serializers.DictField(required=False, allow_null=True)
+    comment = serializers.DictField(required=False, allow_null=True)
+
+
+class MostLikedContentResponseData(serializers.Serializer):
+    content_type = serializers.CharField()
+    timeframe_days = serializers.IntegerField()
+    results = MostLikedContentItemSerializer(many=True)
+
+
+class MostLikedContentResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = MostLikedContentResponseData()
+
+
+class UserLikeStatisticsResponseData(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    total_likes_given = serializers.IntegerField()
+    total_likes_received = serializers.IntegerField()
+    type_breakdown = serializers.DictField(child=serializers.IntegerField())
+
+
+class UserLikeStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserLikeStatisticsResponseData()
+
+
+class MutualLikesStatsSerializer(serializers.Serializer):
+    post = serializers.IntegerField(required=False)
+    comment = serializers.IntegerField(required=False)
+    story = serializers.IntegerField(required=False)
+    reel = serializers.IntegerField(required=False)
+    total_mutual_likes = serializers.IntegerField()
+
+
+class MutualLikesResponseData(serializers.Serializer):
+    user1_id = serializers.IntegerField()
+    user2_id = serializers.IntegerField()
+    mutual_likes = MutualLikesStatsSerializer()
+
+
+class MutualLikesResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = MutualLikesResponseData()
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 class LikeListView(APIView):
     """List likes of the authenticated user, or create a new like."""
@@ -80,27 +237,41 @@ class LikeListView(APIView):
             OpenApiParameter(name="page", type=int, required=False),
             OpenApiParameter(name="page_size", type=int, required=False),
         ],
-        responses={200: PaginatedLikeSerializer},
+        responses={200: LikeListResponseSerializer},
         description="List likes created by the authenticated user, optionally filtered by content type.",
     )
     def get(self, request):
         content_type = request.query_params.get("content_type")
-        # Get all reactions of type 'like' for the user
-        # The service method `get_user_reactions` now supports optional content_type and reaction_type filters
-        likes = ReactionService.get_user_reactions(
-            user=request.user, content_type=content_type, reaction_type="like"
-        )
-        paginator = StandardResultsSetPagination()
-        page = paginator.paginate_queryset(likes, request)
-        serializer = ReactionDisplaySerializer(
-            page, many=True, context={"request": request}
-        )
-        return paginator.get_paginated_response(serializer.data)
+        try:
+            likes = ReactionService.get_user_reactions(
+                user=request.user, content_type=content_type, reaction_type="like"
+            )
+            paginator = StandardResultsSetPagination()
+            page = paginator.paginate_queryset(likes, request)
+            paginated_data = wrap_paginated_data(paginator, page, request, ReactionDisplaySerializer)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Likes retrieved.",
+                    "data": {"pagination": paginated_data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error listing likes")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Reaction's"],
         request=LikeCreateSerializer,
-        responses={201: ReactionDisplaySerializer},
+        responses={201: LikeCreateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Like a post",
@@ -117,11 +288,23 @@ class LikeListView(APIView):
         )
         if serializer.is_valid():
             like = serializer.save()
+            data = ReactionDisplaySerializer(like, context={"request": request}).data
             return Response(
-                ReactionDisplaySerializer(like, context={"request": request}).data,
+                {
+                    "status": True,
+                    "message": "Like created successfully.",
+                    "data": {"reaction": data},
+                },
                 status=status.HTTP_201_CREATED,
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": None,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class ReactionView(APIView):
@@ -141,16 +324,21 @@ class ReactionView(APIView):
         )
         if serializer.is_valid(raise_exception=True):
             result = serializer.save()
-            return Response(result)
-        return Response(serializer.errors, status=400)
-
-
-class LikeToggleResponseSerializer(serializers.Serializer):
-    """Schema for the response of like toggle."""
-
-    liked = serializers.BooleanField(read_only=True)
-    like_count = serializers.IntegerField(read_only=True)
-    message = serializers.CharField(read_only=True)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Reaction processed.",
+                    "data": result,
+                }
+            )
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": None,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class LikeToggleView(APIView):
@@ -161,7 +349,7 @@ class LikeToggleView(APIView):
     @extend_schema(
         tags=["Reaction's"],
         request=LikeToggleSerializer,
-        responses=LikeToggleResponseSerializer,
+        responses={200: LikeToggleResponseSerializer},
         examples=[
             OpenApiExample(
                 "Toggle like request",
@@ -183,13 +371,24 @@ class LikeToggleView(APIView):
         )
         if serializer.is_valid():
             result = serializer.save()  # returns dict with liked, count
-            response_data = {
-                "liked": result["liked"],
-                "like_count": result["count"],
-                "message": "Liked" if result["liked"] else "Unliked",
-            }
-            return Response(LikeToggleResponseSerializer(response_data).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Liked" if result["liked"] else "Unliked",
+                    "data": {
+                        "liked": result["liked"],
+                        "like_count": result["count"],
+                    },
+                }
+            )
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": None,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class LikeDetailView(APIView):
@@ -198,29 +397,36 @@ class LikeDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self, like_id):
-        # Ensure we only retrieve reactions with reaction_type='like'
         return get_object_or_404(Reaction, id=like_id, reaction_type="like")
 
     @extend_schema(
         tags=["Reaction's"],
-        responses={200: ReactionDisplaySerializer},
+        responses={200: LikeDetailResponseSerializer},
         description="Retrieve a specific like (only if owned by current user).",
     )
     def get(self, request, like_id):
         like = self.get_object(like_id)
         if request.user != like.user:
             return Response(
-                {"error": "You do not have permission to view this like"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to view this like",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        serializer = ReactionDisplaySerializer(like, context={"request": request})
-        return Response(serializer.data)
+        data = ReactionDisplaySerializer(like, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "Like retrieved.",
+                "data": {"reaction": data},
+            }
+        )
 
     @extend_schema(
         tags=["Reaction's"],
-        responses={
-            200: {"type": "object", "properties": {"message": {"type": "string"}}}
-        },
+        responses={200: LikeDeleteResponseSerializer},
         description="Delete a like (unlike).",
     )
     @transaction.atomic
@@ -228,18 +434,31 @@ class LikeDetailView(APIView):
         like = self.get_object(like_id)
         if request.user != like.user:
             return Response(
-                {"error": "You do not have permission to delete this like"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to delete this like",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        # Get the model name from the ContentType instance
         content_type = like.content_type.model
         success = ReactionService.remove_like(
             user=request.user, content_type=content_type, object_id=like.object_id
         )
         if success:
-            return Response({"message": "Like removed successfully"})
+            return Response(
+                {
+                    "status": True,
+                    "message": "Like removed successfully",
+                    "data": None,
+                }
+            )
         return Response(
-            {"error": "Failed to remove like"},
+            {
+                "status": False,
+                "message": "Failed to remove like",
+                "data": None,
+            },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -255,28 +474,36 @@ class ObjectLikesView(APIView):
             OpenApiParameter(name="page", type=int, required=False),
             OpenApiParameter(name="page_size", type=int, required=False),
         ],
-        responses={200: PaginatedLikeSerializer},
+        responses={200: ObjectLikesResponseSerializer},
         description="Get all likes for a specific object.",
     )
     def get(self, request, content_type, object_id):
-        # Optional: validate content type via service (will raise ValidationError if invalid)
         if not can_view_content(request.user, content_type, object_id):
             return Response(
-                {"error": "You do not have permission to view likes for this object"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to view likes for this object",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         likes = ReactionService.get_reactions_for_object(
             content_type=content_type,
             object_id=object_id,
-            reaction_type="like",  # only return likes
+            reaction_type="like",
         )
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(likes, request)
-        serializer = ReactionDisplaySerializer(
-            page, many=True, context={"request": request}
+        paginated_data = wrap_paginated_data(paginator, page, request, ReactionDisplaySerializer)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Likes retrieved.",
+                "data": {"pagination": paginated_data},
+            }
         )
-        return paginator.get_paginated_response(serializer.data)
 
 
 class LikeCheckView(APIView):
@@ -290,10 +517,13 @@ class LikeCheckView(APIView):
         description="Check if the authenticated user has liked a specific object, and get total like count.",
     )
     def get(self, request, content_type, object_id):
-        # Service will validate content_type
         if not can_view_content(request.user, content_type, object_id):
             return Response(
-                {"error": "You do not have permission to view recent likers"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to view like status",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -303,26 +533,24 @@ class LikeCheckView(APIView):
         like_count = ReactionService.get_like_count(content_type, object_id)
         reaction_counts = ReactionService.get_reaction_counts(content_type, object_id)
         user_reaction = ReactionService.get_user_reaction(
-            request.user, "post", object_id
+            request.user, content_type, object_id
         )
+
+        data = {
+            "has_liked": has_liked,
+            "like_count": like_count,
+            "user_reaction": user_reaction,
+            "counts": reaction_counts,
+            "content_type": content_type,
+            "object_id": object_id,
+        }
         return Response(
             {
-                "has_liked": has_liked,
-                "like_count": like_count,
-                "user_reaction": user_reaction,
-                "counts": reaction_counts,
-                "content_type": content_type,
-                "object_id": object_id,
+                "status": True,
+                "message": "Like status retrieved.",
+                "data": data,
             }
         )
-
-
-class RecentLikersResponseSerializer(serializers.Serializer):
-    """Schema for recent likers of a content object."""
-
-    content_type = serializers.CharField(read_only=True)
-    object_id = serializers.IntegerField(read_only=True)
-    recent_likers = UserMinimalSerializer(many=True, read_only=True)
 
 
 class RecentLikersView(APIView):
@@ -335,14 +563,17 @@ class RecentLikersView(APIView):
         parameters=[
             OpenApiParameter(name="limit", type=int, required=False),
         ],
-        responses=RecentLikersResponseSerializer,
+        responses={200: RecentLikersResponseSerializer},
         description="Get a list of users who recently liked an object (limited).",
     )
     def get(self, request, content_type, object_id):
-        # Check privacy
         if not can_view_content(request.user, content_type, object_id):
             return Response(
-                {"error": "You do not have permission to view recent likers"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to view recent likers",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -353,36 +584,21 @@ class RecentLikersView(APIView):
             reaction_type="like",
             limit=limit,
         )
-
         serializer = UserMinimalSerializer(
             recent_likers, many=True, context={"request": request}
         )
-        response_data = {
+        data = {
             "content_type": content_type,
             "object_id": object_id,
             "recent_likers": serializer.data,
         }
-        return Response(RecentLikersResponseSerializer(response_data).data)
-
-
-class MostLikedContentItemSerializer(serializers.Serializer):
-    """Schema for a single most liked content item."""
-
-    type = serializers.CharField(read_only=True)  # "post" or "comment"
-    object_id = serializers.IntegerField(read_only=True)
-    like_count = serializers.IntegerField(read_only=True)
-
-    # Optional nested serializers depending on content_type
-    post = serializers.DictField(read_only=True, required=False)
-    comment = serializers.DictField(read_only=True, required=False)
-
-
-class MostLikedContentResponseSerializer(serializers.Serializer):
-    """Schema for the response of most liked content."""
-
-    content_type = serializers.CharField(read_only=True)  # "post" or "comment"
-    timeframe_days = serializers.IntegerField(read_only=True)
-    results = MostLikedContentItemSerializer(many=True, read_only=True)
+        return Response(
+            {
+                "status": True,
+                "message": "Recent likers retrieved.",
+                "data": data,
+            }
+        )
 
 
 class MostLikedContentView(APIView):
@@ -396,13 +612,17 @@ class MostLikedContentView(APIView):
             OpenApiParameter(name="days", type=int, required=False),
             OpenApiParameter(name="limit", type=int, required=False),
         ],
-        responses=MostLikedContentResponseSerializer,
+        responses={200: MostLikedContentResponseSerializer},
         description="Get the most liked content (posts or comments) within a time period.",
     )
     def get(self, request, content_type):
         if content_type not in ["post", "comment"]:
             return Response(
-                {"error": 'Content type must be either "post" or "comment"'},
+                {
+                    "status": False,
+                    "message": 'Content type must be either "post" or "comment"',
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -422,33 +642,26 @@ class MostLikedContentView(APIView):
             }
             if content_type == "post":
                 from feed.serializers.post import PostFeedSerializer
-
                 result["post"] = PostFeedSerializer(item["object"]).data
+                result["comment"] = None
             elif content_type == "comment":
                 from feed.serializers.comment import CommentMinimalSerializer
-
                 result["comment"] = CommentMinimalSerializer(item["object"]).data
+                result["post"] = None
             results.append(result)
 
-        response_data = {
+        data = {
             "content_type": content_type,
             "timeframe_days": days,
             "results": results,
         }
-        return Response(MostLikedContentResponseSerializer(response_data).data)
-
-
-class UserLikeStatisticsSerializer(serializers.Serializer):
-    """Schema for like statistics of a user."""
-
-    user_id = serializers.IntegerField(read_only=True)
-    total_likes_given = serializers.IntegerField(read_only=True)
-    total_likes_received = serializers.IntegerField(read_only=True)
-
-    # breakdown per content type (post, comment, story, reel, etc.)
-    type_breakdown = serializers.DictField(
-        child=serializers.IntegerField(), read_only=True
-    )
+        return Response(
+            {
+                "status": True,
+                "message": "Most liked content retrieved.",
+                "data": data,
+            }
+        )
 
 
 class UserLikeStatisticsView(APIView):
@@ -461,7 +674,7 @@ class UserLikeStatisticsView(APIView):
         parameters=[
             OpenApiParameter(name="user_id", type=int, required=False),
         ],
-        responses=UserLikeStatisticsSerializer,
+        responses={200: UserLikeStatisticsResponseSerializer},
         description="Get like statistics for a user (total likes given, breakdown by type, etc.).",
     )
     def get(self, request, user_id=None):
@@ -469,34 +682,25 @@ class UserLikeStatisticsView(APIView):
             target_user = get_object_or_404(User, id=user_id)
             if request.user != target_user:
                 return Response(
-                    {"error": "You can only view your own like statistics"},
+                    {
+                        "status": False,
+                        "message": "You can only view your own like statistics",
+                        "data": None,
+                    },
                     status=status.HTTP_403_FORBIDDEN,
                 )
         else:
             target_user = request.user
 
         stats = ReactionService.get_user_reaction_statistics(target_user)
-        # enrich with user_id for schema consistency
-        response_data = {"user_id": target_user.id, **stats}
-        return Response(UserLikeStatisticsSerializer(response_data).data)
-
-
-class MutualLikesStatsSerializer(serializers.Serializer):
-    """Counts of mutual likes per content type."""
-
-    post = serializers.IntegerField(read_only=True, required=False)
-    comment = serializers.IntegerField(read_only=True, required=False)
-    story = serializers.IntegerField(read_only=True, required=False)
-    reel = serializers.IntegerField(read_only=True, required=False)
-    total_mutual_likes = serializers.IntegerField(read_only=True)
-
-
-class MutualLikeResponse(serializers.Serializer):
-    """Response schema for mutual likes between two users."""
-
-    user1_id = serializers.IntegerField()
-    user2_id = serializers.IntegerField()
-    mutual_likes = MutualLikesStatsSerializer()
+        data = {"user_id": target_user.id, **stats}
+        return Response(
+            {
+                "status": True,
+                "message": "User statistics retrieved.",
+                "data": data,
+            }
+        )
 
 
 class MutualLikesView(APIView):
@@ -506,7 +710,7 @@ class MutualLikesView(APIView):
 
     @extend_schema(
         tags=["Reaction's"],
-        responses=MutualLikeResponse,
+        responses={200: MutualLikesResponseSerializer},
         description="Get mutual likes between the current user and another user.",
     )
     def get(self, request, user_id):
@@ -514,9 +718,15 @@ class MutualLikesView(APIView):
         mutual = ReactionService.get_mutual_reactions(
             user1=request.user, user2=other_user
         )
-        response_data = {
+        data = {
             "user1_id": request.user.id,
             "user2_id": user_id,
             "mutual_likes": mutual,
         }
-        return Response(MutualLikeResponse(response_data).data)
+        return Response(
+            {
+                "status": True,
+                "message": "Mutual likes retrieved.",
+                "data": data,
+            }
+        )

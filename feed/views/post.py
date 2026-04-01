@@ -30,10 +30,62 @@ from users.models import User
 
 logger = logging.getLogger(__name__)
 
-# ----- Paginated response serializers for drf-spectacular -----
-class PaginatedPostFeedSerializer(serializers.Serializer):
-    """Matches the structure of paginator.get_paginated_response()"""
 
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
+class PostCreateResponseData(serializers.Serializer):
+    id = serializers.IntegerField()
+    processing = serializers.BooleanField()
+
+
+class PostCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostCreateResponseData(allow_null=True)
+
+
+class PostUpdateResponseData(serializers.Serializer):
+    post = PostDisplaySerializer()
+
+
+class PostUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostUpdateResponseData(allow_null=True)
+
+
+class PostDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class PostStatusResponseData(serializers.Serializer):
+    id = serializers.IntegerField()
+    processing = serializers.BooleanField()
+    ready = serializers.BooleanField()
+    media_urls = serializers.ListField(child=serializers.URLField(), allow_null=True)
+
+
+class PostStatusResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostStatusResponseData(allow_null=True)
+
+
+class PostDetailResponseData(serializers.Serializer):
+    post = PostDisplaySerializer()
+
+
+class PostDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostDetailResponseData(allow_null=True)
+
+
+class PostListResponseData(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
@@ -42,42 +94,138 @@ class PaginatedPostFeedSerializer(serializers.Serializer):
     previous = serializers.URLField(allow_null=True)
     results = PostFeedSerializer(many=True)
 
-class PostCreateResponseData(serializers.Serializer):
-        id = serializers.IntegerField()
-        processing = serializers.StringRelatedField()
 
-class PostCreateResponseSerializer(serializers.Serializer):
+class PostListResponseSerializer(serializers.Serializer):
     status = serializers.BooleanField()
     message = serializers.CharField()
-    data = PostCreateResponseData()
-# --------------------------------------------------------------
+    data = PostListResponseData()
+
+
+class PostStatisticsResponseData(serializers.Serializer):
+    stats = PostStatsSerializers()
+
+
+class PostStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostStatisticsResponseData()
+
+
+class UserPostStatisticsResponseData(serializers.Serializer):
+    stats = UserPostStatisticsSerializer()
+
+
+class UserPostStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UserPostStatisticsResponseData()
+
+
+class PostSearchResponseData(serializers.Serializer):
+    page = serializers.IntegerField()
+    hasNext = serializers.BooleanField()
+    hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
+    next = serializers.URLField(allow_null=True)
+    previous = serializers.URLField(allow_null=True)
+    results = PostFeedSerializer(many=True)
+
+
+class PostSearchResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostSearchResponseData()
+
+
+class TrendingPostsResponseData(serializers.Serializer):
+    timeframe_hours = serializers.IntegerField()
+    min_likes = serializers.IntegerField()
+    results = serializers.ListField(
+        child=serializers.DictField()
+    )
+
+
+class TrendingPostsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TrendingPostsResponseData()
+
+
+class PostRestoreResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostDisplaySerializer(allow_null=True)
+
+
+class PostShareResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostDisplaySerializer(allow_null=True)
+
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data into a consistent dict
+# ----------------------------------------------------------------------
+def wrap_paginated_data(paginator, page, request, serializer_class):
+    """
+    Construct a paginated data dict that matches PostListResponseData.
+    """
+    serializer = serializer_class(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
+
 class PostStatusView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["Post's"],
-        responses={200: inline_serializer(
-            name='PostStatusResponse',
-            fields={
-                'id': serializers.IntegerField(),
-                'processing': serializers.BooleanField(),
-                'ready': serializers.BooleanField(),
-                'media_urls': serializers.ListField(child=serializers.URLField(), allow_null=True),
-            }
-        )},
+        responses={200: PostStatusResponseSerializer},
         description="Check processing status of a post."
     )
     def get(self, request, post_id):
         post = get_object_or_404(Post, id=post_id)
         if post.privacy != 'public' and request.user != post.user:
-            return Response({"error": "Forbidden"}, status=403)
-        media_urls = [request.build_absolute_uri(m.file.url) for m in post.media.all()] if not post.processing else None
-        return Response({
+            return Response(
+                {
+                    "status": False,
+                    "message": "Forbidden",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        media_urls = [
+            request.build_absolute_uri(m.file.url)
+            for m in post.media.all()
+        ] if not post.processing else None
+
+        data = {
             'id': post.id,
             'processing': post.processing,
             'ready': not post.processing and post.media.exists(),
             'media_urls': media_urls,
-        })
+        }
+        return Response(
+            {
+                "status": True,
+                "message": "Post status retrieved.",
+                "data": data,
+            }
+        )
+
 
 class PostListView(APIView):
     """View for listing and creating posts"""
@@ -112,7 +260,7 @@ class PostListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedPostFeedSerializer},  # ✅ Fixed pagination doc
+        responses={200: PostListResponseSerializer},
         description="List posts: public posts, posts by a specific user, or personalized feed for authenticated user.",
     )
     def get(self, request):
@@ -136,26 +284,33 @@ class PostListView(APIView):
 
             paginator = StandardResultsSetPagination()
             page = paginator.paginate_queryset(posts, request)
-            serializer = PostFeedSerializer(page, many=True, context={'request': request})
-            response = paginator.get_paginated_response(serializer.data)
-            return response
+            data = wrap_paginated_data(paginator, page, request, PostFeedSerializer)
 
+            return Response(
+                {
+                    "status": True,
+                    "message": "Posts retrieved.",
+                    "data": data,
+                }
+            )
         except Exception as e:
             logger.debug(e)
             return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-    
-
 
     @extend_schema(
         tags=["Post's"],
-           request={
+        request={
             'multipart/form-data': PostCreateSerializer,
         },
-   
         responses={
-            201: PostCreateResponseSerializer,
+            202: PostCreateResponseSerializer,
             400: PostCreateResponseSerializer,
         },
         description="Create a new post.",
@@ -166,7 +321,6 @@ class PostListView(APIView):
         logger.debug(request.data)
         serializer = PostCreateSerializer(data=request.data, context={"request": request})
 
-        # Validate without raising so we can return a consistent response shape
         if serializer.is_valid():
             post = serializer.save()
             response = {
@@ -179,7 +333,6 @@ class PostListView(APIView):
             }
             return Response(response, status=status.HTTP_202_ACCEPTED)
 
-        # Log validation errors for debugging, return consistent error shape
         logger.debug("Post create validation errors: %s", serializer.errors)
         response = {
             "status": False,
@@ -187,7 +340,6 @@ class PostListView(APIView):
             "data": None,
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class PostDetailView(APIView):
@@ -206,30 +358,44 @@ class PostDetailView(APIView):
 
     @extend_schema(
         tags=["Post's"],
-        responses={200: PostDisplaySerializer},
+        responses={200: PostDetailResponseSerializer},
         description="Retrieve a single post by ID.",
     )
     def get(self, request, post_id):
         post = self.get_object(post_id)
         if not post:
             return Response(
-                {"error": "Post not found or deleted"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": False,
+                    "message": "Post not found or deleted",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check if post is public
         if not post.privacy == 'public' and request.user != post.user:
             return Response(
-                {"error": "You do not have permission to view this post"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to view this post",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        serializer = PostDisplaySerializer(post, context={"request": request})
-        return Response(serializer.data)
+        data = PostDisplaySerializer(post, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "Post retrieved.",
+                "data": {"post": data},
+            }
+        )
 
     @extend_schema(
         tags=["Post's"],
         request=PostCreateSerializer,
-        responses={200: PostDisplaySerializer},
+        responses={200: PostUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update post", value={"content": "Updated content"}, request_only=True
@@ -242,13 +408,21 @@ class PostDetailView(APIView):
         post = self.get_object(post_id)
         if not post:
             return Response(
-                {"error": "Post not found or deleted"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": False,
+                    "message": "Post not found or deleted",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check ownership
         if request.user != post.user:
             return Response(
-                {"error": "You do not have permission to update this post"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to update this post",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -260,16 +434,32 @@ class PostDetailView(APIView):
             # Ensure user_id doesn't change
             if "user_id" in request.data and request.data["user_id"] != post.user.id:
                 return Response(
-                    {"error": "Cannot change post owner"},
+                    {
+                        "status": False,
+                        "message": "Cannot change post owner",
+                        "data": None,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
             updated_post = serializer.save()
+            data = PostDisplaySerializer(updated_post, context={"request": request}).data
             return Response(
-                PostDisplaySerializer(updated_post, context={"request": request}).data
+                {
+                    "status": True,
+                    "message": "Post updated successfully.",
+                    "data": {"post": data},
+                }
             )
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     @extend_schema(
         tags=["Post's"],
@@ -281,9 +471,7 @@ class PostDetailView(APIView):
                 required=False,
             ),
         ],
-        responses={
-            200: {"type": "object", "properties": {"message": {"type": "string"}}}
-        },
+        responses={200: PostDeleteResponseSerializer},
         description="Delete a post (soft delete by default).",
     )
     @transaction.atomic
@@ -291,28 +479,45 @@ class PostDetailView(APIView):
         post = self.get_object(post_id)
         if not post:
             return Response(
-                {"error": "Post not found"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": False,
+                    "message": "Post not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check ownership
         if request.user != post.user:
             return Response(
-                {"error": "You do not have permission to delete this post"},
+                {
+                    "status": False,
+                    "message": "You do not have permission to delete this post",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Check if hard delete requested
         hard_delete = request.query_params.get("hard", "false").lower() == "true"
-
         success = PostService.delete_post(post, soft_delete=not hard_delete)
+
         if success:
             message = "Post deleted successfully"
             if hard_delete:
                 message = "Post permanently deleted"
-            return Response({"message": message})
+            return Response(
+                {
+                    "status": True,
+                    "message": message,
+                    "data": None,
+                }
+            )
 
         return Response(
-            {"error": "Failed to delete post"},
+            {
+                "status": False,
+                "message": "Failed to delete post",
+                "data": None,
+            },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -324,7 +529,7 @@ class PostStatisticsView(APIView):
 
     @extend_schema(
         tags=["Post's"],
-        responses={200: PostStatsSerializers},
+        responses={200: PostStatisticsResponseSerializer},
         description="Get statistics for a post (like count, comment count).",
     )
     def get(self, request, post_id):
@@ -333,14 +538,21 @@ class PostStatisticsView(APIView):
         if not post.privacy == 'public' and request.user != post.user:
             return Response(
                 {
-                    "error": "You do not have permission to view statistics for this post"
+                    "status": False,
+                    "message": "You do not have permission to view statistics for this post",
+                    "data": None,
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         statistics = PostService.get_post_statistics(post)
-        serializer = PostStatsSerializers(statistics)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Statistics retrieved.",
+                "data": {"stats": statistics},
+            }
+        )
 
 
 class UserPostStatisticsView(APIView):
@@ -358,7 +570,7 @@ class UserPostStatisticsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: UserPostStatisticsSerializer},
+        responses={200: UserPostStatisticsResponseSerializer},
         description="Get post statistics for a user (total posts, type breakdown, etc.).",
     )
     def get(self, request, user_id=None):
@@ -368,8 +580,13 @@ class UserPostStatisticsView(APIView):
             target_user = request.user
 
         statistics = PostService.get_user_post_statistics(target_user)
-        serializer = UserPostStatisticsSerializer(statistics)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "User statistics retrieved.",
+                "data": {"stats": statistics},
+            }
+        )
 
 
 class PostSearchView(APIView):
@@ -402,13 +619,20 @@ class PostSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedPostFeedSerializer},  # ✅ Fixed pagination doc
+        responses={200: PostSearchResponseSerializer},
         description="Search posts by content.",
     )
     def get(self, request):
         serializer = SearchSerializer(data=request.query_params)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Invalid search parameters.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         data = serializer.validated_data
         user = request.user if request.user.is_authenticated else None
@@ -418,8 +642,15 @@ class PostSearchView(APIView):
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(posts, request)
-        results = PostFeedSerializer(page, many=True).data
-        return paginator.get_paginated_response(results)
+        paginated_data = wrap_paginated_data(paginator, page, request, PostFeedSerializer)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Search results.",
+                "data": paginated_data,
+            }
+        )
 
 
 class TrendingPostsView(APIView):
@@ -446,16 +677,7 @@ class TrendingPostsView(APIView):
                 name="limit", type=int, description="Number of results", required=False
             ),
         ],
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "timeframe_hours": {"type": "integer"},
-                    "min_likes": {"type": "integer"},
-                    "results": {"type": "array"},
-                },
-            }
-        },
+        responses={200: TrendingPostsResponseSerializer},
         description="Get trending posts (most liked within a time window).",
     )
     def get(self, request):
@@ -467,19 +689,26 @@ class TrendingPostsView(APIView):
             hours=hours, min_likes=min_likes, limit=limit
         )
 
-        # Custom serialization for trending data
-        data = []
+        # Build results list
+        results = []
         for item in trending:
-            data.append(
-                {
-                    "post": PostFeedSerializer(item["post"]).data,
-                    "like_count": item["like_count"],
-                    "comment_count": item["comment_count"],
-                }
-            )
+            results.append({
+                "post": PostFeedSerializer(item["post"]).data,
+                "like_count": item["like_count"],
+                "comment_count": item["comment_count"],
+            })
 
+        data = {
+            "timeframe_hours": hours,
+            "min_likes": min_likes,
+            "results": results,
+        }
         return Response(
-            {"timeframe_hours": hours, "min_likes": min_likes, "results": data}
+            {
+                "status": True,
+                "message": "Trending posts retrieved.",
+                "data": data,
+            }
         )
 
 
@@ -487,12 +716,6 @@ class PostRestoreView(APIView):
     """View for restoring deleted posts"""
 
     permission_classes = [IsAuthenticated]
-
-    class PostRestoreResponseSerializer(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.CharField()
-        data = PostDisplaySerializer(required=False, allow_null=True)
-
 
     @extend_schema(
         tags=["Post's"],
@@ -507,7 +730,6 @@ class PostRestoreView(APIView):
     def post(self, request, post_id):
         post = get_object_or_404(Post, id=post_id)
 
-        # Check ownership
         if request.user != post.user:
             return Response(
                 {
@@ -538,17 +760,9 @@ class PostRestoreView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-        
-    
 
 class SharePostToGroupView(APIView):
     permission_classes = [IsAuthenticated]
-
-    class PostShareResponseSerializer(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.CharField()
-        data = PostDisplaySerializer(required=False, allow_null=True)
-
 
     @extend_schema(
         tags=["Post's"],
@@ -574,7 +788,11 @@ class SharePostToGroupView(APIView):
 
         if group_id is None:
             return Response(
-                {"status": False, "message": "group_id is required.", "data": None},
+                {
+                    "status": False,
+                    "message": "group_id is required.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -589,23 +807,38 @@ class SharePostToGroupView(APIView):
             )
             serializer = PostDisplaySerializer(new_post, context={"request": request})
             return Response(
-                {"status": True, "message": "Post shared to group successfully.", "data": serializer.data},
+                {
+                    "status": True,
+                    "message": "Post shared to group successfully.",
+                    "data": serializer.data,
+                },
                 status=status.HTTP_201_CREATED,
             )
         except ValidationError as e:
             return Response(
-                {"status": False, "message": "Failed to share post to group.", "data": None},
+                {
+                    "status": False,
+                    "message": "Failed to share post to group.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except PermissionDenied:
             return Response(
-                {"status": False, "message": "You do not have permission to share to this group.", "data": None},
+                {
+                    "status": False,
+                    "message": "You do not have permission to share to this group.",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
         except Exception as e:
             logger.exception("Unexpected error while sharing post %s to group %s: %s", post_id, group_id, e)
             return Response(
-                {"status": False, "message": "An unexpected error occurred.", "data": None},
+                {
+                    "status": False,
+                    "message": "An unexpected error occurred.",
+                    "data": None,
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-

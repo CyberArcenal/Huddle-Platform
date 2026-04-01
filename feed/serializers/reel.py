@@ -1,5 +1,6 @@
 from typing import Optional
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 import os
@@ -67,9 +68,6 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
         return ""
 
 
-
-
-
 class ReelCreateSerializer(serializers.ModelSerializer):
     client_id = serializers.CharField(required=False, allow_null=True, help_text="Unique ID to prevent duplicates")
     thumbnail = serializers.FileField(allow_null=True, required=False)
@@ -78,16 +76,35 @@ class ReelCreateSerializer(serializers.ModelSerializer):
     audio = serializers.FileField(allow_null=True, required=False)
     duration = serializers.IntegerField(help_text="Duration of the video in seconds (auto-validated, not user input)")
     privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES)
+
     class Meta:
         model = Reel
         fields = ["caption", "media", "thumbnail", "audio", "duration", "privacy", "client_id"]
 
+    # --- Added size validation for thumbnail and audio ---
+    def validate_thumbnail(self, value):
+        if value:
+            max_size = getattr(settings, "MAX_THUMBNAIL_SIZE", 5 * 1024 * 1024)  # 5 MB default
+            if value.size > max_size:
+                raise serializers.ValidationError(
+                    f"Thumbnail size exceeds limit ({max_size // (1024 * 1024)} MB)."
+                )
+        return value
+
+    def validate_audio(self, value):
+        if value:
+            max_size = getattr(settings, "MAX_AUDIO_SIZE", 20 * 1024 * 1024)  # 20 MB default
+            if value.size > max_size:
+                raise serializers.ValidationError(
+                    f"Audio file size exceeds limit ({max_size // (1024 * 1024)} MB)."
+                )
+        return value
+
     def validate_video(self, value):
-        # File size limit
-        max_size_mb = 100
-        if value.size > max_size_mb * 1024 * 1024:
+        max_size_mb = getattr(settings, "MAX_REEL_VIDEO_SIZE", 100 * 1024 * 1024)  # 100 MB default
+        if value.size > max_size_mb:
             raise serializers.ValidationError(
-                f"Video file too large (max {max_size_mb} MB)."
+                f"Video file too large (max {max_size_mb // (1024 * 1024)} MB)."
             )
 
         try:

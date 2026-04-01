@@ -14,11 +14,12 @@ from feed.services.feed import FeedService
 logger = logging.getLogger(__name__)
 
 
-class FeedResponseSerializer(serializers.Serializer):
-    """
-    Direct feed response schema (no DRF paginator).
-    """
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
 
+class FeedResponseData(serializers.Serializer):
+    """The actual feed data (without status/message)."""
     page = serializers.IntegerField()
     page_size = serializers.IntegerField()
     feed_type = serializers.CharField()
@@ -26,6 +27,17 @@ class FeedResponseSerializer(serializers.Serializer):
     hasPrev = serializers.BooleanField()
     results = UnifiedContentItemSerializer(many=True)
 
+
+class FeedResponseSerializer(serializers.Serializer):
+    """Consistent wrapper with status and message."""
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = FeedResponseData()
+
+
+# ----------------------------------------------------------------------
+# View
+# ----------------------------------------------------------------------
 
 class FeedView(APIView):
     """
@@ -135,7 +147,14 @@ class FeedView(APIView):
                 getattr(request.user, "id", None),
                 exc,
             )
-            return Response({"detail": "Failed to build feed"}, status=500)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Failed to build feed",
+                    "data": None,
+                },
+                status=500,
+            )
 
         serializer = UnifiedContentItemSerializer(
             feed_rows, many=True, context={"request": request}
@@ -152,7 +171,7 @@ class FeedView(APIView):
             for row in feed_rows
         )
 
-        response = {
+        response_data = {
             "page": page,
             "page_size": page_size,
             "feed_type": feed_type,
@@ -161,6 +180,10 @@ class FeedView(APIView):
             "results": serializer.data,
         }
 
-        # logger.debug(response)
-
-        return Response(response)
+        return Response(
+            {
+                "status": True,
+                "message": "Feed retrieved successfully.",
+                "data": response_data,
+            }
+        )

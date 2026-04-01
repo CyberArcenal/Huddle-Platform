@@ -22,7 +22,9 @@ from global_utils.pagination import AnalyticsPagination
 logger = logging.getLogger(__name__)
 
 
-# ----- Input serializers for add/remove endpoints -----
+# ----------------------------------------------------------------------
+# Input serializers
+# ----------------------------------------------------------------------
 class BookmarkActionSerializer(serializers.Serializer):
     target_type = serializers.CharField(
         help_text="Model name (e.g., 'post', 'comment')"
@@ -30,18 +32,98 @@ class BookmarkActionSerializer(serializers.Serializer):
     target_id = serializers.IntegerField(help_text="Object ID")
 
 
-# ----- Paginated response serializer for bookmark list -----
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
 class PaginatedBookmarkMinimalSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = BookmarkMinimalSerializer(many=True)
 
 
-# ----- View classes -----
+class BookmarkListResponseData(serializers.Serializer):
+    pagination = PaginatedBookmarkMinimalSerializer()
+
+
+class BookmarkListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BookmarkListResponseData(allow_null=True)
+
+
+class BookmarkCreateResponseData(serializers.Serializer):
+    bookmark = BookmarkDisplaySerializer()
+
+
+class BookmarkCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BookmarkCreateResponseData(allow_null=True)
+
+
+class BookmarkDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class BookmarkStatisticsResponseData(serializers.Serializer):
+    bookmark_count = serializers.IntegerField()
+    has_bookmarked = serializers.BooleanField()
+
+
+class BookmarkStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BookmarkStatisticsResponseData()
+
+
+class TopBookmarkItemSerializer(serializers.Serializer):
+    content_type = serializers.CharField()
+    object_id = serializers.IntegerField()
+    bookmark_count = serializers.IntegerField()
+
+
+class BookmarkTopResponseData(serializers.Serializer):
+    results = TopBookmarkItemSerializer(many=True)
+    limit = serializers.IntegerField()
+
+
+class BookmarkTopResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = BookmarkTopResponseData()
+
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_bookmarks(paginator, page, request):
+    """
+    Construct a paginated data dict that matches PaginatedBookmarkMinimalSerializer.
+    """
+    serializer = BookmarkMinimalSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
+
 class BookmarkListView(APIView):
     """List all bookmarks for the authenticated user."""
 
@@ -66,37 +148,53 @@ class BookmarkListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedBookmarkMinimalSerializer},
+        responses={200: BookmarkListResponseSerializer},
         description="Get all bookmarks created by the current user.",
     )
     def get(self, request):
-        queryset = (
-            ObjectBookmark.objects.filter(user=request.user)
-            .select_related("user", "content_type")
-            .order_by("-created_at")
-        )
+        try:
+            queryset = (
+                ObjectBookmark.objects.filter(user=request.user)
+                .select_related("user", "content_type")
+                .order_by("-created_at")
+            )
 
-        content_type_filter = request.query_params.get("content_type")
-        if content_type_filter:
-            try:
-                ct = ContentType.objects.get(model=content_type_filter)
-                queryset = queryset.filter(content_type=ct)
-            except ContentType.DoesNotExist:
-                return Response(
-                    {"error": f"Invalid content type: {content_type_filter}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            content_type_filter = request.query_params.get("content_type")
+            if content_type_filter:
+                try:
+                    ct = ContentType.objects.get(model=content_type_filter)
+                    queryset = queryset.filter(content_type=ct)
+                except ContentType.DoesNotExist:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": f"Invalid content type: {content_type_filter}",
+                            "data": None,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        paginator = AnalyticsPagination()
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = BookmarkMinimalSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+            paginator = AnalyticsPagination()
+            page = paginator.paginate_queryset(queryset, request)
+            paginated_data = wrap_paginated_bookmarks(paginator, page, request)
 
-
-class BookmarkResponseSerializer(serializers.Serializer):
-    status = serializers.BooleanField()
-    message = serializers.CharField()
-    data = BookmarkDisplaySerializer(required=False, allow_null=True)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Bookmarks retrieved.",
+                    "data": {"pagination": paginated_data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error listing bookmarks")
+            return Response(
+                {
+                    "status": False,
+                    "message": "something went wrong",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class BookmarkDetailView(APIView):
@@ -108,10 +206,10 @@ class BookmarkDetailView(APIView):
         tags=["Bookmarks"],
         request=BookmarkActionSerializer,
         responses={
-            201: BookmarkResponseSerializer,
-            400: BookmarkResponseSerializer,
-            403: BookmarkResponseSerializer,
-            404: BookmarkResponseSerializer,
+            201: BookmarkCreateResponseSerializer,
+            400: BookmarkCreateResponseSerializer,
+            403: BookmarkCreateResponseSerializer,
+            404: BookmarkCreateResponseSerializer,
         },
         description="Create a bookmark for the given object.",
     )
@@ -120,7 +218,11 @@ class BookmarkDetailView(APIView):
         serializer = BookmarkActionSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
-                {"status": False, "message": "Invalid request data.", "data": None},
+                {
+                    "status": False,
+                    "message": "Invalid request data.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -144,11 +246,10 @@ class BookmarkDetailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Retrieve the target object and handle not-found
+        # Retrieve the target object
         try:
             obj = ct.get_object_for_this_type(pk=target_id)
         except Exception as e:
-            # Most model .get_object_for_this_type will raise the model's DoesNotExist
             return Response(
                 {
                     "status": False,
@@ -158,7 +259,7 @@ class BookmarkDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Create bookmark via service (service should handle duplicates/permissions)
+        # Create bookmark via service
         try:
             bookmark = BookmarkService.add_bookmark(user=request.user, obj=obj)
         except PermissionDenied:
@@ -195,22 +296,17 @@ class BookmarkDetailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        response_serializer = BookmarkDisplaySerializer(
+        response_data = BookmarkDisplaySerializer(
             bookmark, context={"request": request}
-        )
+        ).data
         return Response(
             {
                 "status": True,
                 "message": "Bookmark created successfully.",
-                "data": response_serializer.data,
+                "data": {"bookmark": response_data},
             },
             status=status.HTTP_201_CREATED,
         )
-
-    class BookmarkDeleteResponseSerializer(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.CharField()
-        data = serializers.JSONField(required=False, allow_null=True)
 
     @extend_schema(
         tags=["Bookmarks"],
@@ -229,7 +325,11 @@ class BookmarkDetailView(APIView):
         serializer = BookmarkActionSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
-                {"status": False, "message": "Invalid request data.", "data": None},
+                {
+                    "status": False,
+                    "message": "Invalid request data.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -258,26 +358,21 @@ class BookmarkDetailView(APIView):
         try:
             obj = ct.get_object_for_this_type(pk=target_id)
         except Exception:
-            # Object not found; we'll still attempt to remove bookmarks by content type + id
             obj = None
 
         try:
             if obj is not None:
-                # Service removes bookmark by object instance
                 BookmarkService.remove_bookmark(user=request.user, obj=obj)
             else:
-                # Service removes bookmark by content_type and object_id
-                # Implement/remove_bookmark_by_target should be provided by your service layer
-                # Fallback: if not available, filter Bookmark model directly
+                # Use fallback removal by content_type + object_id
+                # The service may or may not have this method; if not, we handle directly.
                 try:
                     BookmarkService.remove_bookmark_by_target(
                         user=request.user, content_type=ct, object_id=target_id
                     )
                 except AttributeError:
-                    # Fallback direct deletion (adjust model names/fields as needed)
-                    from feed.models import ObjectBookmark as _BookmarkModel
-
-                    _BookmarkModel.objects.filter(
+                    # Direct deletion fallback
+                    ObjectBookmark.objects.filter(
                         user=request.user, content_type=ct, object_id=target_id
                     ).delete()
 
@@ -289,7 +384,6 @@ class BookmarkDetailView(APIView):
                 },
                 status=status.HTTP_200_OK,
             )
-
         except PermissionDenied:
             return Response(
                 {
@@ -309,6 +403,7 @@ class BookmarkDetailView(APIView):
                     "message": "Failed to remove bookmark.",
                     "data": None,
                 },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -335,7 +430,7 @@ class BookmarkStatisticsView(APIView):
                 location=OpenApiParameter.QUERY,
             ),
         ],
-        responses={200: BookmarkStatisticsSerializer},
+        responses={200: BookmarkStatisticsResponseSerializer},
         description="Get total bookmarks for the object and whether the current user has bookmarked it.",
     )
     def get(self, request):
@@ -344,33 +439,50 @@ class BookmarkStatisticsView(APIView):
 
         if not target_type or not target_id:
             return Response(
-                {"error": "target_type and target_id are required"},
+                {
+                    "status": False,
+                    "message": "target_type and target_id are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             ct = ContentType.objects.get(model=target_type)
-            obj = ct.get_object_for_this_type(pk=target_id)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:
-            # Object doesn't exist, but we can still return zero stats
-            stats = {
+
+        # Try to get the object; if not found, return zero counts
+        try:
+            obj = ct.get_object_for_this_type(pk=target_id)
+        except Exception:
+            obj = None
+
+        if obj is None:
+            data = {
                 "bookmark_count": 0,
                 "has_bookmarked": False,
             }
-            serializer = BookmarkStatisticsSerializer(stats)
-            return Response(serializer.data)
+        else:
+            data = {
+                "bookmark_count": BookmarkService.get_bookmark_count(obj),
+                "has_bookmarked": BookmarkService.has_bookmarked(request.user, obj),
+            }
 
-        stats = {
-            "bookmark_count": BookmarkService.get_bookmark_count(obj),
-            "has_bookmarked": BookmarkService.has_bookmarked(request.user, obj),
-        }
-        serializer = BookmarkStatisticsSerializer(stats)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Bookmark statistics retrieved.",
+                "data": data,
+            }
+        )
 
 
 class BookmarkTopView(APIView):
@@ -394,33 +506,45 @@ class BookmarkTopView(APIView):
                 required=False,
             ),
         ],
-        responses={200: BookmarkMinimalSerializer(many=True)},
+        responses={200: BookmarkTopResponseSerializer},
         description="Get the most bookmarked objects across the platform. (Admin only)",
     )
     def get(self, request):
-        limit = int(request.query_params.get("limit", 10))
-        content_type_filter = request.query_params.get("content_type")
+        try:
+            limit = int(request.query_params.get("limit", 10))
+            top = BookmarkService.get_top_bookmarked_objects(limit)
 
-        top = BookmarkService.get_top_bookmarked_objects(limit)
+            results = []
+            for item in top:
+                ct_id = item["content_type"]
+                obj_id = item["object_id"]
+                total = item["total"]
+                results.append(
+                    {
+                        "content_type": ContentType.objects.get_for_id(ct_id).model,
+                        "object_id": obj_id,
+                        "bookmark_count": total,
+                    }
+                )
 
-        # top is a list of dicts with content_type, object_id, total
-        # We need to fetch the actual objects to get their details.
-        # Alternatively, we can return the aggregated data without the objects.
-        # Let's return a simplified list of content_type, object_id, bookmark_count.
-        results = []
-        for item in top:
-            ct_id = item["content_type"]
-            obj_id = item["object_id"]
-            total = item["total"]
-            # Optionally load the object if needed, but we'll just return the ids.
-            results.append(
+            data = {
+                "results": results,
+                "limit": limit,
+            }
+            return Response(
                 {
-                    "content_type": ContentType.objects.get_for_id(ct_id).model,
-                    "object_id": obj_id,
-                    "bookmark_count": total,
+                    "status": True,
+                    "message": "Top bookmarked objects retrieved.",
+                    "data": data,
                 }
             )
-
-        # Or we could serialize as BookmarkMinimalSerializer with dummy objects? Not ideal.
-        # We'll just return a custom list.
-        return Response(results)
+        except Exception as e:
+            logger.exception("Error retrieving top bookmarks")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

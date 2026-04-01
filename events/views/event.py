@@ -37,22 +37,29 @@ from groups.services import GroupMemberService
 
 from rest_framework import serializers
 
+import logging
 
-class EventCreateResponseData(serializers.Serializer):
+logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
+class EventStatusResponseData(serializers.Serializer):
     id = serializers.IntegerField()
     processing = serializers.BooleanField()
+    ready = serializers.BooleanField()
+    media_urls = serializers.ListField(child=serializers.URLField(), allow_null=True)
 
 
-class EventCreateResponseSerializer(serializers.Serializer):
+class EventStatusResponseSerializer(serializers.Serializer):
     status = serializers.BooleanField()
-    message = serializers.StringRelatedField()
-    data = EventCreateResponseData()
+    message = serializers.CharField()
+    data = EventStatusResponseData(allow_null=True)
 
 
-# ----- Paginated response serializer for drf-spectacular -----
-class PaginatedEventListSerializer(serializers.Serializer):
-    """Matches the custom pagination response from EventsPagination"""
-
+class PaginatedEventListData(serializers.Serializer):
     count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -62,51 +69,141 @@ class PaginatedEventListSerializer(serializers.Serializer):
     results = EventListSerializer(many=True)
 
 
+class EventListResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedEventListData()
+
+
+class EventCreateResponseData(serializers.Serializer):
+    id = serializers.IntegerField()
+    processing = serializers.BooleanField()
+
+
+class EventCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventCreateResponseData(allow_null=True)
+
+
+class EventDetailResponseData(serializers.Serializer):
+    event = EventDetailSerializer()
+
+
+class EventDetailResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventDetailResponseData()
+
+
+class EventUpdateResponseData(serializers.Serializer):
+    event = EventDetailSerializer()
+
+
+class EventUpdateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventUpdateResponseData()
+
+
+class EventDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class EventStatisticsResponseData(serializers.Serializer):
+    statistics = EventStatisticsSerializer()
+
+
+class EventStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventStatisticsResponseData()
+
+
+class EventTimelineResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = EventTimelineSerializer(many=True)
+
+
+class FeaturedEventsResponseData(serializers.Serializer):
+    events = EventListSerializer(many=True)
+
+
+class FeaturedEventsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = FeaturedEventsResponseData()
+
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_events(paginator, page, request):
+    """
+    Construct a paginated data dict that matches PaginatedEventListData.
+    """
+    serializer = EventListSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
+
 class EventStatusView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["Event"],
-        responses={
-            200: inline_serializer(
-                name="EventStatusResponse",
-                fields={
-                    "id": serializers.IntegerField(),
-                    "processing": serializers.BooleanField(),
-                    "ready": serializers.BooleanField(),
-                    "media_urls": serializers.ListField(
-                        child=serializers.URLField(), allow_null=True
-                    ),
-                },
-            )
-        },
+        responses={200: EventStatusResponseSerializer},
         description="Check processing status of an event.",
     )
     def get(self, request, pk):
         event = get_object_or_404(Event, pk=pk)
-        # Check privacy: only owner can see processing status if private
         if event.event_type != "public" and request.user != event.organizer:
-            return Response({"error": "Forbidden"}, status=403)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Forbidden",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         ready = not event.processing and event.media.exists()
         media_urls = []
         if ready:
-            request = self.context.get("request")
             media_urls = [
                 request.build_absolute_uri(m.file.url) for m in event.media.all()
             ]
+        data = {
+            "id": event.id,
+            "processing": event.processing,
+            "ready": ready,
+            "media_urls": media_urls,
+        }
         return Response(
             {
-                "id": event.id,
-                "processing": event.processing,
-                "ready": ready,
-                "media_urls": media_urls,
+                "status": True,
+                "message": "Event status retrieved.",
+                "data": data,
             }
         )
 
 
 class EventListView(APIView):
-    """List all events or create a new event"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -152,68 +249,73 @@ class EventListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="List events with optional filters and pagination.",
     )
     def get(self, request):
-        """Get list of events with filters"""
-        # Get query parameters
         event_type = request.query_params.get("type")
         group_id = request.query_params.get("group_id")
         organizer_id = request.query_params.get("organizer_id")
         upcoming = request.query_params.get("upcoming", "true").lower() == "true"
         days_ahead = int(request.query_params.get("days_ahead", 30))
 
-        # Get queryset (no limit/offset)
-        if upcoming:
-            queryset = Event.objects.filter(start_time__gte=timezone.now()).order_by(
-                "start_time"
-            )
-        else:
-            queryset = Event.objects.all().order_by("-created_at")
+        try:
+            if upcoming:
+                queryset = Event.objects.filter(start_time__gte=timezone.now()).order_by(
+                    "start_time"
+                )
+            else:
+                queryset = Event.objects.all().order_by("-created_at")
 
-        # Apply filters
-        if event_type:
-            queryset = queryset.filter(event_type=event_type)
+            if event_type:
+                queryset = queryset.filter(event_type=event_type)
 
-        if group_id:
-            try:
-                group = Group.objects.get(id=group_id)
+            if group_id:
+                group = get_object_or_404(Group, id=group_id)
                 queryset = queryset.filter(group=group)
-            except Group.DoesNotExist:
-                return Response(
-                    {"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND
-                )
 
-        if organizer_id:
-            try:
-                organizer = User.objects.get(id=organizer_id)
+            if organizer_id:
+                organizer = get_object_or_404(User, id=organizer_id)
                 queryset = queryset.filter(organizer=organizer)
-            except User.DoesNotExist:
-                return Response(
-                    {"error": "Organizer not found"}, status=status.HTTP_404_NOT_FOUND
-                )
-        if not (request.user.is_authenticated and event.organizer == request.user):
-            queryset = queryset.filter(processing=False)
 
-        # Filter accessible events
-        accessible_events = []
-        for event in queryset:
-            has_access, _ = EventService.check_user_access(event, request.user)
-            if has_access or event.event_type == "public":
-                accessible_events.append(event)
+            # Filter out processing events for non-owners
+            if not (request.user.is_authenticated and hasattr(queryset, 'organizer') and queryset.organizer == request.user):
+                queryset = queryset.filter(processing=False)
 
-        # Apply pagination
-        paginator = EventsPagination()
-        page = paginator.paginate_queryset(accessible_events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+            # Filter accessible events
+            accessible_events = []
+            for event in queryset:
+                has_access, _ = EventService.check_user_access(event, request.user)
+                if has_access or event.event_type == "public":
+                    accessible_events.append(event)
+
+            paginator = EventsPagination()
+            page = paginator.paginate_queryset(accessible_events, request)
+            paginated_data = wrap_paginated_events(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Events retrieved.",
+                    "data": paginated_data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error listing events")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Event"],
         request=EventCreateSerializer,
         responses={
-            201: EventCreateResponseSerializer,
+            202: EventCreateResponseSerializer,
             400: EventCreateResponseSerializer,
         },
         description="Create a new event.",
@@ -223,32 +325,33 @@ class EventListView(APIView):
         serializer = EventCreateSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             event = serializer.save()
-            response = {
-                "status": True,
-                "message": "Event upload accepted, processing in background.",
-                "data": {
-                    "id": event.id,
-                    "processing": True,
+            return Response(
+                {
+                    "status": True,
+                    "message": "Event upload accepted, processing in background.",
+                    "data": {
+                        "id": event.id,
+                        "processing": True,
+                    },
                 },
-            }
-            return Response(response, status=status.HTTP_202_ACCEPTED)
-
+                status=status.HTTP_202_ACCEPTED,
+            )
         return Response(
-            {"status": False, "message": "Failed to create event.", "data": None},
+            {
+                "status": False,
+                "message": "Failed to create event.",
+                "data": None,
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class EventDetailView(APIView):
-    """Retrieve, update or delete an event"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_object(self, pk):
-        """Get event object or return 404"""
         try:
             return Event.objects.get(pk=pk)
         except Event.DoesNotExist:
@@ -256,25 +359,35 @@ class EventDetailView(APIView):
 
     @extend_schema(
         tags=["Event"],
-        responses={200: EventDetailSerializer},
+        responses={200: EventDetailResponseSerializer},
         description="Retrieve detailed information about an event.",
     )
     def get(self, request, pk):
-        """Retrieve event details"""
         event = self.get_object(pk)
-
-        # Check access
         has_access, message = EventService.check_user_access(event, request.user)
         if not has_access and event.event_type != "public":
-            raise PermissionDenied(detail=message)
+            return Response(
+                {
+                    "status": False,
+                    "message": message,
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        serializer = EventDetailSerializer(event, context={"request": request})
-        return Response(serializer.data)
+        data = EventDetailSerializer(event, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "Event retrieved.",
+                "data": {"event": data},
+            }
+        )
 
     @extend_schema(
         tags=["Event"],
         request=EventUpdateSerializer,
-        responses={200: EventDetailSerializer},
+        responses={200: EventUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Full update",
@@ -294,33 +407,53 @@ class EventDetailView(APIView):
     )
     @transaction.atomic
     def put(self, request, pk):
-        """Update event"""
         event = self.get_object(pk)
-
-        # Check if user is organizer
         if event.organizer != request.user:
-            raise PermissionDenied(
-                detail="Only the event organizer can update the event"
+            return Response(
+                {
+                    "status": False,
+                    "message": "Only the event organizer can update the event",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = EventUpdateSerializer(
             event, data=request.data, partial=False, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 event = serializer.save()
-                serializer = EventDetailSerializer(event, context={"request": request})
-                return Response(serializer.data)
+                data = EventDetailSerializer(event, context={"request": request}).data
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Event updated.",
+                        "data": {"event": data},
+                    }
+                )
             except DjangoValidationError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     @extend_schema(
         tags=["Event"],
         request=EventUpdateSerializer,
-        responses={200: EventDetailSerializer},
+        responses={200: EventUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Partial update", value={"title": "New Title Only"}, request_only=True
@@ -329,60 +462,95 @@ class EventDetailView(APIView):
         description="Partially update an event.",
     )
     def patch(self, request, pk):
-        """Partial update event"""
         event = self.get_object(pk)
-
-        # Check if user is organizer
         if event.organizer != request.user:
-            raise PermissionDenied(
-                detail="Only the event organizer can update the event"
+            return Response(
+                {
+                    "status": False,
+                    "message": "Only the event organizer can update the event",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = EventUpdateSerializer(
             event, data=request.data, partial=True, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 event = serializer.save()
-                serializer = EventDetailSerializer(event, context={"request": request})
-                return Response(serializer.data)
+                data = EventDetailSerializer(event, context={"request": request}).data
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Event partially updated.",
+                        "data": {"event": data},
+                    }
+                )
             except DjangoValidationError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     @extend_schema(
-        tags=["Event"], responses={204: None}, description="Delete an event."
+        tags=["Event"],
+        responses={204: EventDeleteResponseSerializer},
+        description="Delete an event.",
     )
     @transaction.atomic
     def delete(self, request, pk):
-        """Delete event"""
         event = self.get_object(pk)
-
-        # Check if user is organizer
         if event.organizer != request.user:
-            raise PermissionDenied(
-                detail="Only the event organizer can delete the event"
+            return Response(
+                {
+                    "status": False,
+                    "message": "Only the event organizer can delete the event",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
-
         try:
             EventService.delete_event(event, request.user)
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Event deleted.",
+                    "data": None,
+                },
+                status=status.HTTP_204_NO_CONTENT,
+            )
         except DjangoValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class EventCreateView(APIView):
-    """Create event (alternative endpoint)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Event"],
         request=EventCreateSerializer,
         responses={
-            201: EventCreateResponseSerializer,
+            202: EventCreateResponseSerializer,
             400: EventCreateResponseSerializer,
         },
         description="Create a new event.",
@@ -392,34 +560,36 @@ class EventCreateView(APIView):
         serializer = EventCreateSerializer(
             data=request.data, context={"request": request}
         )
-
         if serializer.is_valid():
             event = serializer.save()
-            response = {
-                "status": True,
-                "message": "Event upload accepted, processing in background.",
-                "data": {
-                    "id": event.id,
-                    "processing": True,
+            return Response(
+                {
+                    "status": True,
+                    "message": "Event upload accepted, processing in background.",
+                    "data": {
+                        "id": event.id,
+                        "processing": True,
+                    },
                 },
-            }
-            return Response(response, status=status.HTTP_202_ACCEPTED)
-
+                status=status.HTTP_202_ACCEPTED,
+            )
         return Response(
-            {"status": False, "message": "Failed to create event.", "data": None},
+            {
+                "status": False,
+                "message": "Failed to create event.",
+                "data": None,
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
 
 class EventUpdateView(APIView):
-    """Update event (alternative endpoint)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Event"],
         request=EventUpdateSerializer,
-        responses={200: EventSerializer},
+        responses={200: EventUpdateResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update event", value={"title": "Updated Title"}, request_only=True
@@ -429,64 +599,115 @@ class EventUpdateView(APIView):
     )
     @transaction.atomic
     def put(self, request, pk):
-        """Update event"""
         try:
             event = Event.objects.get(pk=pk)
         except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Event not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        # Check if user is organizer
         if event.organizer != request.user:
-            raise PermissionDenied(
-                detail="Only the event organizer can update the event"
+            return Response(
+                {
+                    "status": False,
+                    "message": "Only the event organizer can update the event",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = EventUpdateSerializer(
             event, data=request.data, partial=False, context={"request": request}
         )
-
         if serializer.is_valid():
             try:
                 serializer.save()
-                return Response(serializer.data)
+                data = EventDetailSerializer(event, context={"request": request}).data
+                return Response(
+                    {
+                        "status": True,
+                        "message": "Event updated.",
+                        "data": {"event": data},
+                    }
+                )
             except DjangoValidationError as e:
-                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Something went wrong.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        return Response(
+            {
+                "status": False,
+                "message": "Validation error.",
+                "data": serializer.errors,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class EventDeleteView(APIView):
-    """Delete event (alternative endpoint)"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Event"], responses={204: None}, description="Delete an event."
+        tags=["Event"],
+        responses={204: EventDeleteResponseSerializer},
+        description="Delete an event.",
     )
     @transaction.atomic
     def delete(self, request, pk):
-        """Delete event"""
         try:
             event = Event.objects.get(pk=pk)
         except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Event not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        # Check if user is organizer
         if event.organizer != request.user:
-            raise PermissionDenied(
-                detail="Only the event organizer can delete the event"
+            return Response(
+                {
+                    "status": False,
+                    "message": "Only the event organizer can delete the event",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         try:
             EventService.delete_event(event, request.user)
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Event deleted.",
+                    "data": None,
+                },
+                status=status.HTTP_204_NO_CONTENT,
+            )
         except DjangoValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class UpcomingEventsView(APIView):
-    """Get upcoming events"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -520,11 +741,10 @@ class UpcomingEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="Get upcoming events with filters.",
     )
     def get(self, request):
-        """Get upcoming events with filters"""
         user_id = request.query_params.get("user_id")
         group_id = request.query_params.get("group_id")
         event_type = request.query_params.get("type")
@@ -532,11 +752,13 @@ class UpcomingEventsView(APIView):
 
         user = None
         group = None
+        if user_id:
+            user = get_object_or_404(User, id=user_id)
+        if group_id:
+            group = get_object_or_404(Group, id=group_id)
 
-        if user and request.user == user:
-            include_processing = True
-        else:
-            include_processing = False
+        include_processing = (request.user.is_authenticated and user == request.user)
+
         events = EventService.get_upcoming_events(
             user=user,
             group=group,
@@ -545,7 +767,6 @@ class UpcomingEventsView(APIView):
             include_processing=include_processing,
         )
 
-        # Filter accessible events
         accessible_events = []
         for event in events:
             has_access, _ = EventService.check_user_access(event, request.user)
@@ -554,13 +775,18 @@ class UpcomingEventsView(APIView):
 
         paginator = EventsPagination()
         page = paginator.paginate_queryset(accessible_events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_events(paginator, page, request)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Upcoming events retrieved.",
+                "data": paginated_data,
+            }
+        )
 
 
 class PastEventsView(APIView):
-    """Get past events"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -591,18 +817,16 @@ class PastEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="Get past events with filters.",
     )
     def get(self, request):
-        """Get past events with filters"""
         user_id = request.query_params.get("user_id")
         group_id = request.query_params.get("group_id")
         days_back = int(request.query_params.get("days_back", 365))
 
         user = None
         group = None
-
         if user_id:
             user = get_object_or_404(User, id=user_id)
         if group_id:
@@ -620,13 +844,18 @@ class PastEventsView(APIView):
 
         paginator = EventsPagination()
         page = paginator.paginate_queryset(accessible_events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_events(paginator, page, request)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Past events retrieved.",
+                "data": paginated_data,
+            }
+        )
 
 
 class EventSearchView(APIView):
-    """Search events"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -663,11 +892,10 @@ class EventSearchView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="Search events by query, location, date range.",
     )
     def get(self, request):
-        """Search events"""
         query = request.query_params.get("q", "")
         location = request.query_params.get("location")
         event_type = request.query_params.get("type")
@@ -687,7 +915,11 @@ class EventSearchView(APIView):
                 date_range = (start_date, end_date)
             except ValueError:
                 return Response(
-                    {"error": "Invalid date format. Use ISO format."},
+                    {
+                        "status": False,
+                        "message": "Invalid date format. Use ISO format.",
+                        "data": None,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -706,13 +938,18 @@ class EventSearchView(APIView):
 
         paginator = EventsPagination()
         page = paginator.paginate_queryset(accessible_events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_events(paginator, page, request)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Search results.",
+                "data": paginated_data,
+            }
+        )
 
 
 class FeaturedEventsView(APIView):
-    """Get featured events (most popular)"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -731,7 +968,7 @@ class FeaturedEventsView(APIView):
                 name="limit", type=int, description="Number of results", required=False
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: FeaturedEventsResponseSerializer},
         description="Get featured (most popular) events.",
     )
     def get(self, request):
@@ -742,15 +979,17 @@ class FeaturedEventsView(APIView):
         events = EventService.get_featured_events(
             min_attendees=min_attendees, days_ahead=days_ahead, limit=limit
         )
-        serializer = EventListSerializer(
-            events, many=True, context={"request": request}
+        data = EventListSerializer(events, many=True, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "Featured events retrieved.",
+                "data": {"events": data},
+            }
         )
-        return Response(serializer.data)
 
 
 class RecommendedEventsView(APIView):
-    """Get event recommendations for current user"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -760,48 +999,65 @@ class RecommendedEventsView(APIView):
                 name="limit", type=int, description="Number of results", required=False
             ),
         ],
-        responses={200: EventListSerializer(many=True)},
+        responses={200: FeaturedEventsResponseSerializer},
         description="Get personalized event recommendations.",
     )
     def get(self, request):
         limit = min(int(request.query_params.get("limit", 10)), 20)
         events = EventService.get_recommended_events(user=request.user, limit=limit)
-        serializer = EventListSerializer(
-            events, many=True, context={"request": request}
+        data = EventListSerializer(events, many=True, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "Recommended events retrieved.",
+                "data": {"events": data},
+            }
         )
-        return Response(serializer.data)
 
 
 class EventStatisticsView(APIView):
-    """Get event statistics"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
         tags=["Event"],
-        responses={200: EventStatisticsSerializer},
+        responses={200: EventStatisticsResponseSerializer},
         description="Get detailed statistics for an event (attendee counts, remaining spots, etc.).",
     )
     def get(self, request, pk):
-        """Get statistics for a specific event"""
         try:
             event = Event.objects.get(pk=pk)
         except Event.DoesNotExist:
-            raise NotFound(detail="Event not found")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Event not found",
+                    "data": None,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        # Check access
         has_access, message = EventService.check_user_access(event, request.user)
         if not has_access:
-            raise PermissionDenied(detail=message)
+            return Response(
+                {
+                    "status": False,
+                    "message": message,
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         statistics = EventService.get_event_statistics(event)
-        serializer = EventStatisticsSerializer(statistics)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Event statistics retrieved.",
+                "data": {"statistics": statistics},
+            }
+        )
 
 
 class EventTimelineView(APIView):
-    """Get event timeline for current user"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -832,18 +1088,20 @@ class EventTimelineView(APIView):
                 required=False,
             ),
         ],
-        responses={200: EventTimelineSerializer(many=True)},
+        responses={200: EventTimelineResponseSerializer},
         description="Get a timeline of events within a date range for the current user.",
     )
     def get(self, request):
-        """Get event timeline within date range"""
-        # Parse date range
         start_date_str = request.query_params.get("start_date")
         end_date_str = request.query_params.get("end_date")
 
         if not start_date_str or not end_date_str:
             return Response(
-                {"error": "Both start_date and end_date are required"},
+                {
+                    "status": False,
+                    "message": "Both start_date and end_date are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -856,7 +1114,11 @@ class EventTimelineView(APIView):
             )
         except ValueError:
             return Response(
-                {"error": "Invalid date format. Use ISO format."},
+                {
+                    "status": False,
+                    "message": "Invalid date format. Use ISO format.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -874,14 +1136,16 @@ class EventTimelineView(APIView):
             include_attending=include_attending,
             include_organized=include_organized,
         )
-
-        serializer = EventTimelineSerializer(timeline, many=True)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Event timeline retrieved.",
+                "data": timeline,
+            }
+        )
 
 
 class UserOrganizedEventsView(APIView):
-    """Get events organized by a user"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -909,7 +1173,7 @@ class UserOrganizedEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="Get events organized by a specific user.",
     )
     def get(self, request, user_id=None):
@@ -917,7 +1181,12 @@ class UserOrganizedEventsView(APIView):
             user_id = request.query_params.get("user_id")
         if not user_id:
             return Response(
-                {"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": False,
+                    "message": "User ID is required",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         user = get_object_or_404(User, id=user_id)
@@ -937,13 +1206,18 @@ class UserOrganizedEventsView(APIView):
 
         paginator = EventsPagination()
         page = paginator.paginate_queryset(accessible_events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_events(paginator, page, request)
+
+        return Response(
+            {
+                "status": True,
+                "message": "User organized events retrieved.",
+                "data": paginated_data,
+            }
+        )
 
 
 class GroupEventsView(APIView):
-    """Get events for a specific group"""
-
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -965,7 +1239,7 @@ class GroupEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="Get events for a group (user must be a group member for private groups).",
     )
     def get(self, request, group_id):
@@ -973,8 +1247,13 @@ class GroupEventsView(APIView):
 
         # Check if user is group member (for private groups)
         if not GroupMemberService.is_member(group, request.user):
-            raise PermissionDenied(
-                detail="You must be a group member to view group events"
+            return Response(
+                {
+                    "status": False,
+                    "message": "You must be a group member to view group events",
+                    "data": None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         upcoming_only = (
@@ -985,13 +1264,18 @@ class GroupEventsView(APIView):
 
         paginator = EventsPagination()
         page = paginator.paginate_queryset(events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_events(paginator, page, request)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Group events retrieved.",
+                "data": paginated_data,
+            }
+        )
 
 
 class EventTypeEventsView(APIView):
-    """Get events by type"""
-
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     @extend_schema(
@@ -1013,14 +1297,18 @@ class EventTypeEventsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedEventListSerializer},
+        responses={200: EventListResponseSerializer},
         description="Get events filtered by event type (public, private, group).",
     )
     def get(self, request, event_type):
         valid_types = [choice[0] for choice in Event.EVENT_TYPES]
         if event_type not in valid_types:
             return Response(
-                {"error": f"Invalid event type. Must be one of: {valid_types}"},
+                {
+                    "status": False,
+                    "message": f"Invalid event type. Must be one of: {valid_types}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1040,5 +1328,12 @@ class EventTypeEventsView(APIView):
 
         paginator = EventsPagination()
         page = paginator.paginate_queryset(accessible_events, request)
-        serializer = EventListSerializer(page, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_events(paginator, page, request)
+
+        return Response(
+            {
+                "status": True,
+                "message": "Events by type retrieved.",
+                "data": paginated_data,
+            }
+        )

@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -18,8 +19,12 @@ from analytics.serializers.trend_score import (
 )
 from global_utils.pagination import AnalyticsPagination
 
+logger = logging.getLogger(__name__)
 
-# ----- Input serializers for POST/PUT endpoints -----
+
+# ----------------------------------------------------------------------
+# Input serializers for POST/PUT endpoints
+# ----------------------------------------------------------------------
 class RecalculateScoreInputSerializer(serializers.Serializer):
     """Input for recalculating a trend score."""
     target_type = serializers.CharField(help_text="Model name (e.g., 'post', 'comment')")
@@ -33,18 +38,96 @@ class CleanupTrendScoreInputSerializer(serializers.Serializer):
     )
 
 
-# ----- Paginated response serializer for top trending list -----
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_trend_scores(paginator, page, request):
+    """
+    Construct a paginated data dict that matches the expected structure.
+    """
+    serializer = TrendScoreMinimalSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
 class PaginatedTrendScoreMinimalSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = TrendScoreMinimalSerializer(many=True)
 
 
-# ----- View classes -----
+class TrendScoreObjectGetResponseData(serializers.Serializer):
+    trend_score = TrendScoreDisplaySerializer()
+
+
+class TrendScoreObjectGetResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TrendScoreObjectGetResponseData(allow_null=True)
+
+
+class TrendScoreObjectPostResponseData(serializers.Serializer):
+    trend_score = TrendScoreDisplaySerializer()
+
+
+class TrendScoreObjectPostResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TrendScoreObjectPostResponseData()
+
+
+class TrendScoreObjectDeleteResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+class TrendScoreTopResponseData(serializers.Serializer):
+    pagination = PaginatedTrendScoreMinimalSerializer()
+
+
+class TrendScoreTopResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TrendScoreTopResponseData(allow_null=True)
+
+
+class TrendScoreStatisticsResponseData(serializers.Serializer):
+    stats = TrendScoreStatisticsSerializer()
+
+
+class TrendScoreStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TrendScoreStatisticsResponseData()
+
+
+class TrendScoreCleanupResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
+
 class TrendScoreObjectView(APIView):
     """
     Get, update, or delete the trend score for a specific object.
@@ -71,7 +154,7 @@ class TrendScoreObjectView(APIView):
                 location=OpenApiParameter.QUERY,
             ),
         ],
-        responses={200: TrendScoreDisplaySerializer},
+        responses={200: TrendScoreObjectGetResponseSerializer},
         description="Retrieve the trend score for a specific content object.",
     )
     def get(self, request):
@@ -80,7 +163,11 @@ class TrendScoreObjectView(APIView):
 
         if not target_type or not target_id:
             return Response(
-                {"error": "target_type and target_id are required"},
+                {
+                    "status": False,
+                    "message": "target_type and target_id are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -89,45 +176,83 @@ class TrendScoreObjectView(APIView):
             obj = content_type.get_object_for_this_type(pk=target_id)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:  # model class's DoesNotExist
+        except Exception:
             return Response(
-                {"error": f"Object with ID {target_id} not found"},
+                {
+                    "status": False,
+                    "message": f"Object with ID {target_id} not found",
+                    "data": None,
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        score = TrendScoreService.get_score(obj)
-        if score is None:
-            # Optionally, you could auto-calculate if missing, but we'll just return 404
-            return Response(
-                {"error": "No trend score found for this object"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        try:
+            score = TrendScoreService.get_score(obj)
+            if score is None:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "No trend score found for this object",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-        # Retrieve the full ObjectTrendScore record to get id and calculated_at
-        ct = ContentType.objects.get_for_model(obj)
-        trend_obj = ObjectTrendScore.objects.get(content_type=ct, object_id=obj.id)
-        serializer = TrendScoreDisplaySerializer(trend_obj)
-        return Response(serializer.data)
+            ct = ContentType.objects.get_for_model(obj)
+            trend_obj = ObjectTrendScore.objects.get(content_type=ct, object_id=obj.id)
+            data = TrendScoreDisplaySerializer(trend_obj).data
+            return Response(
+                {
+                    "status": True,
+                    "message": "Trend score retrieved.",
+                    "data": {"trend_score": data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving trend score for %s:%s", target_type, target_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Trend Score"],
         request=RecalculateScoreInputSerializer,
-        responses={200: TrendScoreDisplaySerializer},
+        responses={200: TrendScoreObjectPostResponseSerializer},
         description="Recalculate the trend score for a content object. (Admin only)",
     )
     def post(self, request):
         if not request.user.is_staff:
             return Response(
-                {"error": "Admin permission required"},
+                {
+                    "status": False,
+                    "message": "Admin permission required",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         serializer = RecalculateScoreInputSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         target_type = serializer.validated_data["target_type"]
         target_id = serializer.validated_data["target_id"]
@@ -137,18 +262,43 @@ class TrendScoreObjectView(APIView):
             obj = content_type.get_object_for_this_type(pk=target_id)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:
+        except Exception:
             return Response(
-                {"error": f"Object with ID {target_id} not found"},
+                {
+                    "status": False,
+                    "message": f"Object with ID {target_id} not found",
+                    "data": None,
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        trend_obj = TrendScoreService.calculate_score(obj)
-        serializer = TrendScoreDisplaySerializer(trend_obj)
-        return Response(serializer.data)
+        try:
+            trend_obj = TrendScoreService.calculate_score(obj)
+            data = TrendScoreDisplaySerializer(trend_obj).data
+            return Response(
+                {
+                    "status": True,
+                    "message": "Trend score recalculated.",
+                    "data": {"trend_score": data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error recalculating trend score for %s:%s", target_type, target_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Trend Score"],
@@ -168,13 +318,17 @@ class TrendScoreObjectView(APIView):
                 location=OpenApiParameter.QUERY,
             ),
         ],
-        responses={204: None},
+        responses={204: TrendScoreObjectDeleteResponseSerializer},
         description="Delete the trend score for a content object. (Admin only)",
     )
     def delete(self, request):
         if not request.user.is_staff:
             return Response(
-                {"error": "Admin permission required"},
+                {
+                    "status": False,
+                    "message": "Admin permission required",
+                    "data": None,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -183,7 +337,11 @@ class TrendScoreObjectView(APIView):
 
         if not target_type or not target_id:
             return Response(
-                {"error": "target_type and target_id are required"},
+                {
+                    "status": False,
+                    "message": "target_type and target_id are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -192,17 +350,43 @@ class TrendScoreObjectView(APIView):
             obj = content_type.get_object_for_this_type(pk=target_id)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:
+        except Exception:
             return Response(
-                {"error": f"Object with ID {target_id} not found"},
+                {
+                    "status": False,
+                    "message": f"Object with ID {target_id} not found",
+                    "data": None,
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        TrendScoreService.delete_score(obj)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            TrendScoreService.delete_score(obj)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Trend score deleted.",
+                    "data": None,
+                },
+                status=status.HTTP_204_NO_CONTENT,
+            )
+        except Exception as e:
+            logger.exception("Error deleting trend score for %s:%s", target_type, target_id)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TrendScoreTopView(APIView):
@@ -235,32 +419,54 @@ class TrendScoreTopView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedTrendScoreMinimalSerializer},
+        responses={200: TrendScoreTopResponseSerializer},
         description="Retrieve the top trending objects, optionally filtered by content type.",
     )
     def get(self, request):
         content_type_filter = request.query_params.get("content_type")
         limit = int(request.query_params.get("limit", 20))
 
-        queryset = ObjectTrendScore.objects.select_related("content_type").order_by(
-            "-score"
-        )
+        try:
+            queryset = ObjectTrendScore.objects.select_related("content_type").order_by(
+                "-score"
+            )
 
-        if content_type_filter:
-            try:
-                ct = ContentType.objects.get(model=content_type_filter)
-                queryset = queryset.filter(content_type=ct)
-            except ContentType.DoesNotExist:
-                return Response(
-                    {"error": f"Invalid content type: {content_type_filter}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            if content_type_filter:
+                try:
+                    ct = ContentType.objects.get(model=content_type_filter)
+                    queryset = queryset.filter(content_type=ct)
+                except ContentType.DoesNotExist:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": f"Invalid content type: {content_type_filter}",
+                            "data": None,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        paginator = AnalyticsPagination()
-        paginator.page_size = limit
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = TrendScoreMinimalSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+            paginator = AnalyticsPagination()
+            paginator.page_size = limit
+            page = paginator.paginate_queryset(queryset, request)
+            paginated_data = wrap_paginated_trend_scores(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Top trending objects retrieved.",
+                    "data": {"pagination": paginated_data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving top trending objects")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TrendScoreStatisticsView(APIView):
@@ -270,17 +476,33 @@ class TrendScoreStatisticsView(APIView):
 
     @extend_schema(
         tags=["Trend Score"],
-        responses={200: TrendScoreStatisticsSerializer},
+        responses={200: TrendScoreStatisticsResponseSerializer},
         description="Get average, highest, and lowest trend scores across all objects.",
     )
     def get(self, request):
-        stats = {
-            "average_score": TrendScoreService.get_average_score(),
-            "highest_score": TrendScoreService.get_highest_score(),
-            "lowest_score": TrendScoreService.get_lowest_score(),
-        }
-        serializer = TrendScoreStatisticsSerializer(stats)
-        return Response(serializer.data)
+        try:
+            stats = {
+                "average_score": TrendScoreService.get_average_score(),
+                "highest_score": TrendScoreService.get_highest_score(),
+                "lowest_score": TrendScoreService.get_lowest_score(),
+            }
+            return Response(
+                {
+                    "status": True,
+                    "message": "Trend score statistics retrieved.",
+                    "data": {"stats": stats},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving trend score statistics")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TrendScoreCleanupView(APIView):
@@ -294,19 +516,41 @@ class TrendScoreCleanupView(APIView):
     @extend_schema(
         tags=["Trend Score"],
         request=CleanupTrendScoreInputSerializer,
-        responses={
-            200: {"type": "object", "properties": {"message": {"type": "string"}}}
-        },
+        responses={200: TrendScoreCleanupResponseSerializer},
         description="Delete trend scores that haven't been updated in more than the specified days. (Admin only)",
     )
     @transaction.atomic
     def post(self, request):
         serializer = CleanupTrendScoreInputSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         days = serializer.validated_data["days_inactive"]
         cutoff = timezone.now() - datetime.timedelta(days=days)
 
-        count, _ = ObjectTrendScore.objects.filter(calculated_at__lt=cutoff).delete()
-        return Response({"message": f"Deleted {count} stale trend score records."})
+        try:
+            count, _ = ObjectTrendScore.objects.filter(calculated_at__lt=cutoff).delete()
+            return Response(
+                {
+                    "status": True,
+                    "message": f"Deleted {count} stale trend score records.",
+                    "data": None,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error cleaning up stale trend scores")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

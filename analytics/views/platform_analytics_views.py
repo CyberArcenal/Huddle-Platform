@@ -19,32 +19,144 @@ from analytics.serializers.platform_analytics import PlatformAnalyticsDisplaySer
 from global_utils.pagination import AnalyticsPagination
 from ..services.platform_analytics import PlatformAnalyticsService
 import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-# ----- Paginated response serializers for drf-spectacular -----
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_analytics(paginator, page, request, serializer_class):
+    """
+    Construct a paginated data dict that matches the expected structure.
+    """
+    serializer = serializer_class(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
 class PaginatedPlatformAnalyticsSerializer(serializers.Serializer):
-    """Matches the custom pagination response from AnalyticsPagination"""
-
-    count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = PlatformAnalyticsDisplaySerializer(many=True)
 
 
+class PlatformAnalyticsDailyResponseData(serializers.Serializer):
+    analytics = PlatformAnalyticsDisplaySerializer()
+
+
+class PlatformAnalyticsDailyResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsDailyResponseData()
+
+
+class PlatformAnalyticsRangeResponseData(serializers.Serializer):
+    pagination = PaginatedPlatformAnalyticsSerializer()
+
+
+class PlatformAnalyticsRangeResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsRangeResponseData(allow_null=True)
+
+
+class PlatformAnalyticsSummaryResponseData(serializers.Serializer):
+    summary = PlatformAnalyticsSummarySerializer()
+
+
+class PlatformAnalyticsSummaryResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsSummaryResponseData()
+
+
 class PaginatedPlatformTrendSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = PlatformTrendSerializer(many=True)
 
 
-# ----- Input serializers for POST endpoints -----
+class PlatformAnalyticsTrendsResponseData(serializers.Serializer):
+    pagination = PaginatedPlatformTrendSerializer()
+
+
+class PlatformAnalyticsTrendsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsTrendsResponseData(allow_null=True)
+
+
+class PlatformAnalyticsHealthResponseData(serializers.Serializer):
+    health = PlatformHealthSerializer()
+
+
+class PlatformAnalyticsHealthResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsHealthResponseData()
+
+
+class PlatformAnalyticsTopDaysResponseData(serializers.Serializer):
+    top_days = PlatformTopDaySerializer(many=True)
+
+
+class PlatformAnalyticsTopDaysResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsTopDaysResponseData()
+
+
+class PlatformAnalyticsCorrelationResponseData(serializers.Serializer):
+    correlation = PlatformCorrelationSerializer()
+
+
+class PlatformAnalyticsCorrelationResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsCorrelationResponseData()
+
+
+class PlatformAnalyticsReportResponseData(serializers.Serializer):
+    report = DailyReportSerializer()
+
+
+class PlatformAnalyticsReportResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PlatformAnalyticsReportResponseData()
+
+
+class PlatformAnalyticsCleanupResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = None
+
+
+# ----------------------------------------------------------------------
+# Input serializers for POST endpoints
+# ----------------------------------------------------------------------
 class UpdatePlatformAnalyticsInputSerializer(serializers.Serializer):
     date = serializers.DateField(
         required=False, help_text="Date in YYYY-MM-DD format (defaults to today)"
@@ -70,8 +182,9 @@ class CleanupAnalyticsInputSerializer(serializers.Serializer):
     )
 
 
-# --------------------------------------------------------------
-
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 class PlatformAnalyticsDailyView(APIView):
     """Get or create daily platform analytics"""
@@ -88,7 +201,7 @@ class PlatformAnalyticsDailyView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PlatformAnalyticsDisplaySerializer},
+        responses={200: PlatformAnalyticsDailyResponseSerializer},
         description="Retrieve daily platform analytics for a specific date. If not found, creates a new record with zero values.",
     )
     def get(self, request):
@@ -98,23 +211,44 @@ class PlatformAnalyticsDailyView(APIView):
                 date = datetime.date.fromisoformat(date_str)
             except ValueError:
                 return Response(
-                    {"error": "Invalid date format. Use YYYY-MM-DD."},
+                    {
+                        "status": False,
+                        "message": "Invalid date format. Use YYYY-MM-DD.",
+                        "data": None,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
             date = timezone.now().date()
 
-        analytics = PlatformAnalyticsService.get_daily_analytics(date)
-        if not analytics:
-            analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
+        try:
+            analytics = PlatformAnalyticsService.get_daily_analytics(date)
+            if not analytics:
+                analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
 
-        serializer = PlatformAnalyticsDisplaySerializer(analytics)
-        return Response(serializer.data)
+            data = PlatformAnalyticsDisplaySerializer(analytics).data
+            return Response(
+                {
+                    "status": True,
+                    "message": "Daily analytics retrieved.",
+                    "data": {"analytics": data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving daily analytics for %s", date)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     @extend_schema(
         tags=["Platform Analytic's"],
         request=UpdatePlatformAnalyticsInputSerializer,
-        responses={200: PlatformAnalyticsDisplaySerializer},
+        responses={200: PlatformAnalyticsDailyResponseSerializer},
         examples=[
             OpenApiExample(
                 "Update request",
@@ -127,35 +261,79 @@ class PlatformAnalyticsDailyView(APIView):
                     "total_messages": 200,
                 },
                 request_only=True,
-            )
+            ),
+            OpenApiExample(
+                "Update response",
+                value={
+                    "status": True,
+                    "message": "Daily analytics updated.",
+                    "data": {
+                        "analytics": {
+                            "id": 1,
+                            "date": "2025-03-10",
+                            "total_users": 1000,
+                            "active_users": 500,
+                            "new_posts": 50,
+                            "new_groups": 5,
+                            "total_messages": 200,
+                            "created_at": "2025-03-10T12:00:00Z",
+                            "updated_at": "2025-03-10T12:00:00Z",
+                        }
+                    },
+                },
+                response_only=True,
+            ),
         ],
         description="Manually update daily analytics. Only fields provided will be updated.",
     )
     @transaction.atomic
     def post(self, request):
-        """Manually create or update daily analytics (admin only)"""
         serializer = UpdatePlatformAnalyticsInputSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         data = serializer.validated_data
         date = data.get("date", timezone.now().date())
 
-        analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
-        # Update fields if provided
-        for field in [
-            "total_users",
-            "active_users",
-            "new_posts",
-            "new_groups",
-            "total_messages",
-        ]:
-            if field in data:
-                setattr(analytics, field, data[field])
-        analytics.save()
+        try:
+            analytics = PlatformAnalyticsService.get_or_create_daily_analytics(date)
+            for field in [
+                "total_users",
+                "active_users",
+                "new_posts",
+                "new_groups",
+                "total_messages",
+            ]:
+                if field in data:
+                    setattr(analytics, field, data[field])
+            analytics.save()
 
-        output_serializer = PlatformAnalyticsDisplaySerializer(analytics)
-        return Response(output_serializer.data, status=status.HTTP_200_OK)
+            output_data = PlatformAnalyticsDisplaySerializer(analytics).data
+            return Response(
+                {
+                    "status": True,
+                    "message": "Daily analytics updated.",
+                    "data": {"analytics": output_data},
+                },
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.exception("Error updating daily analytics for %s", date)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PlatformAnalyticsRangeView(APIView):
@@ -194,7 +372,7 @@ class PlatformAnalyticsRangeView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedPlatformAnalyticsSerializer},
+        responses={200: PlatformAnalyticsRangeResponseSerializer},
         description="Get platform analytics for a date range, with optional pagination.",
     )
     def get(self, request):
@@ -206,7 +384,11 @@ class PlatformAnalyticsRangeView(APIView):
 
         if not start_date_str or not end_date_str:
             return Response(
-                {"error": "start_date and end_date are required"},
+                {
+                    "status": False,
+                    "message": "start_date and end_date are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -215,17 +397,41 @@ class PlatformAnalyticsRangeView(APIView):
             end_date = datetime.date.fromisoformat(end_date_str)
         except ValueError:
             return Response(
-                {"error": "Invalid date format. Use YYYY-MM-DD."},
+                {
+                    "status": False,
+                    "message": "Invalid date format. Use YYYY-MM-DD.",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        analytics = PlatformAnalyticsService.get_analytics_range(
-            start_date, end_date, include_empty
-        )
-        paginator = AnalyticsPagination()
-        page = paginator.paginate_queryset(analytics, request)
-        serializer = PlatformAnalyticsDisplaySerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        try:
+            analytics = PlatformAnalyticsService.get_analytics_range(
+                start_date, end_date, include_empty
+            )
+            paginator = AnalyticsPagination()
+            page = paginator.paginate_queryset(analytics, request)
+            paginated_data = wrap_paginated_analytics(
+                paginator, page, request, PlatformAnalyticsDisplaySerializer
+            )
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Analytics range retrieved.",
+                    "data": {"pagination": paginated_data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving analytics range")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PlatformAnalyticsSummaryView(APIView):
@@ -243,14 +449,30 @@ class PlatformAnalyticsSummaryView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PlatformAnalyticsSummarySerializer},
+        responses={200: PlatformAnalyticsSummaryResponseSerializer},
         description="Get a summary of platform metrics over the last N days.",
     )
     def get(self, request):
         days = int(request.query_params.get("days", 30))
-        summary = PlatformAnalyticsService.get_platform_summary(days)
-        serializer = PlatformAnalyticsSummarySerializer(summary)
-        return Response(serializer.data)
+        try:
+            summary = PlatformAnalyticsService.get_platform_summary(days)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Platform summary retrieved.",
+                    "data": {"summary": summary},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving platform summary")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PlatformAnalyticsTrendsView(APIView):
@@ -289,7 +511,7 @@ class PlatformAnalyticsTrendsView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedPlatformTrendSerializer},
+        responses={200: PlatformAnalyticsTrendsResponseSerializer},
         description="Get trend data (daily values with moving average) for a specific metric.",
     )
     def get(self, request):
@@ -299,7 +521,11 @@ class PlatformAnalyticsTrendsView(APIView):
 
         if not metric:
             return Response(
-                {"error": "metric parameter is required"},
+                {
+                    "status": False,
+                    "message": "metric parameter is required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -308,12 +534,38 @@ class PlatformAnalyticsTrendsView(APIView):
                 metric, days, moving_avg
             )
         except ValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error retrieving trends for metric %s", metric)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         paginator = AnalyticsPagination()
         page = paginator.paginate_queryset(trends, request)
-        serializer = PlatformTrendSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        paginated_data = wrap_paginated_analytics(
+            paginator, page, request, PlatformTrendSerializer
+        )
+
+        return Response(
+            {
+                "status": True,
+                "message": "Trends retrieved.",
+                "data": {"pagination": paginated_data},
+            }
+        )
 
 
 class PlatformAnalyticsHealthView(APIView):
@@ -331,14 +583,30 @@ class PlatformAnalyticsHealthView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PlatformHealthSerializer},
+        responses={200: PlatformAnalyticsHealthResponseSerializer},
         description="Calculate overall platform health score based on activity, growth, engagement.",
     )
     def get(self, request):
         days = int(request.query_params.get("days", 7))
-        health = PlatformAnalyticsService.get_platform_health_metrics(days)
-        serializer = PlatformHealthSerializer(health)
-        return Response(serializer.data)
+        try:
+            health = PlatformAnalyticsService.get_platform_health_metrics(days)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Platform health metrics retrieved.",
+                    "data": {"health": health},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving platform health")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PlatformAnalyticsTopDaysView(APIView):
@@ -362,7 +630,7 @@ class PlatformAnalyticsTopDaysView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PlatformTopDaySerializer(many=True)},
+        responses={200: PlatformAnalyticsTopDaysResponseSerializer},
         description="Get the top performing days for a given metric.",
     )
     def get(self, request):
@@ -372,10 +640,32 @@ class PlatformAnalyticsTopDaysView(APIView):
         try:
             top_days = PlatformAnalyticsService.get_top_performing_days(metric, limit)
         except ValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error retrieving top days for metric %s", metric)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-        serializer = PlatformTopDaySerializer(top_days, many=True)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Top performing days retrieved.",
+                "data": {"top_days": top_days},
+            }
+        )
 
 
 class PlatformAnalyticsCorrelationView(APIView):
@@ -399,7 +689,7 @@ class PlatformAnalyticsCorrelationView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PlatformCorrelationSerializer},
+        responses={200: PlatformAnalyticsCorrelationResponseSerializer},
         description="Calculate correlation coefficient between two metrics over a period.",
     )
     def get(self, request):
@@ -409,7 +699,11 @@ class PlatformAnalyticsCorrelationView(APIView):
 
         if not metric1 or not metric2:
             return Response(
-                {"error": "metric1 and metric2 are required"},
+                {
+                    "status": False,
+                    "message": "metric1 and metric2 are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -418,10 +712,32 @@ class PlatformAnalyticsCorrelationView(APIView):
                 metric1, metric2, days
             )
         except ValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            logger.exception("Error retrieving correlation")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-        serializer = PlatformCorrelationSerializer(correlation)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Correlation analysis retrieved.",
+                "data": {"correlation": correlation},
+            }
+        )
 
 
 class PlatformAnalyticsReportView(APIView):
@@ -439,7 +755,7 @@ class PlatformAnalyticsReportView(APIView):
                 required=False,
             ),
         ],
-        responses={200: DailyReportSerializer},
+        responses={200: PlatformAnalyticsReportResponseSerializer},
         description="Generate a detailed daily report with changes from previous day.",
     )
     def get(self, request):
@@ -449,15 +765,35 @@ class PlatformAnalyticsReportView(APIView):
                 date = datetime.date.fromisoformat(date_str)
             except ValueError:
                 return Response(
-                    {"error": "Invalid date format. Use YYYY-MM-DD."},
+                    {
+                        "status": False,
+                        "message": "Invalid date format. Use YYYY-MM-DD.",
+                        "data": None,
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
             date = timezone.now().date()
 
-        report = PlatformAnalyticsService.generate_daily_report(date)
-        serializer = DailyReportSerializer(report)
-        return Response(serializer.data)
+        try:
+            report = PlatformAnalyticsService.generate_daily_report(date)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Daily report generated.",
+                    "data": {"report": report},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error generating daily report for %s", date)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PlatformAnalyticsCleanupView(APIView):
@@ -468,17 +804,39 @@ class PlatformAnalyticsCleanupView(APIView):
     @extend_schema(
         tags=["Platform Analytic's"],
         request=CleanupAnalyticsInputSerializer,
-        responses={
-            200: {"type": "object", "properties": {"message": {"type": "string"}}}
-        },
+        responses={200: PlatformAnalyticsCleanupResponseSerializer},
         description="Delete analytics records older than specified days.",
     )
     @transaction.atomic
     def post(self, request):
         serializer = CleanupAnalyticsInputSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         days_to_keep = serializer.validated_data["days_to_keep"]
-        count = PlatformAnalyticsService.cleanup_old_analytics(days_to_keep)
-        return Response({"message": f"Deleted {count} old analytics records."})
+        try:
+            count = PlatformAnalyticsService.cleanup_old_analytics(days_to_keep)
+            return Response(
+                {
+                    "status": True,
+                    "message": f"Deleted {count} old analytics records.",
+                    "data": None,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error cleaning up old analytics records")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

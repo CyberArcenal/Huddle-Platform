@@ -1,15 +1,12 @@
 # users/serializers/user_image.py
 import os
+from django.conf import settings
 from rest_framework import serializers
 from feed.models.post import POST_PRIVACY_TYPES
 from users.models import UserImage
 from users.models.user import PROFILE_IMAGE_TYPE_CHOICES
 from users.serializers.user.profile import UserMinimalSerializer
 from users.services.user_image import UserImageService
-
-
-
-
 
 
 
@@ -181,6 +178,14 @@ class UserImageCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
+        # --- Added file size validation ---
+        image_file = attrs.get("image")
+        if image_file:
+            max_size = getattr(settings, "USER_IMAGE_MAX_SIZE", 5 * 1024 * 1024)  # 5 MB default
+            if image_file.size > max_size:
+                raise serializers.ValidationError(
+                    {"image": f"Image file size exceeds limit ({max_size // (1024 * 1024)} MB)."}
+                )
         # Additional validation for image dimensions etc.
         # You can copy the validation from ProfilePictureUploadSerializer.validate_image_file
         return attrs
@@ -209,5 +214,3 @@ class UserImageCreateSerializer(serializers.ModelSerializer):
             crop_width=crop_width,
             crop_height=crop_height,
         )
-        
-

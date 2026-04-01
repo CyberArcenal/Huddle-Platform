@@ -17,17 +17,108 @@ from feed.serializers.view import (
 from global_utils.pagination import AnalyticsPagination, StoriesPagination
 from stories.services.story import StoryService
 
+import logging
 
-# ----- Paginated response serializer for view history -----
+logger = logging.getLogger(__name__)
+
+
+# ----------------------------------------------------------------------
+# Response serializers for consistent documentation
+# ----------------------------------------------------------------------
+
+class ViewRecordResponseData(serializers.Serializer):
+    view = ViewDisplaySerializer()
+
+
+class ViewRecordResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ViewRecordResponseData(allow_null=True)
+
+
+class ViewStatisticsResponseData(serializers.Serializer):
+    stats = ViewStatisticsSerializer()
+
+
+class ViewStatisticsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ViewStatisticsResponseData()
+
+
 class PaginatedViewMinimalSerializer(serializers.Serializer):
-    count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
     hasPrev = serializers.BooleanField()
+    count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = ViewMinimalSerializer(many=True)
 
+
+class ViewHistoryResponseData(serializers.Serializer):
+    pagination = PaginatedViewMinimalSerializer()
+
+
+class ViewHistoryResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ViewHistoryResponseData(allow_null=True)
+
+
+class TopViewedItemSerializer(serializers.Serializer):
+    target_type = serializers.CharField()
+    target_id = serializers.IntegerField()
+    view_count = serializers.IntegerField()
+    unique_viewers = serializers.IntegerField()
+    total_duration = serializers.IntegerField(allow_null=True)
+    average_duration = serializers.FloatField(allow_null=True)
+
+
+class TopViewedResponseData(serializers.Serializer):
+    results = TopViewedItemSerializer(many=True)
+    limit = serializers.IntegerField()
+
+
+class TopViewedResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = TopViewedResponseData()
+
+
+class StoryViewsResponseData(serializers.Serializer):
+    pagination = PaginatedViewMinimalSerializer()
+
+
+class StoryViewsResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = StoryViewsResponseData(allow_null=True)
+
+
+# ----------------------------------------------------------------------
+# Helper to wrap paginated data
+# ----------------------------------------------------------------------
+def wrap_paginated_views(paginator, page, request):
+    """
+    Construct a paginated data dict that matches PaginatedViewMinimalSerializer.
+    """
+    serializer = ViewMinimalSerializer(page, many=True, context={'request': request})
+    data = {
+        'page': paginator.page.number,
+        'hasNext': paginator.page.has_next(),
+        'hasPrev': paginator.page.has_previous(),
+        'count': paginator.page.paginator.count,
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': serializer.data,
+    }
+    return data
+
+
+# ----------------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------------
 
 class ViewRecordView(APIView):
     """Record a view for a content object."""
@@ -37,17 +128,31 @@ class ViewRecordView(APIView):
     @extend_schema(
         tags=["Views"],
         request=ViewCreateSerializer,
-        responses={201: ViewDisplaySerializer},
+        responses={201: ViewRecordResponseSerializer},
         description="Record a view for a content object. Can be anonymous or authenticated.",
     )
     def post(self, request):
         serializer = ViewCreateSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error.",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         view = serializer.save()
-        view_serializer = ViewDisplaySerializer(view, context={"request": request})
-        return Response(view_serializer.data, status=status.HTTP_201_CREATED)
+        view_data = ViewDisplaySerializer(view, context={"request": request}).data
+        return Response(
+            {
+                "status": True,
+                "message": "View recorded successfully.",
+                "data": {"view": view_data},
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ViewStatisticsView(APIView):
@@ -73,7 +178,7 @@ class ViewStatisticsView(APIView):
                 location=OpenApiParameter.QUERY,
             ),
         ],
-        responses={200: ViewStatisticsSerializer},
+        responses={200: ViewStatisticsResponseSerializer},
         description="Get aggregated view statistics for a content object.",
     )
     def get(self, request):
@@ -82,7 +187,11 @@ class ViewStatisticsView(APIView):
 
         if not target_type or not target_id:
             return Response(
-                {"error": "target_type and target_id are required"},
+                {
+                    "status": False,
+                    "message": "target_type and target_id are required",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -91,10 +200,14 @@ class ViewStatisticsView(APIView):
             obj = ct.get_object_for_this_type(pk=target_id)
         except ContentType.DoesNotExist:
             return Response(
-                {"error": f"Invalid content type: {target_type}"},
+                {
+                    "status": False,
+                    "message": f"Invalid content type: {target_type}",
+                    "data": None,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except obj.DoesNotExist:
+        except Exception:
             # Object doesn't exist, return zero stats
             stats = {
                 "view_count": 0,
@@ -102,8 +215,13 @@ class ViewStatisticsView(APIView):
                 "total_duration": 0,
                 "average_duration": 0,
             }
-            serializer = ViewStatisticsSerializer(stats)
-            return Response(serializer.data)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Statistics retrieved (object not found, zero stats).",
+                    "data": {"stats": stats},
+                }
+            )
 
         stats = {
             "view_count": ViewService.get_view_count(obj),
@@ -111,8 +229,13 @@ class ViewStatisticsView(APIView):
             "total_duration": ViewService.get_total_duration(obj),
             "average_duration": ViewService.get_average_duration(obj),
         }
-        serializer = ViewStatisticsSerializer(stats)
-        return Response(serializer.data)
+        return Response(
+            {
+                "status": True,
+                "message": "Statistics retrieved.",
+                "data": {"stats": stats},
+            }
+        )
 
 
 class ViewHistoryView(APIView):
@@ -139,29 +262,51 @@ class ViewHistoryView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedViewMinimalSerializer},
+        responses={200: ViewHistoryResponseSerializer},
         description="Get the current user's view history.",
     )
     def get(self, request):
-        queryset = ObjectView.objects.filter(user=request.user).select_related(
-            "user", "content_type"
-        ).order_by("-viewed_at")
+        try:
+            queryset = ObjectView.objects.filter(user=request.user).select_related(
+                "user", "content_type"
+            ).order_by("-viewed_at")
 
-        content_type_filter = request.query_params.get("content_type")
-        if content_type_filter:
-            try:
-                ct = ContentType.objects.get(model=content_type_filter)
-                queryset = queryset.filter(content_type=ct)
-            except ContentType.DoesNotExist:
-                return Response(
-                    {"error": f"Invalid content type: {content_type_filter}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            content_type_filter = request.query_params.get("content_type")
+            if content_type_filter:
+                try:
+                    ct = ContentType.objects.get(model=content_type_filter)
+                    queryset = queryset.filter(content_type=ct)
+                except ContentType.DoesNotExist:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": f"Invalid content type: {content_type_filter}",
+                            "data": None,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        paginator = AnalyticsPagination()
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = ViewMinimalSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+            paginator = AnalyticsPagination()
+            page = paginator.paginate_queryset(queryset, request)
+            paginated_data = wrap_paginated_views(paginator, page, request)
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "View history retrieved.",
+                    "data": {"pagination": paginated_data},
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving view history")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TopViewedView(APIView):
@@ -185,51 +330,75 @@ class TopViewedView(APIView):
                 required=False,
             ),
         ],
-        responses={200: ViewStatisticsSerializer(many=True)},
+        responses={200: TopViewedResponseSerializer},
         description="Get the most viewed objects across the platform. (Admin only)",
     )
     def get(self, request):
-        limit = int(request.query_params.get("limit", 10))
-        content_type_filter = request.query_params.get("content_type")
+        try:
+            limit = int(request.query_params.get("limit", 10))
+            content_type_filter = request.query_params.get("content_type")
 
-        queryset = ObjectView.objects.values("content_type", "object_id").annotate(
-            view_count=models.Count("id"),
-            unique_viewers=models.Count("user", distinct=True),
-            total_duration=models.Sum("duration_seconds"),
-            average_duration=models.Avg("duration_seconds"),
-        ).order_by("-view_count")[:limit]
+            queryset = ObjectView.objects.values("content_type", "object_id").annotate(
+                view_count=models.Count("id"),
+                unique_viewers=models.Count("user", distinct=True),
+                total_duration=models.Sum("duration_seconds"),
+                average_duration=models.Avg("duration_seconds"),
+            ).order_by("-view_count")[:limit]
 
-        if content_type_filter:
-            try:
-                ct = ContentType.objects.get(model=content_type_filter)
-                queryset = queryset.filter(content_type=ct)
-            except ContentType.DoesNotExist:
-                return Response(
-                    {"error": f"Invalid content type: {content_type_filter}"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            if content_type_filter:
+                try:
+                    ct = ContentType.objects.get(model=content_type_filter)
+                    queryset = queryset.filter(content_type=ct)
+                except ContentType.DoesNotExist:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": f"Invalid content type: {content_type_filter}",
+                            "data": None,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        results = []
-        for item in queryset:
-            ct_id = item["content_type"]
-            obj_id = item["object_id"]
-            try:
-                ct = ContentType.objects.get_for_id(ct_id)
-                model_name = ct.model
-            except ContentType.DoesNotExist:
-                model_name = "unknown"
+            results = []
+            for item in queryset:
+                ct_id = item["content_type"]
+                obj_id = item["object_id"]
+                try:
+                    ct = ContentType.objects.get_for_id(ct_id)
+                    model_name = ct.model
+                except ContentType.DoesNotExist:
+                    model_name = "unknown"
 
-            results.append({
-                "target_type": model_name,
-                "target_id": obj_id,
-                "view_count": item["view_count"],
-                "unique_viewers": item["unique_viewers"],
-                "total_duration": item["total_duration"],
-                "average_duration": item["average_duration"],
-            })
+                results.append({
+                    "target_type": model_name,
+                    "target_id": obj_id,
+                    "view_count": item["view_count"],
+                    "unique_viewers": item["unique_viewers"],
+                    "total_duration": item["total_duration"] or 0,
+                    "average_duration": item["average_duration"] or 0.0,
+                })
 
-        return Response(results)
-    
+            data = {
+                "results": results,
+                "limit": limit,
+            }
+            return Response(
+                {
+                    "status": True,
+                    "message": "Top viewed objects retrieved.",
+                    "data": data,
+                }
+            )
+        except Exception as e:
+            logger.exception("Error retrieving top viewed objects")
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class ViewsListView(APIView):
@@ -250,23 +419,52 @@ class ViewsListView(APIView):
                 required=False,
             ),
         ],
-        responses={200: PaginatedViewMinimalSerializer},
+        responses={200: StoryViewsResponseSerializer},
         description="Retrieve a paginated list of users who viewed a story. Only the story owner can access.",
     )
     def get(self, request, story_id):
-        story = StoryService.get_story_by_id(story_id)
-        if not story:
+        try:
+            story = StoryService.get_story_by_id(story_id)
+            if not story:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Story not found",
+                        "data": None,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Permission check: only owner or admin can see viewers
+            if story.user != request.user and not request.user.is_staff:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You do not have permission to view viewers of this story",
+                        "data": None,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            views = ViewService.get_story_views(story)
+            paginator = StoriesPagination()
+            page = paginator.paginate_queryset(views, request)
+            paginated_data = wrap_paginated_views(paginator, page, request)
+
             return Response(
-                {"error": "Story not found"}, status=status.HTTP_404_NOT_FOUND
+                {
+                    "status": True,
+                    "message": "Story viewers retrieved.",
+                    "data": {"pagination": paginated_data},
+                }
             )
-        # Permission check: only owner or admin can see viewers
-        if story.user != request.user and not request.user.is_staff:
+        except Exception as e:
+            logger.exception("Error retrieving story viewers for story %s", story_id)
             return Response(
-                {"error": "You do not have permission to view viewers of this story"},
-                status=status.HTTP_403_FORBIDDEN,
+                {
+                    "status": False,
+                    "message": "Something went wrong.",
+                    "data": None,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        views = ViewService.get_story_views(story)
-        paginator = StoriesPagination()
-        page = paginator.paginate_queryset(views, request)
-        serializer = ViewMinimalSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)

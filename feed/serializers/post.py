@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Any, List, Optional
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from feed.models.post import Post
@@ -99,6 +100,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
         post_type = data.get("post_type", "text")
         media = data.get("media", [])
 
+        # --- Existing validation for post_type vs media ---
         if post_type in ["image", "video"] and not media:
             raise serializers.ValidationError(
                 {
@@ -113,6 +115,28 @@ class PostCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"content": "Text posts require content."}
             )
+
+        # --- Added size validation for media files ---
+        if media:
+            if post_type == "image":
+                max_size = getattr(settings, "MAX_IMAGE_SIZE", 10 * 1024 * 1024)  # 10 MB default
+                for idx, file in enumerate(media):
+                    if file.size > max_size:
+                        raise serializers.ValidationError(
+                            {
+                                "media": f"Image file at position {idx+1} exceeds {max_size // (1024 * 1024)} MB."
+                            }
+                        )
+            elif post_type == "video":
+                max_size = getattr(settings, "MAX_VIDEO_SIZE", 50 * 1024 * 1024)  # 50 MB default
+                for idx, file in enumerate(media):
+                    if file.size > max_size:
+                        raise serializers.ValidationError(
+                            {
+                                "media": f"Video file at position {idx+1} exceeds {max_size // (1024 * 1024)} MB."
+                            }
+                        )
+
         return data
 
     def create(self, validated_data):

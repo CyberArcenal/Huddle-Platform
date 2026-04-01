@@ -9,7 +9,7 @@ from groups.serializers.suggestion import GroupSuggestionItemSerializer
 from rest_framework import serializers
 
 
-class PaginatedGroupSuggestionSerializer(serializers.Serializer):
+class PaginatedGroupSuggestionData(serializers.Serializer):
     count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -18,7 +18,12 @@ class PaginatedGroupSuggestionSerializer(serializers.Serializer):
     previous = serializers.URLField(allow_null=True)
     results = GroupSuggestionItemSerializer(many=True)
 
-
+class PaginatedGroupSuggestionSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PaginatedGroupSuggestionData()
+    
+    
 class GroupSuggestionView(APIView):
     """View for getting ranked group recommendations."""
     permission_classes = [permissions.IsAuthenticated]
@@ -91,7 +96,7 @@ class GroupSuggestionView(APIView):
         next_url = f"{base_url}?limit={limit}&offset={offset+limit}" if has_next else None
         prev_url = f"{base_url}?limit={limit}&offset={max(0, offset-limit)}" if has_prev else None
 
-        response_data = {
+        data = {
             "count": len(recommendations),
             "page": page,
             "hasNext": has_next,
@@ -102,6 +107,11 @@ class GroupSuggestionView(APIView):
         }
         # Serialize the results
         serializer = GroupSuggestionItemSerializer(recommendations, many=True, context={"request": request})
-        response_data["results"] = serializer.data
-
+        data["results"] = serializer.data
+        
+        response_data = {
+            "status": True,
+            "message": "Group suggestions retrieved successfully.",
+            "data": response_data,
+        }
         return Response(response_data)
