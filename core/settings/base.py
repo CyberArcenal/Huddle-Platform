@@ -28,6 +28,8 @@ from .components.spectacular        import *
 
 # from .components.cloudinary         import *
 
+from .components.media              import *
+
 
 
 

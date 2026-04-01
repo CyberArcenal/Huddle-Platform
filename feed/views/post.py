@@ -42,9 +42,42 @@ class PaginatedPostFeedSerializer(serializers.Serializer):
     previous = serializers.URLField(allow_null=True)
     results = PostFeedSerializer(many=True)
 
+class PostCreateResponseData(serializers.Serializer):
+        id = serializers.IntegerField()
+        processing = serializers.StringRelatedField()
 
+class PostCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = PostCreateResponseData()
 # --------------------------------------------------------------
+class PostStatusView(APIView):
+    permission_classes = [AllowAny]
 
+    @extend_schema(
+        tags=["Post's"],
+        responses={200: inline_serializer(
+            name='PostStatusResponse',
+            fields={
+                'id': serializers.IntegerField(),
+                'processing': serializers.BooleanField(),
+                'ready': serializers.BooleanField(),
+                'media_urls': serializers.ListField(child=serializers.URLField(), allow_null=True),
+            }
+        )},
+        description="Check processing status of a post."
+    )
+    def get(self, request, post_id):
+        post = get_object_or_404(Post, id=post_id)
+        if post.privacy != 'public' and request.user != post.user:
+            return Response({"error": "Forbidden"}, status=403)
+        media_urls = [request.build_absolute_uri(m.file.url) for m in post.media.all()] if not post.processing else None
+        return Response({
+            'id': post.id,
+            'processing': post.processing,
+            'ready': not post.processing and post.media.exists(),
+            'media_urls': media_urls,
+        })
 
 class PostListView(APIView):
     """View for listing and creating posts"""
@@ -90,11 +123,16 @@ class PostListView(APIView):
         try:
             if user_posts:
                 target_user = get_object_or_404(User, id=user_posts)
-                posts = PostService.get_user_posts(user=target_user)
+                include_processing = (request.user.is_authenticated and request.user == target_user)
+                posts = PostService.get_user_posts(
+                    user=target_user,
+                    requester=request.user if request.user.is_authenticated else None,
+                    include_processing=include_processing,
+                )
             elif feed and user:
-                posts = PostService.get_feed_posts(user=user)
+                posts = PostService.get_feed_posts(user=user, include_processing=False)
             else:
-                posts = PostService.get_public_posts(exclude_user=user)
+                posts = PostService.get_public_posts(exclude_user=user, include_processing=False)
 
             paginator = StandardResultsSetPagination()
             page = paginator.paginate_queryset(posts, request)
@@ -107,11 +145,7 @@ class PostListView(APIView):
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    class PostCreateResponseSerializer(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.CharField()
-        data = PostDisplaySerializer(required=False, allow_null=True)
+    
 
 
     @extend_schema(
@@ -137,10 +171,13 @@ class PostListView(APIView):
             post = serializer.save()
             response = {
                 "status": True,
-                "message": "Post created successfully.",
-                "data": PostDisplaySerializer(post, context={"request": request}).data,
+                "message": "Post upload accepted, processing in background.",
+                "data": {
+                    "id": post.id,
+                    "processing": True,
+                }
             }
-            return Response(response, status=status.HTTP_201_CREATED)
+            return Response(response, status=status.HTTP_202_ACCEPTED)
 
         # Log validation errors for debugging, return consistent error shape
         logger.debug("Post create validation errors: %s", serializer.errors)

@@ -1,5 +1,6 @@
+import os
 import threading
-
+import tempfile
 from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -18,7 +19,7 @@ from feed.services.media import MediaProcessingService
 from feed.services.reaction import ReactionService
 from feed.services.share import ShareService
 from feed.services.view import ViewService
-from feed.tasks.media import process_media_task
+from feed.tasks.media import finalize_post_upload, process_media_task
 from groups.models.group import Group
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
@@ -38,31 +39,27 @@ class PostService:
         user: User,
         content: str,
         post_type: str = "text",
-        media_files: Optional[List] = None,  # list of uploaded files
+        media_files: Optional[List] = None,
         privacy: str = "followers",
         group: Group = None,
         tag_users: Optional[List[User]] = None,
+        client_id: Optional[str] = None,
         **extra_fields,
     ) -> Post:
-        """Create a new post with optional media files"""
-        # Validate post type
-        valid_types = [choice[0] for choice in POST_TYPES]
-        if post_type not in valid_types:
-            raise ValidationError(f"Post type must be one of {valid_types}")
+        # Idempotency check
+        if client_id:
+            existing = Post.objects.filter(client_id=client_id).first()
+            if existing:
+                return existing
 
-        if group and not isinstance(group, Group):
-            raise ValidationError(f"Group: {group} is not an instance")
-
-        if not isinstance(user, User):
-            raise ValidationError(f"User: {user} is not an intance")
-
-        # Validate based on post type
-        if post_type == "text" and not content.strip():
-            raise ValidationError("Text posts require content")
-        elif post_type in ["image", "video"] and not media_files:
-            raise ValidationError(
-                f"{post_type.capitalize()} posts require at least one media file."
-            )
+        # Save media files to temporary locations
+        temp_paths = []
+        if media_files:
+            for file in media_files:
+                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                    for chunk in file.chunks():
+                        tmp.write(chunk)
+                    temp_paths.append(tmp.name)
 
         try:
             with transaction.atomic():
@@ -72,31 +69,30 @@ class PostService:
                     post_type=post_type,
                     privacy=privacy,
                     group=group,
+                    client_id=client_id,
+                    processing=True,
+                    temp_file_paths=temp_paths,
                     **extra_fields,
                 )
-                if media_files:
-                    post_ct = ContentType.objects.get_for_model(post)
-                    for order, file in enumerate(media_files):
-                        MediaProcessingService.create(
-                            content_type=post_ct,
-                            object_id=post.id,
-                            file=file,
-                            order=order,
-                            created_by=user,
-                        )
-                # handle tagged users
+                # Trigger background task to move files and create Media records
+                finalize_post_upload.delay(post.id, temp_paths)
+                # Handle tagged users
                 if tag_users:
                     post.tag_users.set(tag_users)
                 return post
-        except IntegrityError as e:
-            raise ValidationError(f"Failed to create post: {str(e)}")
+        except Exception:
+            # Clean up temp files on failure
+            for path in temp_paths:
+                if os.path.exists(path):
+                    os.remove(path)
+            raise
 
     @staticmethod
     def get_post_by_id(
         post_id: int, requesting_user: Optional[User] = None
     ) -> Optional[Post]:
         try:
-            post = Post.objects.get(id=post_id, is_deleted=False)
+            post = Post.objects.get(id=post_id, is_deleted=False, processing=False)
         except Post.DoesNotExist:
             return None
 
@@ -124,6 +120,7 @@ class PostService:
         user: User,
         requester: Optional[User] = None,
         include_deleted: bool = False,
+        include_processing: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> List[Post]:
@@ -132,6 +129,8 @@ class PostService:
 
         if not include_deleted:
             queryset = queryset.filter(is_deleted=False)
+        if not include_processing:
+            queryset = queryset.filter(processing=False)
 
         queryset = queryset.prefetch_related(
             Prefetch("media", queryset=Media.objects.prefetch_related("variants"))

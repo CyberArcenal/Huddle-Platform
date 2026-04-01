@@ -60,7 +60,7 @@ class PostMinimalSerializer(serializers.ModelSerializer):
 
 class PostCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating a new post."""
-
+    client_id = serializers.CharField(required=False, allow_null=True)
     content = serializers.CharField(required=False, allow_blank=True)
     media = serializers.ListField(
         child=serializers.FileField(allow_empty_file=False),
@@ -92,6 +92,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
             "media",
             "tag_users",
             "mimeTypes",
+            "client_id", 
         ]
 
     def validate(self, data):
@@ -130,6 +131,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
                 privacy=validated_data.get("privacy", "followers"),
                 tag_users=validated_data.get("tag_users", []),
                 group=validated_data.get("group", None),
+                client_id=validated_data.get("client_id"),
             )
             return post
         except ValidationError as e:
@@ -153,6 +155,7 @@ class PostDisplaySerializer(serializers.ModelSerializer):
     user = UserMinimalSerializer(read_only=True)
     group = GroupMinimalSerializer(read_only=True, allow_null=True)
     shared_post = serializers.SerializerMethodField()
+    processing = serializers.BooleanField(read_only=True)
     media = MediaDisplaySerializer(many=True, read_only=True)
     comments = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
@@ -174,6 +177,7 @@ class PostDisplaySerializer(serializers.ModelSerializer):
             "media",
             "privacy",
             "is_deleted",
+            "processing",
             "created_at",
             "updated_at",
             "comments",
@@ -185,7 +189,11 @@ class PostDisplaySerializer(serializers.ModelSerializer):
             "statistics",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "is_deleted"]
-
+        
+    def get_media(self, obj) -> MediaDisplaySerializer(many=True): # type: ignore
+        if obj.processing:
+            return []
+        return MediaDisplaySerializer(obj.media.all(), many=True, context=self.context).data
     def get_shared_post(self, obj) -> PostMinimalSerializer:
         if obj.shared_post:
             return PostMinimalSerializer(obj.shared_post, context=self.context).data

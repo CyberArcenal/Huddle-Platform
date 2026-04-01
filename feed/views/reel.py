@@ -23,6 +23,24 @@ from global_utils.pagination import StandardResultsSetPagination
 logger = logging.getLogger(__name__)
 
 
+class ReelCreateResponseData(serializers.Serializer):
+    id = serializers.IntegerField()
+    processing = serializers.BooleanField()
+
+
+class ReelCreateResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ReelCreateResponseData()
+
+
+class ReelStatusResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    processing = serializers.BooleanField()
+    ready = serializers.BooleanField()
+    video_url = serializers.CharField(allow_null=True, required=False)
+
+
 class PaginatedReelSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -31,6 +49,30 @@ class PaginatedReelSerializer(serializers.Serializer):
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
     results = ReelDisplaySerializer(many=True)
+
+
+class ReelStatusView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Reel's"],
+        responses={200: ReelStatusResponseSerializer},
+        description="Check the processing status of a reel. Returns whether the reel is still being processed and the video URL when ready.",
+    )
+    def get(self, request, reel_id):
+        reel = get_object_or_404(Reel, id=reel_id)
+        if reel.privacy != "public" and request.user != reel.user:
+            return Response({"error": "Forbidden"}, status=403)
+        return Response(
+            {
+                "id": reel.id,
+                "processing": reel.processing,
+                "ready": not reel.processing and reel.media.exists(),
+                "video_url": (
+                    reel.media.first().file.url if reel.media.exists() else None
+                ),
+            }
+        )
 
 
 class ReelListView(APIView):
@@ -71,28 +113,32 @@ class ReelListView(APIView):
         user_id = request.query_params.get("user_id")
         if user_id:
             user = get_object_or_404(User, id=user_id)
-            reels = ReelService.get_user_reels(user=user, include_deleted=False)
+            # Show processing reels only to the owner
+            include_processing = request.user.is_authenticated and request.user == user
+            reels = ReelService.get_user_reels(
+                user=user,
+                requester=request.user if request.user.is_authenticated else None,
+                include_processing=include_processing,
+            )
         else:
             if request.user.is_authenticated:
-                reels = ReelService.get_feed_reels(user=request.user)
+                reels = ReelService.get_feed_reels(
+                    user=request.user, include_processing=False
+                )
             else:
-                reels = ReelService.get_public_reels()
+                reels = ReelService.get_public_reels(include_processing=False)
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(reels, request)
-        serializer = ReelDisplaySerializer(page, many=True, context={"request": request})
+        serializer = ReelDisplaySerializer(
+            page, many=True, context={"request": request}
+        )
         return paginator.get_paginated_response(serializer.data)
-
-    class ReelCreateResponseSerializer(serializers.Serializer):
-        status = serializers.BooleanField()
-        message = serializers.CharField()
-        data = ReelDisplaySerializer(required=False, allow_null=True)
-
 
     @extend_schema(
         tags=["Reel's"],
-                 request={
-            'multipart/form-data': ReelCreateSerializer,
+        request={
+            "multipart/form-data": ReelCreateSerializer,
         },
         responses={
             201: ReelCreateResponseSerializer,
@@ -103,15 +149,23 @@ class ReelListView(APIView):
     @transaction.atomic
     def post(self, request):
         logger.debug(f"Post request: {request.data}")
-        serializer = ReelCreateSerializer(data=request.data, context={"request": request})
+        serializer = ReelCreateSerializer(
+            data=request.data, context={"request": request}
+        )
+
         if serializer.is_valid():
             reel = serializer.save()
-            response = {
-                "status": True,
-                "message": "Reel created successfully.",
-                "data": ReelDisplaySerializer(reel, context={"request": request}).data,
-            }
-            return Response(response, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    "status": True,
+                    "message": "Reel upload accepted, processing in background.",
+                    "data": {
+                        "id": reel.id,
+                        "processing": True,
+                    },
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
 
         response = {
             "status": False,
@@ -119,7 +173,6 @@ class ReelListView(APIView):
             "data": None,
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class ReelDetailView(APIView):
@@ -215,109 +268,138 @@ class ReelDetailView(APIView):
             {"error": "Failed to delete reel"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-        
+
+
 # feed/views/reel.py (append to existing)
+
 
 class ReelSearchView(APIView):
     """Search reels by caption."""
+
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["Reel's"],
         parameters=[
-            OpenApiParameter(name='q', type=str, description='Search query', required=True),
-            OpenApiParameter(name='user_id', type=int, description='Filter by user ID', required=False),
-            OpenApiParameter(name='page', type=int, required=False),
-            OpenApiParameter(name='page_size', type=int, required=False),
+            OpenApiParameter(
+                name="q", type=str, description="Search query", required=True
+            ),
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="Filter by user ID",
+                required=False,
+            ),
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False),
         ],
         responses={200: PaginatedReelSerializer},
-        description="Search reels by caption."
+        description="Search reels by caption.",
     )
     def get(self, request):
-        query = request.query_params.get('q', '')
-        user_id = request.query_params.get('user_id')
-        
+        query = request.query_params.get("q", "")
+        user_id = request.query_params.get("user_id")
+
         if not query:
             return Response(
                 {"error": "Query parameter 'q' is required"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         user = None
         if user_id:
             user = get_object_or_404(User, id=user_id)
-        
-        reels = ReelService.search_reels(query=query, user=user)
-        
+
+        reels = ReelService.search_reels(
+            query=query, user=user, include_processing=False
+        )
+
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(reels, request)
-        serializer = ReelDisplaySerializer(page, many=True, context={'request': request})
+        serializer = ReelDisplaySerializer(
+            page, many=True, context={"request": request}
+        )
         return paginator.get_paginated_response(serializer.data)
 
 
 class TrendingReelsView(APIView):
     """Get trending reels (most liked recently)."""
+
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["Reel's"],
         parameters=[
-            OpenApiParameter(name='hours', type=int, description='Time window in hours', required=False),
-            OpenApiParameter(name='min_likes', type=int, description='Minimum likes', required=False),
-            OpenApiParameter(name='limit', type=int, description='Max results', required=False),
+            OpenApiParameter(
+                name="hours",
+                type=int,
+                description="Time window in hours",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="min_likes", type=int, description="Minimum likes", required=False
+            ),
+            OpenApiParameter(
+                name="limit", type=int, description="Max results", required=False
+            ),
         ],
-        responses={
-            200: ReelDisplaySerializer(many=True)
-        },
-        description="Get trending reels based on like count in the last N hours."
+        responses={200: ReelDisplaySerializer(many=True)},
+        description="Get trending reels based on like count in the last N hours.",
     )
     def get(self, request):
-        hours = int(request.query_params.get('hours', 24))
-        min_likes = int(request.query_params.get('min_likes', 5))
-        limit = int(request.query_params.get('limit', 10))
-        
-        trending = ReelService.get_trending_reels(hours=hours, min_likes=min_likes, limit=limit)
-        
+        hours = int(request.query_params.get("hours", 24))
+        min_likes = int(request.query_params.get("min_likes", 5))
+        limit = int(request.query_params.get("limit", 10))
+
+        trending = ReelService.get_trending_reels(
+            hours=hours, min_likes=min_likes, limit=limit, include_processing=False
+        )
+
         # Extract just the reel objects for serialization
-        reels = [item['reel'] for item in trending]
-        serializer = ReelDisplaySerializer(reels, many=True, context={'request': request})
+        reels = [item["reel"] for item in trending]
+        serializer = ReelDisplaySerializer(
+            reels, many=True, context={"request": request}
+        )
         return Response(serializer.data)
 
 
 class ReelStatisticsView(APIView):
     """Get statistics for a single reel."""
+
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["Reel's"],
         responses={
             200: {
-                'type': 'object',
-                'properties': {
-                    'reel_id': {'type': 'integer'},
-                    'like_count': {'type': 'integer'},
-                    'comment_count': {'type': 'integer'},
-                    'created_at': {'type': 'string', 'format': 'date-time'},
-                    'privacy': {'type': 'string'}
-                }
+                "type": "object",
+                "properties": {
+                    "reel_id": {"type": "integer"},
+                    "like_count": {"type": "integer"},
+                    "comment_count": {"type": "integer"},
+                    "created_at": {"type": "string", "format": "date-time"},
+                    "privacy": {"type": "string"},
+                },
             }
         },
-        description="Get like and comment counts for a reel."
+        description="Get like and comment counts for a reel.",
     )
     def get(self, request, reel_id):
         reel = get_object_or_404(Reel, id=reel_id, is_deleted=False)
-        
+
         # Privacy check
-        if reel.privacy != 'public' and request.user != reel.user:
+        if reel.privacy != "public" and request.user != reel.user:
             return Response(
-                {"error": "You do not have permission to view statistics for this reel"},
-                status=status.HTTP_403_FORBIDDEN
+                {
+                    "error": "You do not have permission to view statistics for this reel"
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         stats = ReelService.get_reel_statistics(reel)
         return Response(stats)
-    
-    
+
+
 class ReelRestoreResponseSerializer(serializers.Serializer):
     status = serializers.BooleanField()
     message = serializers.CharField()
@@ -326,6 +408,7 @@ class ReelRestoreResponseSerializer(serializers.Serializer):
 
 class ReelRestoreView(APIView):
     """Restore a soft-deleted reel."""
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
@@ -336,7 +419,7 @@ class ReelRestoreView(APIView):
             400: ReelRestoreResponseSerializer,
             500: ReelRestoreResponseSerializer,
         },
-        description="Restore a soft‑deleted reel. Only owner can restore."
+        description="Restore a soft‑deleted reel. Only owner can restore.",
     )
     @transaction.atomic
     def post(self, request, reel_id):
@@ -358,7 +441,9 @@ class ReelRestoreView(APIView):
                 {
                     "status": True,
                     "message": "Reel restored successfully.",
-                    "data": ReelDisplaySerializer(reel, context={'request': request}).data,
+                    "data": ReelDisplaySerializer(
+                        reel, context={"request": request}
+                    ).data,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -373,27 +458,31 @@ class ReelRestoreView(APIView):
         )
 
 
-
 class UserReelStatisticsView(APIView):
     """Get reel statistics for a user."""
+
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["Reel's"],
         responses={
             200: {
-                'type': 'object',
-                'properties': {
-                    'total_reels': {'type': 'integer'},
-                    'public_reels': {'type': 'integer'},
-                    'private_reels': {'type': 'integer'},
-                    'privacy_breakdown': {'type': 'array'},
-                    'total_reactions': {'type': 'integer'},
-                    'first_reel_date': {'type': 'string', 'format': 'date-time', 'nullable': True}
-                }
+                "type": "object",
+                "properties": {
+                    "total_reels": {"type": "integer"},
+                    "public_reels": {"type": "integer"},
+                    "private_reels": {"type": "integer"},
+                    "privacy_breakdown": {"type": "array"},
+                    "total_reactions": {"type": "integer"},
+                    "first_reel_date": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": True,
+                    },
+                },
             }
         },
-        description="Get statistics for a user's reels."
+        description="Get statistics for a user's reels.",
     )
     def get(self, request, user_id=None):
         if user_id:
@@ -403,37 +492,49 @@ class UserReelStatisticsView(APIView):
             if not request.user.is_authenticated:
                 return Response(
                     {"error": "Authentication required"},
-                    status=status.HTTP_401_UNAUTHORIZED
+                    status=status.HTTP_401_UNAUTHORIZED,
                 )
             target_user = request.user
-        
+
         # Privacy: if target user has secret/followers reels, only they can see full stats?
         # For simplicity, we return stats only for public reels if not owner.
         if request.user != target_user:
             # Return only public stats
-            total_reels = Reel.objects.filter(user=target_user, privacy='public', is_deleted=False).count()
+            total_reels = Reel.objects.filter(
+                user=target_user, privacy="public", is_deleted=False, processing=False
+            ).count()
             public_reels = total_reels
             private_reels = 0
-            privacy_breakdown = [{'privacy': 'public', 'count': total_reels}]
+            privacy_breakdown = [{"privacy": "public", "count": total_reels}]
             total_reactions = 0
-            for reel in Reel.objects.filter(user=target_user, privacy='public', is_deleted=False):
-                total_reactions += ReactionService.get_like_count('reel', reel.id)
-            first_reel = Reel.objects.filter(user=target_user, privacy='public').order_by('created_at').first()
+            for reel in Reel.objects.filter(
+                user=target_user, privacy="public", is_deleted=False, processing=False
+            ):
+                total_reactions += ReactionService.get_like_count("reel", reel.id)
+            first_reel = (
+                Reel.objects.filter(
+                    user=target_user, privacy="public", processing=False
+                )
+                .order_by("created_at")
+                .first()
+            )
             first_reel_date = first_reel.created_at if first_reel else None
         else:
             stats = ReelService.get_user_reel_statistics(target_user)
-            total_reels = stats['total_reels']
-            public_reels = stats['public_reels']
-            private_reels = stats['private_reels']
-            privacy_breakdown = stats['privacy_breakdown']
-            total_reactions = stats['total_reactions']
-            first_reel_date = stats['first_reel_date']
-        
-        return Response({
-            'total_reels': total_reels,
-            'public_reels': public_reels,
-            'private_reels': private_reels,
-            'privacy_breakdown': privacy_breakdown,
-            'total_reactions': total_reactions,
-            'first_reel_date': first_reel_date
-        })
+            total_reels = stats["total_reels"]
+            public_reels = stats["public_reels"]
+            private_reels = stats["private_reels"]
+            privacy_breakdown = stats["privacy_breakdown"]
+            total_reactions = stats["total_reactions"]
+            first_reel_date = stats["first_reel_date"]
+
+        return Response(
+            {
+                "total_reels": total_reels,
+                "public_reels": public_reels,
+                "private_reels": private_reels,
+                "privacy_breakdown": privacy_breakdown,
+                "total_reactions": total_reactions,
+                "first_reel_date": first_reel_date,
+            }
+        )

@@ -42,6 +42,9 @@ MEDIA_VARIANT_TYPES = [
     ('large', 'Large'),
     ('video_preview', 'Video Preview'),
     ('video_transcoded', 'Video Transcoded'),
+    ('video_480p', '480p Video'),
+    ('video_720p', '720p Video'),
+    ('video_1080p', '1080p Video'),
 ]
 
 class MediaVariant(models.Model):

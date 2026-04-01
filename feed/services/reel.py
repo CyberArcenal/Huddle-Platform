@@ -1,10 +1,13 @@
 # feed/services/reel.py
+import os
+
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
 from django.db.models import Prefetch
 from django.db import models
+import tempfile
 from feed.models.media import Media
 from feed.services import post
 from feed.services.comment import CommentService
@@ -17,9 +20,49 @@ from ..models import Reel
 
 class ReelService:
     """Service for Reel model operations"""
-
+    
+    
     @staticmethod
     def create_reel(
+        user, video, caption="", thumbnail=None, audio=None, duration=None,
+        privacy="public", client_id=None, **extra_fields
+    ) -> Reel:
+        # Idempotency: return existing if client_id matches
+        if client_id:
+            existing = Reel.objects.filter(client_id=client_id).first()
+            if existing:
+                return existing
+
+        # Save uploaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            for chunk in video.chunks():
+                tmp.write(chunk)
+            temp_path = tmp.name
+
+        try:
+            with transaction.atomic():
+                reel = Reel.objects.create(
+                    user=user,
+                    caption=caption,
+                    thumbnail=thumbnail,
+                    audio=audio,
+                    duration=duration,
+                    privacy=privacy,
+                    client_id=client_id,
+                    processing=True,
+                    temp_file_path=temp_path,
+                    **extra_fields,
+                )
+                # Start background processing (Celery or threading)
+                from feed.tasks.media import finalize_reel_upload
+                finalize_reel_upload.delay(reel.id, temp_path)
+                return reel
+        except Exception:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise
+    @staticmethod
+    def create_reel_v1(
         user: User,
         video,
         caption: str = "",
@@ -74,6 +117,7 @@ class ReelService:
         user: User,
         requester: Optional[User] = None,
         include_deleted: bool = False,
+        include_processing: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> List[Reel]:
@@ -81,6 +125,8 @@ class ReelService:
         queryset = Reel.objects.filter(user=user)
         if not include_deleted:
             queryset = queryset.filter(is_deleted=False)
+        if not include_processing:
+            queryset = queryset.filter(processing=False)
 
         if requester and requester != user:
             # Public reels only (or followers if we implement that)
@@ -91,16 +137,26 @@ class ReelService:
 
     @staticmethod
     def get_public_reels(
-        exclude_user: Optional[User] = None, limit: int = 50, offset: int = 0
+        exclude_user: Optional[User] = None,
+        include_processing: bool = False,
+        limit: int = 50,
+        offset: int = 0
     ) -> List[Reel]:
         """Get public reels from all users."""
         queryset = Reel.objects.filter(privacy="public", is_deleted=False)
+        if not include_processing:
+            queryset = queryset.filter(processing=False)
         if exclude_user:
             queryset = queryset.exclude(user=exclude_user)
         return list(queryset.order_by("-created_at")[offset : offset + limit])
 
     @staticmethod
-    def get_feed_reels(user: User, limit: int = 50, offset: int = 0) -> List[Reel]:
+    def get_feed_reels(
+        user: User,
+        include_processing: bool = False,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Reel]:
         """Get personalized reel feed for a user (from followed users and self)."""
         from users.services import UserFollowService
 
@@ -109,17 +165,16 @@ class ReelService:
             Reel.objects.filter(
                 models.Q(user__in=following_users) | models.Q(user=user),
                 is_deleted=False,
-                privacy__in=[
-                    "public",
-                    "followers",
-                ],  # followers can see followers-only reels from followed users
+                privacy__in=["public", "followers"],
             )
             .select_related("user")
             .prefetch_related(
                 Prefetch('media', queryset=Media.objects.prefetch_related('variants'))
             )
-            .order_by("-created_at")[offset : offset + limit]
         )
+        if not include_processing:
+            feed_reels = feed_reels.filter(processing=False)
+        feed_reels = feed_reels.order_by("-created_at")[offset : offset + limit]
         return list(feed_reels)
 
     @staticmethod
@@ -164,10 +219,16 @@ class ReelService:
 
     @staticmethod
     def search_reels(
-        query: str, user: Optional[User] = None, limit: int = 20, offset: int = 0
+        query: str,
+        user: Optional[User] = None,
+        include_processing: bool = False,
+        limit: int = 20,
+        offset: int = 0
     ) -> List[Reel]:
         """Search reels by caption."""
         queryset = Reel.objects.filter(caption__icontains=query, is_deleted=False)
+        if not include_processing:
+            queryset = queryset.filter(processing=False)
         if user:
             queryset = queryset.filter(user=user)
         return list(queryset.order_by("-created_at")[offset : offset + limit])
@@ -218,15 +279,21 @@ class ReelService:
 
     @staticmethod
     def get_trending_reels(
-        hours: int = 24, min_likes: int = 5, limit: int = 10
+        hours: int = 24,
+        min_likes: int = 5,
+        limit: int = 10,
+        include_processing: bool = False
     ) -> List[Dict[str, Any]]:
         """Get trending reels (most liked within a time period)."""
-
         time_threshold = timezone.now() - timezone.timedelta(hours=hours)
 
         recent_reels = Reel.objects.filter(
-            created_at__gte=time_threshold, is_deleted=False, privacy="public"
+            created_at__gte=time_threshold,
+            is_deleted=False,
+            privacy="public"
         )
+        if not include_processing:
+            recent_reels = recent_reels.filter(processing=False)
 
         trending = []
         for reel in recent_reels:
@@ -255,11 +322,13 @@ class ReelService:
         return count
 
     @staticmethod
-    def get_group_reels(group, requester=None, limit=20, offset=0):
-        """
-        Return reels that belong to a specific group.
-        Assumes the Reel model has a 'group' field (ForeignKey to Group).
-        """
+    def get_group_reels(
+        group,
+        requester=None,
+        include_processing: bool = False,
+        limit=20,
+        offset=0
+    ):
         from groups.services.group import GroupService
 
         if requester and not GroupService.is_user_allowed_to_view(requester, group):
@@ -268,7 +337,8 @@ class ReelService:
         queryset = Reel.objects.filter(
             group=group,
             is_deleted=False,
-            # optionally privacy filtering
-        ).select_related('user').order_by('-created_at')
-
+        ).select_related('user')
+        if not include_processing:
+            queryset = queryset.filter(processing=False)
+        queryset = queryset.order_by('-created_at')
         return list(queryset[offset:offset + limit])

@@ -54,7 +54,7 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
         try:
             request = self.context.get("request")
             media = obj.media.all().first()
-            if media and request:
+            if media and not obj.processing and request:   # add condition
                 return request.build_absolute_uri(media.file.url)
             return ""
         except:
@@ -71,6 +71,7 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
 
 
 class ReelCreateSerializer(serializers.ModelSerializer):
+    client_id = serializers.CharField(required=False, allow_null=True, help_text="Unique ID to prevent duplicates")
     thumbnail = serializers.FileField(allow_null=True, required=False)
     caption = serializers.CharField(help_text="Optional caption for the reel", allow_blank=True)
     media = serializers.FileField(required=True, help_text="Video file for the reel (max 100MB, max duration 60s)")
@@ -79,7 +80,7 @@ class ReelCreateSerializer(serializers.ModelSerializer):
     privacy = serializers.ChoiceField(choices=POST_PRIVACY_TYPES)
     class Meta:
         model = Reel
-        fields = ["caption", "media", "thumbnail", "audio", "duration", "privacy"]
+        fields = ["caption", "media", "thumbnail", "audio", "duration", "privacy", "client_id"]
 
     def validate_video(self, value):
         # File size limit
@@ -153,6 +154,7 @@ class ReelCreateSerializer(serializers.ModelSerializer):
                 thumbnail=validated_data.get("thumbnail") or thumbnail_file,  # use generated if not provided
                 audio=validated_data.get("audio"),
                 duration=validated_data.get("duration"),
+                client_id=validated_data.get("client_id"),
                 privacy=validated_data.get("privacy", "public"),
             )
         except ValidationError as e:
@@ -221,7 +223,7 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         try:
             request = self.context.get("request")
             media = obj.media.all().first()
-            if media and request:
+            if media and not obj.processing and request:   # add condition
                 return request.build_absolute_uri(media.file.url)
             return ""
         except:

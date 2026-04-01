@@ -17,6 +17,7 @@ urlpatterns = [
     path('posts/<int:post_id>/statistics/', post.PostStatisticsView.as_view(), name='post-statistics'),
     path('posts/<int:post_id>/restore/', post.PostRestoreView.as_view(), name='post-restore'),
     path('posts/<int:post_id>/share-to-group/', post.SharePostToGroupView.as_view(), name='post-share-to-group'),
+    path('posts/<int:post_id>/status/', post.PostStatusView.as_view(), name='post-status'),
     
     path('users/<int:user_id>/content/', UserContentFeedView.as_view(), name='user-content'),
     path('me/content/', UserContentFeedView.as_view(), name='my-content'),
@@ -97,6 +98,7 @@ urlpatterns = [
     path('media/', MediaListView.as_view(), name='media-list'),
     path('media/create/', MediaCreateView.as_view(), name='media-create'),
     path('media/<int:media_id>/', MediaDetailView.as_view(), name='media-detail'),
+    path('reels/<int:reel_id>/status/', reel.ReelStatusView.as_view(), name='reel-status'),
 ]
 
 app_name = 'feed'

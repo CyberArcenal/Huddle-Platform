@@ -25,6 +25,11 @@ class Reel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    
+    client_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    processing = models.BooleanField(default=True)
+    temp_file_path = models.CharField(max_length=500, blank=True, null=True)
+    
 
     class Meta:
         db_table = 'reels'

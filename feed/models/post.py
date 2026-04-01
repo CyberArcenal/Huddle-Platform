@@ -35,16 +35,21 @@ class Post(models.Model):
         settings.AUTH_USER_MODEL, related_name="tagged_posts", blank=True
     )
 
-    # ..
+
     content = models.TextField()
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default="text")
-    # media_url removed
+   
     privacy = models.CharField(
         max_length=10, choices=POST_PRIVACY_TYPES, default="followers"
     )
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    
+    client_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    processing = models.BooleanField(default=True)
+    temp_file_paths = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "posts"

@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
+from feed.serializers.media import MediaDisplaySerializer
 from groups.serializers.group import GroupMinimalSerializer
 from users.serializers.user.profile import UserMinimalSerializer
 from ..models import Event
@@ -13,6 +14,7 @@ from ..services import EventService
 # ----------------------------------------------------------------------
 class EventStatisticsSerializerData(serializers.Serializer):
     """Statistics for an event."""
+
     total_attendees = serializers.IntegerField()
     going_count = serializers.IntegerField()
     maybe_count = serializers.IntegerField()
@@ -21,7 +23,9 @@ class EventStatisticsSerializerData(serializers.Serializer):
     remaining_spots = serializers.IntegerField(allow_null=True)
     days_until_event = serializers.IntegerField()
     duration_hours = serializers.FloatField()
-    organizer = serializers.DictField()  # or you could use a nested UserMinimalSerializer
+    organizer = (
+        serializers.DictField()
+    )  # or you could use a nested UserMinimalSerializer
     group = serializers.CharField(allow_null=True)
 
 
@@ -30,6 +34,13 @@ class EventStatisticsSerializerData(serializers.Serializer):
 # ----------------------------------------------------------------------
 class EventCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating events"""
+
+    media = serializers.ListField(
+        child=serializers.FileField(allow_empty_file=False),
+        required=False,
+        write_only=True,
+    )
+    client_id = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = Event
@@ -42,6 +53,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
             "event_type",
             "group",
             "max_attendees",
+            "media",
+            "client_id",
         ]
         extra_kwargs = {
             "group": {"required": False, "allow_null": True},
@@ -87,10 +100,16 @@ class EventCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        try:
-            return EventService.create_event(**validated_data)
-        except ValidationError as e:
-            raise serializers.ValidationError(e.message_dict)
+        request = self.context.get("request")
+        media_files = validated_data.pop("media", [])
+        client_id = validated_data.pop("client_id", None)
+
+        return EventService.create_event(
+            organizer=request.user,
+            media_files=media_files,
+            client_id=client_id,
+            **validated_data
+        )
 
 
 class EventUpdateSerializer(serializers.ModelSerializer):
@@ -161,6 +180,8 @@ class EventListSerializer(serializers.ModelSerializer):
     is_full = serializers.SerializerMethodField()
     attendees_count = serializers.SerializerMethodField()
     user_status = serializers.SerializerMethodField()
+    media = MediaDisplaySerializer(many=True, read_only=True)
+    processing = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Event
@@ -179,6 +200,8 @@ class EventListSerializer(serializers.ModelSerializer):
             "is_full",
             "attendees_count",
             "user_status",
+            "media",
+            "processing",
         ]
         read_only_fields = fields
 
@@ -187,12 +210,14 @@ class EventListSerializer(serializers.ModelSerializer):
 
     def get_attendees_count(self, obj) -> int:
         from ..services import EventAttendanceService
+
         return EventAttendanceService.get_attendance_count(obj, status="going")
 
     def get_user_status(self, obj) -> Optional[str]:
         request = self.context.get("request")
         if request and request.user.is_authenticated:
             from ..services import EventAttendanceService
+
             attendance = EventAttendanceService.get_attendance(obj, request.user)
             return attendance.status if attendance else None
         return None
@@ -205,6 +230,7 @@ class EventDetailSerializer(EventListSerializer):
     can_edit = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
     can_rsvp = serializers.SerializerMethodField()
+    media = MediaDisplaySerializer(many=True, read_only=True)
 
     class Meta:
         model = Event
@@ -236,7 +262,7 @@ class EventDetailSerializer(EventListSerializer):
             return obj.organizer == request.user
         return False
 
-    def get_can_rsvp(self, obj) -> bool:
+    def get_can_rsvp(self, obj:Event) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False

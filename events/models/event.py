@@ -1,5 +1,7 @@
-from django.conf import settings
+# events/models/event.py
+
 from django.db import models
+from django.conf import settings
 from feed.models.media import Media
 from groups.models import Group
 from django.contrib.contenttypes.fields import GenericRelation
@@ -30,6 +32,11 @@ class Event(models.Model):
     declined_count = models.IntegerField(default=0)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # NEW FIELDS
+    client_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    processing = models.BooleanField(default=True)
+    temp_file_paths = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = "events"
