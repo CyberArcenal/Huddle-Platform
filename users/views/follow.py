@@ -9,21 +9,17 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from global_utils.pagination import StandardResultsSetPagination, UsersPagination
-from users.serializers.user.base import UserListSerializer
+from users.serializers.matching import UserMutualCountSerializer
 from dating.services.matching import MatchingService
+from users.serializers.user.minimal import UserMinimalSerializer
 
 from ..services.user_follow import UserFollowService
-from ..services.user_activity import UserActivityService
 from ..serializers.follow import (
     FollowStatsResponseSerializer,
     FollowStatusResponseSerializer,
-    FollowUserResponseSerializer,
     FollowUserSerializer,
-    UnfollowUserResponseSerializer,
     UnfollowUserSerializer,
     FollowStatsSerializer,
-    FollowerListSerializer,
-    FollowingListSerializer,
 )
 from django.db import transaction
 from ..models import User
@@ -38,7 +34,7 @@ def wrap_paginated_users(paginator, page, request, context_extra=None):
     """
     Build paginated data dict for user lists.
     """
-    serializer = UserListSerializer(
+    serializer = UserMinimalSerializer(
         page, many=True, context={"request": request, **(context_extra or {})}
     )
     data = {
@@ -112,7 +108,7 @@ class PaginatedUserListData(serializers.Serializer):
     count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = UserListSerializer(many=True)
+    results = UserMinimalSerializer(many=True)
 
 
 class FollowersListResponseSerializer(serializers.Serializer):
@@ -152,9 +148,7 @@ class SuggestedUsersResponseData(serializers.Serializer):
     count = serializers.IntegerField()
     next = serializers.URLField(allow_null=True)
     previous = serializers.URLField(allow_null=True)
-    results = serializers.ListField(
-        child=serializers.DictField()
-    )  # UserMutualCountSerializer
+    results = UserMutualCountSerializer(many=True)
 
 
 class SuggestedUsersResponseSerializer(serializers.Serializer):

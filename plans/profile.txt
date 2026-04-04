@@ -1,0 +1,103 @@
+Narito ang mga magagandang enhancements na pwedeng idagdag sa profile page para maging mas polished, functional, at user-friendly:
+
+---
+
+### 🧩 **UI/UX Improvements**
+
+1. **Gawing dynamic ang taas ng Media grid**  
+   - Kasalukuyang naka-fixed height (`1000.dp`) ang `LazyVerticalStaggeredGrid` sa loob ng `LazyColumn`. Mas magandang gumamit ng `HorizontalPager` para sa bawat tab, para hiwalay ang scrollable containers.
+
+2. **I-complete ang missing tabs (Reels, Groups)**  
+   - Magdagdag ng Reels tab (video posts) at Groups tab (listahan ng groups na sinalihan/ginawa ng user). Pwede ring gamitin ang `PagingData` para sa reels at groups.
+
+3. **Ipakita ang mutual friends at friends preview**  
+   - May `friendsPreview` at `mutualFriendsCount` ang `UserProfile` pero hindi ginagamit. Pwedeng maglagay ng horizontal row ng friends (avatar + name) sa ilalim ng profile stats.
+
+4. **Ipakita ang capability score**  
+   - Pwede itong gawing badge o progress bar para ipakita ang "Capability Score" ng user (hal. sa tabi ng username o sa About tab).
+
+5. **Ipakita ang personality type, love language, relationship goal**  
+   - Nasa `UserProfile` pero wala sa About tab. Pwedeng idagdag bilang info cards sa About section.
+
+6. **Magdagdag ng “Share Profile” at “QR Code”**  
+   - Karaniwan sa social apps para madaling mag-add ng kaibigan.
+
+7. **Magdagdag ng dark mode support**  
+   - Palitan ang hardcoded colors (`Color.White`, `Color.Black`) ng `MaterialTheme.colorScheme` properties.
+
+---
+
+### ⚙️ **Feature Enhancements**
+
+8. **Edit profile information (bio, location, phone, etc.)**  
+   - Sa kasalukuyan, puro profile picture at cover photo lang ang editable. Kailangan ng edit profile screen para sa ibang fields.
+
+9. **Pinned posts**  
+   - Pwedeng mag-pin ng importanteng post sa ibabaw ng feed (kung supported ng backend).
+
+10. **Follow/Unfollow mula sa friends preview**  
+    - Ipakita ang `friendsPreview` at bigyan ng follow button ang bawat user sa list.
+
+11. **Report user at block user**  
+    - Magdagdag ng menu sa profile header para sa report/block (lalo na kapag hindi current user).
+
+12. **Confirm dialog bago mag-delete ng post, remove photo, etc.**  
+    - Para maiwasan ang accidental deletion.
+
+13. **Reaction picker (Like, Love, Haha, etc.)**  
+    - Sa kasalukuyan, tila simpleng like/reaction lang. Pwedeng mag-popup ng reaction options.
+
+14. **Highlight management (edit, delete, reorder, change cover)**  
+    - Sa ngayon, create lang ang supported. Dapat may edit/delete options.
+
+15. **Story highlights viewer**  
+    - May navigation na `highlight_carousel` pero hindi pa implemented. Kailangan ng full-screen story viewer.
+
+---
+
+### 🚀 **Performance & Code Quality**
+
+16. **Ayusin ang nested scrolling sa Media tab**  
+    - Iwasan ang fixed height; gumamit ng `LazyVerticalStaggeredGrid` na hindi nakapaloob sa `LazyColumn` (gamit ang `HorizontalPager`).
+
+17. **Magdagdag ng loading skeletons para sa lahat ng tab**  
+    - Sa ngayon, Posts tab lang may shimmer. Kailangan din sa Media, Reels, Groups, About.
+
+18. **Empty states na may illustration**  
+    - Palitan ang simpleng "No media yet" ng may icon at friendly message.
+
+19. **End-of-list indicator**  
+    - Kapag na-load na lahat, magpakita ng "You've seen everything".
+
+20. **I-ayos ang type mismatch sa `onImageClick`**  
+    - Sa `ProfileScreen`, ang `onImageClick` ay `{ url -> viewModel.showFullscreenImage(url) }` pero ang kailangan ay `(MediaDetailData) -> Unit`. Kailangan i-correct ito.
+
+21. **Alisin ang duplicate/outdated na `ProfileViewModel.kt`**  
+    - May dalawang file: `ProfileViewModel.kt` (commented out) at `ProfileViewModelManager.kt`. Panatilihin lang ang isa.
+
+22. **Gamitin ang `FullscreenImageDialog` o `MediaDetailDialog` nang maayos**  
+    - Sa ngayon, `MediaDetailDialog` ang gamit pero may `FullscreenImageDialog` na hindi ginagamit. Pumili ng isa at i-consolidate.
+
+23. **Magdagdag ng retry button sa bawat tab kung may error**  
+    - Halimbawa, kung hindi nag-load ang media grid, magpakita ng "Retry" button.
+
+---
+
+### 📊 **Analytics & Social Proof**
+
+24. **Ipakita ang profile views count**  
+    - Kung available sa backend, magpakita ng “Profile views” sa stats row.
+
+25. **Ipakita ang posts count**  
+    - May `postsCount` sa `UserProfile` pero hindi ginagamit. Pwedeng idagdag sa stats (Followers, Following, Posts).
+
+---
+
+Ang pinaka-praktikal na unahin ay:  
+- Pag-aayos ng Media grid (dynamic height)  
+- Pagkumpleto ng About tab (personality, love language, etc.)  
+- Pag-add ng edit profile functionality  
+- Pag-add ng mutual friends display  
+- Pag-ayos ng type mismatch at pag-clean up ng code
+
+Kung kaya ng oras, maganda ring magdagdag ng share profile at QR code para mas social-friendly ang app.

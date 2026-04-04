@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, ValidationError
 from stories.models import StoryHighlight
 from stories.services.highlight import StoryHighlightService
+from users.models import User
 from stories.serializers.highlight import (
     StoryHighlightSerializer,
     StoryHighlightCreateSerializer,
@@ -110,13 +111,28 @@ class StoryHighlightListView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Storie's"],
+        tags=["Stories"],
         responses={200: StoryHighlightListResponseSerializer},
-        description="Get all story highlights for the authenticated user.",
+        parameters=[
+            OpenApiParameter(
+                name="user_id",
+                description="User ID",
+                required=False,  # optional since you fallback to request.user
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,  # changed to QUERY
+            )
+        ],
+        description="Get all story highlights for the authenticated user or a specified user.",
     )
     def get(self, request):
         try:
-            highlights = StoryHighlightService.get_user_highlights(request.user)
+            user_id = request.query_params.get("user_id", None)
+            if user_id:
+                user = get_object_or_404(User, pk=user_id)
+                highlights = StoryHighlightService.get_user_highlights(user)
+            else:
+                highlights = StoryHighlightService.get_user_highlights(request.user)
+                
             serializer = StoryHighlightSerializer(highlights, many=True, context={"request": request})
             return Response(
                 {

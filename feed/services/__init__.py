@@ -2,7 +2,7 @@
 from .post import PostService
 from .comment import CommentService
 from .reaction import ReactionService
-from .feed import FeedService
+from .feed.feed import FeedService
 from .reel import ReelService           # new
 from .share import ShareService
 

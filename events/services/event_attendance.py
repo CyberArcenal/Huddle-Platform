@@ -5,12 +5,72 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from events.services.event import EventService
 from users.models import User
+from users.models.blocked import BlockedUser
+from users.models.friendship import Friendship
+from users.models.mute import MutedUser
+from users.models.user_follow import UserFollow
 from ..models import Event, EventAttendance
-
+from django.db.models import Q
 
 class EventAttendanceService:
     """Service for EventAttendance model operations"""
+    
+    @staticmethod
+    def search_event_attendees(event, search=None, personality=None, sort=None, friends_only=False, user=None):
+        """
+        Returns filtered and sorted attendees for an event.
+        """
 
+        # Base queryset: all attendances for the event
+        qs = EventAttendance.objects.filter(event=event).select_related("user")
+
+        # Exclude blocked/muted users
+        if user:
+            blocked_ids = BlockedUser.objects.filter(user=user).values_list("blocked_id", flat=True)
+            muted_ids = MutedUser.objects.filter(user=user).values_list("muted_id", flat=True)
+            qs = qs.exclude(user_id__in=blocked_ids).exclude(user_id__in=muted_ids)
+
+        # Search filter (username or name)
+        if search:
+            qs = qs.filter(
+                Q(user__username__icontains=search) |
+                Q(user__first_name__icontains=search) |
+                Q(user__last_name__icontains=search)
+            )
+
+        # Personality filter (MBTI type)
+        if personality:
+            qs = qs.filter(user__personality_type=personality)
+
+        # Friends-only filter
+        if friends_only and user:
+            # Accepted friendships where current user is involved
+            friend_ids = Friendship.objects.filter(
+                Q(from_user=user, status="accepted") |
+                Q(to_user=user, status="accepted")
+            ).values_list("from_user_id", "to_user_id")
+
+            # Flatten friend IDs
+            friend_ids = set([fid for tup in friend_ids for fid in tup if fid != user.id])
+
+            # Also include "following" relationships if needed
+            following_ids = UserFollow.objects.filter(follower=user).values_list("following_id", flat=True)
+
+            qs = qs.filter(user_id__in=friend_ids.union(set(following_ids)))
+
+        # Sorting
+        if sort:
+            sort_map = {
+                "joined_at": "joined_at",
+                "name": "user__first_name",  # adjust if you have a display name field
+                "capability_score": "user__capability_score",  # hypothetical field
+            }
+            sort_field = sort_map.get(sort)
+            if sort_field:
+                qs = qs.order_by(sort_field)
+
+        return qs
+    
     @staticmethod
     def rsvp_to_event(
         event: Event, user: User, status: str = "going"

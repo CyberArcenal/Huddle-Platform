@@ -134,7 +134,8 @@ class EventService:
         event_type: Optional[str] = None,
         days_ahead: int = 30,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        include_processing=False
     ) -> List[Event]:
         """Get upcoming events"""
         queryset = Event.objects.filter(
@@ -201,7 +202,7 @@ class EventService:
         offset: int = 0
     ) -> List[Event]:
         """Get events by type"""
-        queryset = Event.objects.filter(event_type=event_type)
+        queryset = Event.objects.filter(event_type=event_type, processing=False)
         
         if upcoming_only:
             queryset = queryset.filter(start_time__gte=timezone.now())
@@ -220,7 +221,7 @@ class EventService:
 
         queryset = Event.objects.filter(
             group=group,
-            is_deleted=False,
+            is_deleted=False, processing=False
             # maybe privacy filtering
         ).order_by('-start_time')
 
@@ -234,7 +235,7 @@ class EventService:
         offset: int = 0
     ) -> List[Event]:
         """Get events organized by a user"""
-        queryset = Event.objects.filter(organizer=user)
+        queryset = Event.objects.filter(organizer=user, processing=False)
         
         if upcoming_only:
             queryset = queryset.filter(start_time__gte=timezone.now())
@@ -270,6 +271,7 @@ class EventService:
         
         # Only show upcoming events in search
         queryset = queryset.filter(start_time__gte=timezone.now())
+        queryset = queryset.filter(processing=False)
         
         return list(queryset.order_by('start_time')[offset:offset + limit])
     
@@ -286,7 +288,8 @@ class EventService:
         
         featured_events = Event.objects.filter(
             start_time__gte=timezone.now(),
-            start_time__lte=time_threshold
+            start_time__lte=time_threshold,
+            processing=False
         ).annotate(
             attendee_count=Count('attendances', filter=Q(attendances__status='going'))
         ).filter(
@@ -316,7 +319,7 @@ class EventService:
         group_events_qs = Event.objects.filter(
             group__in=user_groups,
             start_time__gte=timezone.now(),
-            event_type='group'
+            event_type='group', processing=False
         ).exclude(
             organizer=user
         ).select_related('group', 'organizer').prefetch_related(prefetch).order_by('start_time')

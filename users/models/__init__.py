@@ -11,3 +11,4 @@ from .user import *
 from .friendship import *
 from .blocked import *
 from .mute import *
+from .personality_quiz import *

@@ -10,6 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 
 from core.settings.dev import LOGGER
 from global_utils.pagination import UsersPagination
+from users.models.user_activity import UserActivity
 from users.serializers.user.minimal import UserMinimalSerializer
 from users.serializers.user.profile import UserProfileSerializer
 
@@ -93,17 +94,6 @@ class UserUpdateResponseSerializer(serializers.Serializer):
     status = serializers.BooleanField()
     message = serializers.CharField()
     data = UserUpdateResponseData()
-
-
-class UserDetailResponseData(serializers.Serializer):
-    user = UserProfileSerializer()
-
-
-class UserDetailResponseSerializer(serializers.Serializer):
-    status = serializers.BooleanField()
-    message = serializers.CharField()
-    data = UserDetailResponseData(allow_null=True)
-
 
 class UserSearchResponseSerializer(serializers.Serializer):
     status = serializers.BooleanField()
@@ -343,6 +333,7 @@ class UserProfileView(APIView):
     def get(self, request):
         try:
             serializer = UserProfileSerializer(request.user, context={"request": request})
+            logger.debug(f"Retrieved profile for user {request.user.id}: {serializer.data}")
             return Response(
                 {
                     "status": True,
@@ -426,7 +417,7 @@ class UserDetailView(APIView):
 
     @extend_schema(
         tags=["User's"],
-        responses={200: UserDetailResponseSerializer},
+        responses={200: UserProfileResponseSerializer},
         description="Retrieve a user's public profile by ID.",
     )
     def get(self, request, user_id):
@@ -1076,5 +1067,343 @@ class EmailVerificationView(APIView):
                 "status": True,
                 "message": "Email verified successfully",
                 "data": {"message": "Email verified successfully"},
+            }
+        )
+        
+        
+
+
+# ----------------------------------------------------------------------
+# Individual field update views (for profile details screen)
+# ----------------------------------------------------------------------
+
+class UpdateUsernameView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateUsernameInputSerializer(serializers.Serializer):
+        username = serializers.CharField(max_length=30, min_length=3)
+
+        def validate_username(self, value):
+            value = value.lower().strip()
+            # Check format
+            if not value.replace("_", "").replace(".", "").isalnum():
+                raise serializers.ValidationError(
+                    "Username can only contain letters, numbers, underscores and dots"
+                )
+            # Check uniqueness (exclude current user)
+            if User.objects.filter(username__iexact=value).exclude(id=self.context['user'].id).exists():
+                raise serializers.ValidationError("Username already taken")
+            return value
+
+    class ResponseData(serializers.Serializer):
+        username = serializers.CharField()
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateUsernameInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's username.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateUsernameInputSerializer(data=request.data, context={'user': request.user})
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_username = serializer.validated_data['username']
+        request.user.username = new_username
+        request.user.save(update_fields=['username'])
+
+        # Log activity
+        UserActivity.objects.create(
+            user=request.user,
+            action="update_username",
+            description=f"Username changed to {new_username}",
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT"),
+        )
+
+        return Response(
+            {
+                "status": True,
+                "message": "Username updated successfully",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdateEmailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateEmailInputSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+        def validate_email(self, value):
+            value = value.lower().strip()
+            if User.objects.filter(email__iexact=value).exclude(id=self.context['user'].id).exists():
+                raise serializers.ValidationError("Email already registered")
+            return value
+
+    class ResponseData(serializers.Serializer):
+        email = serializers.EmailField()
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateEmailInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's email address. Note: The user may need to re-verify the new email.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateEmailInputSerializer(data=request.data, context={'user': request.user})
+        if not serializer.is_valid():
+            return Response(
+                {
+                    "status": False,
+                    "message": "Validation error",
+                    "data": serializer.errors,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_email = serializer.validated_data['email']
+        # Optionally set is_verified = False and send verification email
+        request.user.email = new_email
+        request.user.is_verified = False
+        request.user.save(update_fields=['email', 'is_verified'])
+
+        # Queue a new verification email (optional)
+        try:
+            from users.services.otp_request import OtpRequestService
+            from notifications.services.notification_queue import NotificationQueueService
+            otp_request = OtpRequestService.create_otp_request(
+                user=request.user,
+                email=new_email,
+                expires_in_minutes=10,
+                otp_type="email"
+            )
+            NotificationQueueService.queue_notification(
+                channel="email",
+                recipient=new_email,
+                subject="Verify your new email address",
+                message=f"Your verification code is: {otp_request.otp_code}",
+                metadata={"otp_code": otp_request.otp_code, "user_id": request.user.id}
+            )
+        except Exception as e:
+            logger.exception("Failed to send email verification after email update")
+
+        UserActivity.objects.create(
+            user=request.user,
+            action="update_email",
+            description=f"Email changed to {new_email}",
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT"),
+        )
+
+        return Response(
+            {
+                "status": True,
+                "message": "Email updated successfully. Please verify your new email address.",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdateFirstNameView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateFirstNameUpdateFirstNameInputSerializer(serializers.Serializer):
+        first_name = serializers.CharField(max_length=30, allow_blank=True)
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateFirstNameUpdateFirstNameInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's first name.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateFirstNameUpdateFirstNameInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.first_name = serializer.validated_data['first_name']
+        request.user.save(update_fields=['first_name'])
+        return Response(
+            {
+                "status": True,
+                "message": "First name updated",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdateLastNameView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateLastNameUpdateLastNameInputSerializer(serializers.Serializer):
+        last_name = serializers.CharField(max_length=30, allow_blank=True)
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateLastNameUpdateLastNameInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's last name.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateLastNameUpdateLastNameInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.last_name = serializer.validated_data['last_name']
+        request.user.save(update_fields=['last_name'])
+        return Response(
+            {
+                "status": True,
+                "message": "Last name updated",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdatePhoneNumberView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdatePhoneNumberUpdatePhoneNumberInputSerializer(serializers.Serializer):
+        phone_number = serializers.CharField(max_length=20, allow_blank=True, required=False)
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdatePhoneNumberUpdatePhoneNumberInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's phone number.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdatePhoneNumberUpdatePhoneNumberInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.phone_number = serializer.validated_data.get('phone_number', '')
+        request.user.save(update_fields=['phone_number'])
+        return Response(
+            {
+                "status": True,
+                "message": "Phone number updated",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdateBioView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateBioUpdateBioInputSerializer(serializers.Serializer):
+        bio = serializers.CharField(max_length=500, allow_blank=True, required=False)
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateBioUpdateBioInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's bio.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateBioUpdateBioInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.bio = serializer.validated_data.get('bio', '')
+        request.user.save(update_fields=['bio'])
+        return Response(
+            {
+                "status": True,
+                "message": "Bio updated",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdateLocationView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateLocationUpdateLocationInputSerializer(serializers.Serializer):
+        location = serializers.CharField(max_length=100, allow_blank=True, required=False)
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateLocationUpdateLocationInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's location.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateLocationUpdateLocationInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.location = serializer.validated_data.get('location', '')
+        request.user.save(update_fields=['location'])
+        return Response(
+            {
+                "status": True,
+                "message": "Location updated",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+
+
+class UpdateDateOfBirthView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateDateOfBirthUpdateDateOfBirthInputSerializer(serializers.Serializer):
+        date_of_birth = serializers.DateField(required=False, allow_null=True)
+
+        def validate_date_of_birth(self, value):
+            if value:
+                min_age_date = timezone.now().date() - timezone.timedelta(days=365 * 13)
+                if value > min_age_date:
+                    raise serializers.ValidationError("You must be at least 13 years old")
+            return value
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateDateOfBirthUpdateDateOfBirthInputSerializer,
+        responses={200: UserUpdateResponseSerializer},
+        description="Update the authenticated user's date of birth.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateDateOfBirthUpdateDateOfBirthInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        request.user.date_of_birth = serializer.validated_data.get('date_of_birth')
+        request.user.save(update_fields=['date_of_birth'])
+        return Response(
+            {
+                "status": True,
+                "message": "Date of birth updated",
+                "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
             }
         )

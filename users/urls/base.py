@@ -1,11 +1,13 @@
 import django.urls
 import rest_framework.routers
 import users.serializers.user_preference
+from users.views import personality_quiz
 import users.views.activity
 import users.views.admin
 import users.views.block
 import users.views.follow
 import users.views.friendship
+from users.views.mute import CheckMutedView, MuteView, MutedUsersListView, UnmuteView, UnmuteView
 import users.views.suggestions
 import users.views.media
 import users.views.security
@@ -29,6 +31,16 @@ urlpatterns = [
     django.urls.path('check-email/', users.views.user.CheckEmailView.as_view(), name='check-email'),
     django.urls.path('verify-email/', users.views.user.EmailVerificationView.as_view(), name='verify-email'),
     django.urls.path('resend-verification/', users.views.user.ResendVerificationView.as_view(), name='resend-verification'),
+    
+    # Individual profile field updates
+    django.urls.path('update-username/', users.views.user.UpdateUsernameView.as_view(), name='update-username'),
+    django.urls.path('update-email/', users.views.user.UpdateEmailView.as_view(), name='update-email'),
+    django.urls.path('update-first-name/', users.views.user.UpdateFirstNameView.as_view(), name='update-first-name'),
+    django.urls.path('update-last-name/', users.views.user.UpdateLastNameView.as_view(), name='update-last-name'),
+    django.urls.path('update-phone-number/', users.views.user.UpdatePhoneNumberView.as_view(), name='update-phone-number'),
+    django.urls.path('update-bio/', users.views.user.UpdateBioView.as_view(), name='update-bio'),
+    django.urls.path('update-location/', users.views.user.UpdateLocationView.as_view(), name='update-location'),
+    django.urls.path('update-date-of-birth/', users.views.user.UpdateDateOfBirthView.as_view(), name='update-date-of-birth'),
     
     # Follow endpoints
     django.urls.path('follow/', users.views.follow.FollowUserView.as_view(), name='follow-user'),
@@ -111,6 +123,7 @@ urlpatterns += [
     django.urls.path('preferences/achievements/', users.serializers.user_preference.UserAchievementsView.as_view(), name='user-achievements'),
     django.urls.path('preferences/causes/', users.serializers.user_preference.UserCausesView.as_view(), name='user-causes'),
     django.urls.path('preferences/lifestyle-tags/', users.serializers.user_preference.UserLifestyleTagsView.as_view(), name='user-lifestyle-tags'),
+    
 ]
 
 urlpatterns += [
@@ -128,4 +141,17 @@ urlpatterns += [
     django.urls.path('friends/requests/<int:pk>/decline/', users.views.friendship.FriendRequestDeclineView.as_view(), name='friend-request-decline'),
     django.urls.path('friends/remove/', users.views.friendship.FriendRemoveView.as_view(), name='friend-remove'),
     django.urls.path('friends/<int:pk>/tag/', users.views.friendship.FriendTagUpdateView.as_view(), name='friend-tag-update'),
+]
+
+urlpatterns += [
+    django.urls.path('muting/', MutedUsersListView.as_view(), name='muted-list'),
+    django.urls.path('muting/mute/', MuteView.as_view(), name='mute'),
+    django.urls.path('muting/unmute/', UnmuteView.as_view(), name='unmute'),
+    django.urls.path('muting/check/' , CheckMutedView.as_view(), name="check-muted"),
+]
+
+urlpatterns += [
+    django.urls.path('personality/questions/', personality_quiz.PersonalityQuizQuestionsView.as_view(), name='personality-questions'),
+    django.urls.path('personality/submit/',personality_quiz.PersonalityQuizSubmitView.as_view(), name='personality-submit'),
+    django.urls.path('personality/status/', personality_quiz.PersonalityQuizStatusView.as_view(), name='personality-status'),
 ]

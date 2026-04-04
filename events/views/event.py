@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 # Response serializers for consistent documentation
 # ----------------------------------------------------------------------
 
+
 class EventStatusResponseData(serializers.Serializer):
     id = serializers.IntegerField()
     processing = serializers.BooleanField()
@@ -145,15 +146,15 @@ def wrap_paginated_events(paginator, page, request):
     """
     Construct a paginated data dict that matches PaginatedEventListData.
     """
-    serializer = EventListSerializer(page, many=True, context={'request': request})
+    serializer = EventListSerializer(page, many=True, context={"request": request})
     data = {
-        'page': paginator.page.number,
-        'hasNext': paginator.page.has_next(),
-        'hasPrev': paginator.page.has_previous(),
-        'count': paginator.page.paginator.count,
-        'next': paginator.get_next_link(),
-        'previous': paginator.get_previous_link(),
-        'results': serializer.data,
+        "page": paginator.page.number,
+        "hasNext": paginator.page.has_next(),
+        "hasPrev": paginator.page.has_previous(),
+        "count": paginator.page.paginator.count,
+        "next": paginator.get_next_link(),
+        "previous": paginator.get_previous_link(),
+        "results": serializer.data,
     }
     return data
 
@@ -161,6 +162,7 @@ def wrap_paginated_events(paginator, page, request):
 # ----------------------------------------------------------------------
 # Views
 # ----------------------------------------------------------------------
+
 
 class EventStatusView(APIView):
     permission_classes = [AllowAny]
@@ -170,8 +172,8 @@ class EventStatusView(APIView):
         responses={200: EventStatusResponseSerializer},
         description="Check processing status of an event.",
     )
-    def get(self, request, pk):
-        event = get_object_or_404(Event, pk=pk)
+    def get(self, request, event_id):
+        event = get_object_or_404(Event, pk=event_id)
         if event.event_type != "public" and request.user != event.organizer:
             return Response(
                 {
@@ -261,9 +263,9 @@ class EventListView(APIView):
 
         try:
             if upcoming:
-                queryset = Event.objects.filter(start_time__gte=timezone.now()).order_by(
-                    "start_time"
-                )
+                queryset = Event.objects.filter(
+                    start_time__gte=timezone.now()
+                ).order_by("start_time")
             else:
                 queryset = Event.objects.all().order_by("-created_at")
 
@@ -279,7 +281,11 @@ class EventListView(APIView):
                 queryset = queryset.filter(organizer=organizer)
 
             # Filter out processing events for non-owners
-            if not (request.user.is_authenticated and hasattr(queryset, 'organizer') and queryset.organizer == request.user):
+            if not (
+                request.user.is_authenticated
+                and hasattr(queryset, "organizer")
+                and queryset.organizer == request.user
+            ):
                 queryset = queryset.filter(processing=False)
 
             # Filter accessible events
@@ -313,7 +319,7 @@ class EventListView(APIView):
 
     @extend_schema(
         tags=["Event"],
-        request=EventCreateSerializer,
+        request={"multipart/form-data": EventCreateSerializer},
         responses={
             202: EventCreateResponseSerializer,
             400: EventCreateResponseSerializer,
@@ -325,7 +331,7 @@ class EventListView(APIView):
         serializer = EventCreateSerializer(
             data=request.data, context={"request": request}
         )
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             event = serializer.save()
             return Response(
                 {
@@ -351,9 +357,9 @@ class EventListView(APIView):
 class EventDetailView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def get_object(self, pk):
+    def get_object(self, event_id):
         try:
-            return Event.objects.get(pk=pk)
+            return Event.objects.get(pk=event_id)
         except Event.DoesNotExist:
             raise NotFound(detail="Event not found")
 
@@ -362,8 +368,8 @@ class EventDetailView(APIView):
         responses={200: EventDetailResponseSerializer},
         description="Retrieve detailed information about an event.",
     )
-    def get(self, request, pk):
-        event = self.get_object(pk)
+    def get(self, request, event_id):
+        event = self.get_object(event_id)
         has_access, message = EventService.check_user_access(event, request.user)
         if not has_access and event.event_type != "public":
             return Response(
@@ -560,7 +566,7 @@ class EventCreateView(APIView):
         serializer = EventCreateSerializer(
             data=request.data, context={"request": request}
         )
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             event = serializer.save()
             return Response(
                 {
@@ -598,9 +604,9 @@ class EventUpdateView(APIView):
         description="Update an event (full or partial).",
     )
     @transaction.atomic
-    def put(self, request, pk):
+    def put(self, request, event_id):
         try:
-            event = Event.objects.get(pk=pk)
+            event = Event.objects.get(pk=event_id)
         except Event.DoesNotExist:
             return Response(
                 {
@@ -663,9 +669,9 @@ class EventDeleteView(APIView):
         description="Delete an event.",
     )
     @transaction.atomic
-    def delete(self, request, pk):
+    def delete(self, request, event_id):
         try:
-            event = Event.objects.get(pk=pk)
+            event = Event.objects.get(pk=event_id)
         except Event.DoesNotExist:
             return Response(
                 {
@@ -757,7 +763,7 @@ class UpcomingEventsView(APIView):
         if group_id:
             group = get_object_or_404(Group, id=group_id)
 
-        include_processing = (request.user.is_authenticated and user == request.user)
+        include_processing = request.user.is_authenticated and user == request.user
 
         events = EventService.get_upcoming_events(
             user=user,
@@ -1023,9 +1029,9 @@ class EventStatisticsView(APIView):
         responses={200: EventStatisticsResponseSerializer},
         description="Get detailed statistics for an event (attendee counts, remaining spots, etc.).",
     )
-    def get(self, request, pk):
+    def get(self, request, event_id):
         try:
-            event = Event.objects.get(pk=pk)
+            event = Event.objects.get(pk=event_id)
         except Event.DoesNotExist:
             return Response(
                 {

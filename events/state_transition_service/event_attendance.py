@@ -17,14 +17,14 @@ class EventAttendanceStateTransitionService:
         EventAttendanceStateTransitionService._update_event_counts(event, old_status, new_status)
 
         # 2. Notify the event organizer (unless the change is made by the organizer themselves)
-        if event.organizer != user:
-            NotificationService.send_rsvp_change_notification(
-                organizer=event.organizer,
-                event=event,
-                attendee=user,
-                old_status=old_status,
-                new_status=new_status
-            )
+        # if event.organizer != user:
+        #     NotificationService.send_rsvp_change_notification(
+        #         organizer=event.organizer,
+        #         event=event,
+        #         attendee=user,
+        #         old_status=old_status,
+        #         new_status=new_status
+        #     )
 
         # 3. Update analytics (record the change)
         EventAnalyticsService.record_rsvp_change(

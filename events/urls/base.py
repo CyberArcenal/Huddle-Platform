@@ -2,6 +2,7 @@ from django.urls import path, include
 from events import views
 from events.views import event_analytics
 from events.views.event import EventStatusView
+from events.views.event_attendance import EventAttendanceApprovalView, EventAttendanceSearchView
 # Event URL patterns
 event_urlpatterns = [
     # Main event endpoints
@@ -35,6 +36,7 @@ event_detail_urlpatterns = [
     # Attendance endpoints for this event
     path('attendees/', views.EventAttendanceListView.as_view(), name='event-attendees'),
     path('attendees/mutual/', views.MutualAttendeesView.as_view(), name='mutual-attendees'),
+    path("attendees/search/", EventAttendanceSearchView.as_view(),name="event-attendees-search"),
     path('attendees/trend/', views.AttendanceTrendView.as_view(), name='attendance-trend'),
     path('attendees/reminders/', views.SendRemindersView.as_view(), name='send-reminders'),
     
@@ -45,6 +47,7 @@ event_detail_urlpatterns = [
     # Specific attendance records
     path('attendance/', views.EventAttendanceDetailView.as_view(), name='event-attendance-self'),
     path('attendance/<int:user_id>/', views.EventAttendanceDetailView.as_view(), name='event-attendance-user'),
+    path('attendance/<int:user_id>/approval/', EventAttendanceApprovalView.as_view(), name='event-attendance-approval'),
 ]
 
 # User events URL patterns
@@ -59,7 +62,7 @@ user_events_urlpatterns = [
 urlpatterns = [
     # Event endpoints
     path('events/', include(event_urlpatterns)),
-    path('events/<int:pk>/', include(event_detail_urlpatterns)),
+    path('events/<int:event_id>/', include(event_detail_urlpatterns)),
     
     # User events endpoints
     path('user/events/', include(user_events_urlpatterns)),
@@ -67,14 +70,14 @@ urlpatterns = [
         path('events/<int:event_id>/analytics/', event_analytics.EventAnalyticsListView.as_view(), name='event-analytics-list'),
     path('events/<int:event_id>/analytics/<str:date>/', event_analytics.EventAnalyticsDetailView.as_view(), name='event-analytics-detail'),
     path('events/<int:event_id>/analytics/summary/', event_analytics.EventAnalyticsSummaryView.as_view(), name='event-analytics-summary'),
-    path('status/', EventStatusView.as_view(), name='event-status'),
+    path('status/<int:event_id>/', EventStatusView.as_view(), name='event-status'),
 ]
 
 # For backward compatibility (optional)
 legacy_urlpatterns = [
     path('', views.EventListView.as_view(), name='event-list-legacy'),
-    path('<int:pk>/', views.EventDetailView.as_view(), name='event-detail-legacy'),
-    path('<int:pk>/attendees/', views.EventAttendanceListView.as_view(), name='event-attendees-legacy'),
+    path('<int:event_id>/', views.EventDetailView.as_view(), name='event-detail-legacy'),
+    path('<int:event_id>/attendees/', views.EventAttendanceListView.as_view(), name='event-attendees-legacy'),
     path('<int:event_id>/rsvp/', views.EventRSVPView.as_view(), name='event-rsvp-legacy'),
 ]
 

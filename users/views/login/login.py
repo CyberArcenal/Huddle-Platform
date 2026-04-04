@@ -131,7 +131,7 @@ class LoginView(APIView):
             f"Login request from IP: {client_ip}, User-Agent: {user_agent} body: {request.data}"
         )
 
-        serializer = LoginRequestSerializer(data=request.data)
+        serializer = LoginRequestSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -232,6 +232,7 @@ class LoginView(APIView):
         try:
             user.last_login = timezone.now()
             user.save()
+            user = User.objects.get(id=user.id)  # Refresh user instance to get updated last_login
 
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
@@ -266,8 +267,9 @@ class LoginView(APIView):
                 user_agent=user_agent,
                 details="User logged in successfully",
             )
-
-            user_data = UserProfileSerializer(user).data
+              
+            request.user = user  # Set the user on the request for serializer context
+            user_data = UserProfileSerializer(user, context={"request": request}).data
             logger.debug(f"User data: {user_data}")
             # Return using success response serializer structure
             return Response(
@@ -344,7 +346,7 @@ class Verify2FALoginView(APIView):
         user_agent = request.META.get("HTTP_USER_AGENT", "")
         device_name = user_agent[:100]
 
-        serializer = Verify2FARequestSerializer(data=request.data)
+        serializer = Verify2FARequestSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -419,7 +421,8 @@ class Verify2FALoginView(APIView):
                 details="User logged in successfully with 2FA",
             )
 
-            user_data = UserProfileSerializer(user).data
+            user_data = UserProfileSerializer(user, context={"request": request}).data
+            logger.debug(f"User data: {user_data}")
             # Return using Verify2FAResponseSerializer structure
             return Response(
                 {
@@ -474,7 +477,7 @@ class Resend2FAOTPView(APIView):
     )
     @transaction.atomic
     def post(self, request):
-        serializer = Resend2FARequestSerializer(data=request.data)
+        serializer = Resend2FARequestSerializer(data=request.data, context={"request": request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

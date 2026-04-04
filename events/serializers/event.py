@@ -40,6 +40,8 @@ class EventCreateSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True,
     )
+    start_time = serializers.DateTimeField(required=True)
+    end_time = serializers.DateTimeField(required=True)
     client_id = serializers.CharField(required=False, allow_null=True)
 
     class Meta:

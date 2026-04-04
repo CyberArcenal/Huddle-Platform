@@ -208,9 +208,178 @@ class SendRemindersResponseSerializer(serializers.Serializer):
     data = SendRemindersResponseData()
 
 
-# ----------------------------------------------------------------------
-# Views
-# ----------------------------------------------------------------------
+# -------------------------------
+# Input / Response Serializers
+# -------------------------------
+
+class AttendanceApprovalInputSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(
+        choices=["approve", "reject"],
+        help_text="Action to perform on attendee"
+    )
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Optional reason for rejection"
+    )
+
+
+class AttendanceApprovalResponseData(serializers.Serializer):
+    attendance = EventAttendanceSerializer()
+    reason = serializers.CharField(required=False, allow_blank=True)
+
+
+class AttendanceApprovalResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = AttendanceApprovalResponseData()
+
+
+# -------------------------------
+# View
+# -------------------------------
+class EventAttendanceApprovalView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Event Attendance"],
+        request=AttendanceApprovalInputSerializer,
+        responses={200: AttendanceApprovalResponseSerializer},
+        examples=[
+            OpenApiExample(
+                "Approve attendee",
+                value={"action": "approve"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Reject attendee with reason",
+                value={"action": "reject", "reason": "Capacity full"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "Approval response",
+                value={
+                    "status": True,
+                    "message": "Attendance approved.",
+                    "data": {
+                        "attendance": {
+                            "id": 12,
+                            "event": 5,
+                            "user": 7,
+                            "status": "going",
+                            "joined_at": "2026-04-02T12:34:56Z",
+                        },
+                        "reason": ""
+                    },
+                },
+                response_only=True,
+            ),
+        ],
+        description="Approve or reject an attendee for an event. Only the organizer can perform this action.",
+    )
+    @transaction.atomic
+    def post(self, request, event_id, user_id):
+        try:
+            event = get_object_or_404(Event, id=event_id)
+            if event.organizer != request.user:
+                return Response(
+                    {"status": False, "message": "Only the organizer can approve/reject attendees", "data": None},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            user = get_object_or_404(User, id=user_id)
+            attendance = EventAttendance.objects.filter(event=event, user=user).first()
+            if not attendance:
+                return Response(
+                    {"status": False, "message": "Attendance record not found", "data": None},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            serializer = AttendanceApprovalInputSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            action = serializer.validated_data["action"]
+            reason = serializer.validated_data.get("reason", "")
+
+            if action == "approve":
+                attendance.status = "going"
+                message = "Attendance approved."
+            elif action == "reject":
+                attendance.status = "declined"
+                message = "Attendance rejected."
+
+            attendance.save()
+            data = EventAttendanceSerializer(attendance, context={"request": request}).data
+            return Response(
+                {"status": True, "message": message, "data": {"attendance": data, "reason": reason}},
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            logger.exception("Error approving/rejecting attendance")
+            return Response(
+                {"status": False, "message": "Something went wrong.", "data": None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class EventAttendanceSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=["Event Attendance"],
+        parameters=[
+            OpenApiParameter(name="search", type=str, description="Search by username or name", required=False),
+            OpenApiParameter(name="personality", type=str, description="Filter by MBTI personality type", required=False),
+            OpenApiParameter(name="sort", type=str, description="Sort field (joined_at, name, capability_score)", required=False),
+            OpenApiParameter(name="friendsOnly", type=bool, description="Filter to only friends", required=False),
+            OpenApiParameter(name="page", type=int, description="Page number", required=False),
+            OpenApiParameter(name="page_size", type=int, description="Results per page", required=False),
+        ],
+        responses={200: EventAttendanceListResponseSerializer},
+        description="Search and filter attendees for an event.",
+    )
+    def get(self, request, event_id):
+        try:
+            event = get_object_or_404(Event, id=event_id)
+            has_access, message = EventService.check_user_access(event, request.user)
+            if not has_access:
+                return Response(
+                    {"status": False, "message": message, "data": None},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            # Extract query params
+            search = request.query_params.get("search")
+            personality = request.query_params.get("personality")
+            sort = request.query_params.get("sort")
+            friends_only = request.query_params.get("friendsOnly") in ["true", "1"]
+
+            # Service layer handles filtering logic
+            attendees = EventAttendanceService.search_event_attendees(
+                event=event,
+                search=search,
+                personality=personality,
+                sort=sort,
+                friends_only=friends_only,
+                user=request.user,
+            )
+
+            paginator = EventsPagination()
+            page = paginator.paginate_queryset(attendees, request)
+            paginated_data = wrap_paginated_attendance(
+                paginator, page, request, EventAttendanceWithUserSerializer
+            )
+
+            return Response(
+                {"status": True, "message": "Attendees retrieved.", "data": paginated_data}
+            )
+        except Exception as e:
+            logger.exception("Error searching attendees for event %s", event_id)
+            return Response(
+                {"status": False, "message": "Something went wrong.", "data": None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
 
 class EventAttendanceListView(APIView):
     permission_classes = [IsAuthenticated]

@@ -9,7 +9,7 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from core.settings.dev import LOGGER
 from feed.serializers.feed import UnifiedContentItemSerializer
-from feed.services.feed import FeedService
+from feed.services.feed.feedv2 import FeedService
 
 logger = logging.getLogger(__name__)
 

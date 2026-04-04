@@ -1,7 +1,7 @@
 import logging
 
 from .base import *
-from .logger import *
+# from .logger import *
 
 
 LOGGER = logging.getLogger(__name__)
