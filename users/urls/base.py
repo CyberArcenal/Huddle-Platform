@@ -7,6 +7,7 @@ import users.views.admin
 import users.views.block
 import users.views.follow
 import users.views.friendship
+from users.views.login.password_reset import PasswordChangeView
 from users.views.mute import CheckMutedView, MuteView, MutedUsersListView, UnmuteView, UnmuteView
 import users.views.suggestions
 import users.views.media
@@ -62,7 +63,7 @@ urlpatterns = [
 
     
     # Security endpoints
-    django.urls.path('security/change-password/', users.views.security.ChangePasswordView.as_view(), name='change-password'),
+    django.urls.path('security/change-password/', PasswordChangeView.as_view(), name='change-password'),
     django.urls.path('security/enable-2fa/', users.views.security.Enable2FAView.as_view(), name='enable-2fa'),
     django.urls.path('security/disable-2fa/', users.views.security.Disable2FAView.as_view(), name='disable-2fa'),
     django.urls.path('security/settings/', users.views.security.SecuritySettingsView.as_view(), name='security-settings'),

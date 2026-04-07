@@ -22,7 +22,6 @@ from .follow import (
 )
 
 from .security import (
-    ChangePasswordView,
     Enable2FAView,
     Disable2FAView,
     SecuritySettingsView,
@@ -86,7 +85,6 @@ __all__ = [
     'SuggestedUsersView',
     
     # Security views
-    'ChangePasswordView',
     'Enable2FAView',
     'Disable2FAView',
     'SecuritySettingsView',

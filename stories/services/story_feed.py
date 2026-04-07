@@ -11,65 +11,55 @@ from users.models.user import User
 class StoryFeedService:
     """Service for story feed generation and management"""
 
+    # stories/services/story_feed.py
+
     @staticmethod
     def generate_story_feed(
         user: User,
         include_own_stories: bool = True,
         limit_per_user: int = 3,
-        max_users: int = 20,
-    ) -> List[Dict[str, Any]]:
+        offset: int = 0,           # idinagdag
+        limit: int = 10,           # idinagdag (default 10 users per page)
+    ) -> tuple[List[Dict[str, Any]], bool, int]:
         """
-        Generate a personalized story feed for a user
-
-        Returns stories grouped by user, with recent stories from:
-        1. Users followed by the current user
-        2. Popular stories from non-followed users (optional)
-        3. User's own stories (optional)
+        Returns: (feed, has_next, next_offset)
         """
         feed = []
-
-        # 1. Get stories from followed users
         following_users = UserFollowService.get_following(user)
-
-        for followed_user in following_users[:max_users]:
+        
+        # Apply offset and limit
+        start = offset
+        end = offset + limit
+        paginated_users = following_users[start:end]
+        
+        for followed_user in paginated_users:
             user_stories = StoryService.get_user_stories(
                 user=followed_user, include_expired=False, limit=limit_per_user
             )
-
             if user_stories:
-                feed.append(
-                    {
-                        "user": followed_user,
-                        "stories": user_stories,
-                        "has_viewed_all": all(
-                            ViewService.has_viewed(story, user)
-                            for story in user_stories
-                        ),
-                        "type": "following",
-                    }
-                )
-
-        # 2. Add user's own stories if requested
-        if include_own_stories:
+                feed.append({
+                    "user": followed_user,
+                    "stories": user_stories,
+                    "has_viewed_all": all(ViewService.has_viewed(story, user) for story in user_stories),
+                    "type": "following",
+                })
+        
+        # Add own stories at the beginning only on first page (offset=0)
+        if include_own_stories and offset == 0:
             own_stories = StoryService.get_user_stories(
                 user=user, include_expired=False, limit=limit_per_user
             )
-
             if own_stories:
-                feed.insert(
-                    0,
-                    {  # Insert at beginning
-                        "user": user,
-                        "stories": own_stories,
-                        "has_viewed_all": True,  # User has viewed their own stories
-                        "type": "own",
-                    },
-                )
-
-        # 3. Add popular stories from non-followed users (discovery)
-        # This can be expanded based on your discovery algorithm
-
-        return feed
+                feed.insert(0, {
+                    "user": user,
+                    "stories": own_stories,
+                    "has_viewed_all": True,
+                    "type": "own",
+                })
+        
+        has_next = len(following_users) > end
+        next_offset = end if has_next else None
+        return feed, has_next, next_offset
     
     @staticmethod    
     def get_user_stories(

@@ -49,7 +49,7 @@ class TokenVerifyRequestSerializer(serializers.Serializer):
 
 class TokenVerifyResponseSerializer(serializers.Serializer):
     valid = serializers.BooleanField()
-    detail = serializers.StringRelatedField()
+    message = serializers.StringRelatedField()
     user = UserMinimalSerializer(allow_null=True, read_only=True)
 
 class PasswordResetRequestSerializer(serializers.Serializer):

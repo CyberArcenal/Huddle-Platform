@@ -123,21 +123,21 @@ class LogoutView(APIView):
             except User.DoesNotExist:
                 logger.warning(f"User not found during logout: {user_id}")
                 return Response(
-                    {"status": False, "detail": "User not found"},
+                    {"status": False, "message": "User not found"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
         except TokenError as e:
             logger.warning(f"Logout failed due to invalid token: {str(e)}")
             return Response(
-                {"status": False, "detail": "Invalid refresh token"},
+                {"status": False, "message": "Invalid refresh token"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         except Exception as e:
             logger.error(f"Unexpected error during logout: {str(e)}")
             return Response(
-                {"status": False, "detail": "An error occurred during logout"},
+                {"status": False, "message": "An error occurred during logout"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -174,7 +174,7 @@ class LogoutAllView(APIView):
 
         if not user.is_authenticated:
             return Response(
-                {"status": False, "detail": "Authentication required"},
+                {"status": False, "message": "Authentication required"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -241,6 +241,6 @@ class LogoutAllView(APIView):
         except Exception as e:
             logger.error(f"Unexpected error during logout all: {str(e)}")
             return Response(
-                {"status": False, "detail": "An error occurred during logout"},
+                {"status": False, "message": "An error occurred during logout"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

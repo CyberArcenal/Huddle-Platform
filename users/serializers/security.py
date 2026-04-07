@@ -337,9 +337,9 @@ class UserSecuritySettingsSerializer(serializers.ModelSerializer):
 
 # ===== Response serializers for drf-spectacular =====
 
-class ChangePasswordResponseSerializer(serializers.Serializer):
-    message = serializers.CharField()
-    user_id = serializers.IntegerField()
+# class ChangePasswordResponseSerializer(serializers.Serializer):
+#     message = serializers.CharField()
+#     user_id = serializers.IntegerField()
 
 
 class Enable2FAResponseSerializer(serializers.Serializer):

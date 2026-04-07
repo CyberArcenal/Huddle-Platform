@@ -128,6 +128,8 @@ class StoryDeleteResponseSerializer(serializers.Serializer):
 
 class StoryFeedListResponseData(serializers.Serializer):
     feed = StoryFeedSerializer(many=True)
+    has_next = serializers.BooleanField()
+    next_offset = serializers.IntegerField(allow_null=True)
 
 
 class StoryFeedListResponseSerializer(serializers.Serializer):
@@ -515,57 +517,44 @@ class StoryFeedView(APIView):
     @extend_schema(
         tags=["Storie's"],
         parameters=[
-            OpenApiParameter(
-                name="include_own",
-                type=bool,
-                description="Include user's own stories",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="limit_per_user",
-                type=int,
-                description="Max stories per user",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="max_users",
-                type=int,
-                description="Max number of users to include",
-                required=False,
-            ),
+            OpenApiParameter(name="include_own", type=bool, required=False),
+            OpenApiParameter(name="limit_per_user", type=int, required=False),
+            OpenApiParameter(name="offset", type=int, required=False),    # idinagdag
+            OpenApiParameter(name="limit", type=int, required=False),     # idinagdag
         ],
         responses={200: StoryFeedListResponseSerializer},
-        description="Generate a personalized story feed grouped by user.",
     )
     def get(self, request):
         try:
             include_own = request.query_params.get("include_own", "true").lower() == "true"
             limit_per_user = int(request.query_params.get("limit_per_user", 3))
-            max_users = int(request.query_params.get("max_users", 20))
+            offset = int(request.query_params.get("offset", 0))
+            limit = int(request.query_params.get("limit", 10))
 
-            feed = StoryFeedService.generate_story_feed(
+            feed, has_next, next_offset = StoryFeedService.generate_story_feed(
                 user=request.user,
                 include_own_stories=include_own,
                 limit_per_user=limit_per_user,
-                max_users=max_users,
+                offset=offset,
+                limit=limit,
             )
 
             serializer = StoryFeedSerializer(feed, many=True, context={'request': request})
-            return Response(
-                {
-                    "status": True,
-                    "message": "Story feed retrieved.",
-                    "data": {"feed": serializer.data},
-                }
-            )
+            response_data = {
+                "feed": serializer.data,
+                "has_next": has_next,
+                "next_offset": next_offset,
+                "total_users": len(feed)
+            }
+            return Response({
+                "status": True,
+                "message": "Story feed retrieved.",
+                "data": response_data,
+            })
         except Exception as e:
             logger.exception("Error generating story feed")
             return Response(
-                {
-                    "status": False,
-                    "message": "Something went wrong.",
-                    "data": None,
-                },
+                {"status": False, "message": "Something went wrong.", "data": None},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

@@ -7,7 +7,11 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import inline_serializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from global_utils.pagination import UsersPagination
-from users.serializers.session import BulkTerminateSessionsSerializer, LoginSessionSerializer, TerminateSessionSerializer
+from users.serializers.session import (
+    BulkTerminateSessionsSerializer,
+    LoginSessionSerializer,
+    TerminateSessionSerializer,
+)
 
 from ..services.security_log import SecurityLogService
 from ..services.user_security_settings import UserSecuritySettingsService
@@ -15,7 +19,6 @@ from ..services.login_session import LoginSessionService
 from ..services.blacklisted_access_token import BlacklistedAccessTokenService
 from ..serializers.security import (
     BulkTerminateSessionsResponseSerializer,
-    ChangePasswordResponseSerializer,
     ChangePasswordSerializer,
     Check2FAStatusResponseSerializer,
     Disable2FAResponseSerializer,
@@ -45,15 +48,15 @@ def wrap_paginated_security_logs(paginator, page, request):
     """
     Construct a paginated data dict for SecurityLogSerializer.
     """
-    serializer = SecurityLogSerializer(page, many=True, context={'request': request})
+    serializer = SecurityLogSerializer(page, many=True, context={"request": request})
     data = {
-        'page': paginator.page.number,
-        'hasNext': paginator.page.has_next(),
-        'hasPrev': paginator.page.has_previous(),
-        'count': paginator.page.paginator.count,
-        'next': paginator.get_next_link(),
-        'previous': paginator.get_previous_link(),
-        'results': serializer.data,
+        "page": paginator.page.number,
+        "hasNext": paginator.page.has_next(),
+        "hasPrev": paginator.page.has_previous(),
+        "count": paginator.page.paginator.count,
+        "next": paginator.get_next_link(),
+        "previous": paginator.get_previous_link(),
+        "results": serializer.data,
     }
     return data
 
@@ -62,15 +65,15 @@ def wrap_paginated_sessions(paginator, page, request):
     """
     Construct a paginated data dict for LoginSessionSerializer.
     """
-    serializer = LoginSessionSerializer(page, many=True, context={'request': request})
+    serializer = LoginSessionSerializer(page, many=True, context={"request": request})
     data = {
-        'page': paginator.page.number,
-        'hasNext': paginator.page.has_next(),
-        'hasPrev': paginator.page.has_previous(),
-        'count': paginator.page.paginator.count,
-        'next': paginator.get_next_link(),
-        'previous': paginator.get_previous_link(),
-        'results': serializer.data,
+        "page": paginator.page.number,
+        "hasNext": paginator.page.has_next(),
+        "hasPrev": paginator.page.has_previous(),
+        "count": paginator.page.paginator.count,
+        "next": paginator.get_next_link(),
+        "previous": paginator.get_previous_link(),
+        "results": serializer.data,
     }
     return data
 
@@ -78,6 +81,7 @@ def wrap_paginated_sessions(paginator, page, request):
 # ----------------------------------------------------------------------
 # Response serializers
 # ----------------------------------------------------------------------
+
 
 class PaginatedSecurityLogData(serializers.Serializer):
     page = serializers.IntegerField()
@@ -93,16 +97,6 @@ class PaginatedSecurityLogResponseSerializer(serializers.Serializer):
     status = serializers.BooleanField()
     message = serializers.CharField()
     data = PaginatedSecurityLogData()
-
-
-class ChangePasswordResponseData(serializers.Serializer):
-    user_id = serializers.IntegerField()
-
-
-class ChangePasswordResponseSerializer(serializers.Serializer):
-    status = serializers.BooleanField()
-    message = serializers.CharField()
-    data = ChangePasswordResponseData()
 
 
 class Enable2FAResponseData(serializers.Serializer):
@@ -232,69 +226,6 @@ class Check2FAStatusResponseSerializer(serializers.Serializer):
 # ----------------------------------------------------------------------
 # Views
 # ----------------------------------------------------------------------
-
-class ChangePasswordView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    @extend_schema(
-        tags=["User Security"],
-        request=ChangePasswordSerializer,
-        responses={200: ChangePasswordResponseSerializer},
-        examples=[
-            OpenApiExample(
-                "Change password request",
-                value={
-                    "old_password": "currentpass",
-                    "new_password": "newpass123",
-                    "confirm_password": "newpass123",
-                },
-                request_only=True,
-            ),
-            OpenApiExample(
-                "Success response",
-                value={
-                    "status": True,
-                    "message": "Password changed successfully",
-                    "data": {"user_id": 1},
-                },
-                response_only=True,
-            ),
-        ],
-        description="Change the authenticated user's password.",
-    )
-    @transaction.atomic
-    def post(self, request):
-        serializer = ChangePasswordSerializer(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            try:
-                user = serializer.save()
-                return Response(
-                    {
-                        "status": True,
-                        "message": "Password changed successfully",
-                        "data": {"user_id": user.id},
-                    }
-                )
-            except Exception as e:
-                logger.exception("ChangePasswordView error")
-                return Response(
-                    {
-                        "status": False,
-                        "message": "Something went wrong.",
-                        "data": None,
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        return Response(
-            {
-                "status": False,
-                "message": "Validation error.",
-                "data": serializer.errors,
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
 
 
 class Enable2FAView(APIView):
