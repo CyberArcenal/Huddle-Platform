@@ -179,6 +179,7 @@ class User(AbstractUser):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    last_seen = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "users"

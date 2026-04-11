@@ -155,4 +155,10 @@ urlpatterns += [
     django.urls.path('personality/questions/', personality_quiz.PersonalityQuizQuestionsView.as_view(), name='personality-questions'),
     django.urls.path('personality/submit/',personality_quiz.PersonalityQuizSubmitView.as_view(), name='personality-submit'),
     django.urls.path('personality/status/', personality_quiz.PersonalityQuizStatusView.as_view(), name='personality-status'),
+    django.urls.path('personality/details/<str:mbti_type>/', personality_quiz.PersonalityTypeDetailsView.as_view(), name='personality-details'),
+]
+
+urlpatterns += [
+        django.urls.path('online-status/<int:user_id>/', users.views.user.UserOnlineStatusView.as_view(), name='user-online-status'),
+        django.urls.path('online-status/', users.views.user.UserOnlineStatusView.as_view(), name='user-online-status-bulk'),
 ]

@@ -22,6 +22,7 @@ class Reel(models.Model):
     duration = models.FloatField(help_text='Duration in seconds', blank=True, null=True)
     privacy = models.CharField(max_length=10, choices=POST_PRIVACY_TYPES, default='public')
     is_deleted = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

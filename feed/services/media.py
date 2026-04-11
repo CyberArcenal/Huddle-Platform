@@ -132,7 +132,7 @@ class MediaProcessingService:
 
         except Exception as e:
             logger.exception(f"Failed to process image media {media.id}: {e}")
-
+            
     @staticmethod
     def process_video(media: Media):
         """Extract thumbnail, generate video variants, and store metadata."""
@@ -142,15 +142,15 @@ class MediaProcessingService:
             import os
             import json
             from django.conf import settings
+            import tempfile
 
-            # 1. Extract thumbnail
-            thumbnail_file, tmp_thumb_path = extract_thumbnail(
+            # 1. Extract static thumbnail (existing code)
+            thumbnail_file, tmp_thumb_path, video_tmp_path = extract_thumbnail(
                 media.file, time="00:00:01"
             )
             base_filename = os.path.splitext(os.path.basename(media.file.name))[0]
             variant_name_thumb = f"{base_filename}_thumbnail.jpg"
 
-            # Get or create thumbnail variant
             thumb_variant, created = MediaVariant.objects.get_or_create(
                 media=media,
                 variant_type="thumbnail",
@@ -159,6 +159,8 @@ class MediaProcessingService:
             if not created and thumb_variant.file:
                 thumb_variant.file.delete(save=False)
             thumb_variant.file.save(variant_name_thumb, thumbnail_file)
+            thumbnail_file.close()
+
             try:
                 with Image.open(thumb_variant.file) as thumb_img:
                     thumb_variant.width, thumb_variant.height = thumb_img.size
@@ -166,25 +168,19 @@ class MediaProcessingService:
                 pass
             thumb_variant.size_bytes = thumb_variant.file.size
             thumb_variant.save()
-            # Clean up temporary thumbnail
-            os.unlink(tmp_thumb_path)
 
-            # 2. Get original video metadata via ffprobe
+            os.unlink(tmp_thumb_path)
+            if video_tmp_path and os.path.exists(video_tmp_path):
+                os.unlink(video_tmp_path)
+
+            # 2. Original video metadata (existing)
             cmd_probe = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "stream=width,height,duration,codec_name",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "json",
-                media.file.path,
+                "ffprobe", "-v", "error",
+                "-show_entries", "stream=width,height,duration,codec_name",
+                "-show_entries", "format=duration",
+                "-of", "json", media.file.path,
             ]
-            result = subprocess.run(
-                cmd_probe, capture_output=True, text=True, check=True
-            )
+            result = subprocess.run(cmd_probe, capture_output=True, text=True, check=True)
             data = json.loads(result.stdout)
             video_stream = next(
                 (s for s in data.get("streams", []) if s.get("codec_type") == "video"),
@@ -193,12 +189,10 @@ class MediaProcessingService:
             original_width = video_stream.get("width")
             original_height = video_stream.get("height")
             original_duration = float(
-                video_stream.get("duration")
-                or data.get("format", {}).get("duration", 0)
+                video_stream.get("duration") or data.get("format", {}).get("duration", 0)
             )
             original_codec = video_stream.get("codec_name")
 
-            # Store original metadata
             media.metadata = {
                 "original": {
                     "width": original_width,
@@ -210,7 +204,73 @@ class MediaProcessingService:
                 "variants": {},
             }
 
-            # 3. Generate video variants (if configured)
+            # ========== BAGONG KODIGO: GUMAWA NG 3-SECOND VIDEO THUMBNAIL ==========
+            animated_thumb_duration = getattr(settings, "ANIMATED_THUMBNAIL_DURATION", 3)  # default 3 sec
+            animated_thumb_width = getattr(settings, "ANIMATED_THUMBNAIL_WIDTH", 320)     # maliit na lapad
+
+            # Kalkulahin ang taas upang mapanatili ang aspect ratio
+            if original_width and original_height:
+                target_height = int(animated_thumb_width * original_height / original_width)
+            else:
+                target_height = animated_thumb_width  # fallback
+
+            # Gumamit ng temporary file para sa trimmed clip
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_anim:
+                tmp_anim_path = tmp_anim.name
+
+            # ffmpeg command: i-trim ang unang `animated_thumb_duration` segundo, i-scale, i-encode
+            cmd_anim_thumb = [
+                "ffmpeg",
+                "-i", media.file.path,
+                "-t", str(animated_thumb_duration),           # haba ng clip
+                "-vf", f"scale={animated_thumb_width}:{target_height}",
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "28",                                 # mababang bitrate para maliit ang file
+                "-c:a", "aac",
+                "-b:a", "64k",
+                "-movflags", "+faststart",
+                tmp_anim_path,
+                "-y"
+            ]
+            subprocess.run(cmd_anim_thumb, check=True, capture_output=True)
+
+            # I-save bilang MediaVariant
+            anim_variant, created = MediaVariant.objects.get_or_create(
+                media=media,
+                variant_type="video_thumbnail",               # pangalan ng variant
+                defaults={"size_bytes": 0}
+            )
+            if not created and anim_variant.file:
+                anim_variant.file.delete(save=False)
+
+            anim_filename = f"{base_filename}_anim_thumb.mp4"
+            with open(tmp_anim_path, "rb") as f:
+                content_file = ContentFile(f.read())
+                anim_variant.file.save(anim_filename, content_file)
+
+            anim_variant.width = animated_thumb_width
+            anim_variant.height = target_height
+            anim_variant.size_bytes = anim_variant.file.size
+            anim_variant.duration = animated_thumb_duration
+            anim_variant.codec = "h264"
+            anim_variant.save()
+
+            # I-record sa metadata
+            media.metadata["variants"]["video_thumbnail"] = {
+                "file": anim_variant.file.name,
+                "width": animated_thumb_width,
+                "height": target_height,
+                "size_bytes": anim_variant.size_bytes,
+                "duration": animated_thumb_duration,
+                "codec": "h264",
+            }
+
+            # Linisin ang temp file
+            os.unlink(tmp_anim_path)
+            # ========== TAPOS NG BAGONG KODIGO ==========
+
+            # 3. Generate other video variants (existing code)
             variants_config = getattr(settings, "VIDEO_VARIANTS", [])
             for config in variants_config:
                 variant_type = config["type"]
@@ -218,40 +278,25 @@ class MediaProcessingService:
                 target_height = config["height"]
                 bitrate = config.get("bitrate", "1000k")
 
-                # Build ffmpeg command to transcode
                 output_filename = f"{base_filename}_{variant_type}.mp4"
-                # We'll use a temporary file first to avoid partial writes
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(
-                    suffix=".mp4", delete=False
-                ) as tmp_out:
+                with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_out:
                     tmp_output = tmp_out.name
 
                 cmd = [
                     "ffmpeg",
-                    "-i",
-                    media.file.path,
-                    "-vf",
-                    f"scale={target_width}:{target_height}",
-                    "-c:v",
-                    "libx264",
-                    "-b:v",
-                    bitrate,
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "128k",
-                    "-preset",
-                    "medium",
-                    "-movflags",
-                    "+faststart",
+                    "-i", media.file.path,
+                    "-vf", f"scale={target_width}:{target_height}",
+                    "-c:v", "libx264",
+                    "-b:v", bitrate,
+                    "-c:a", "aac",
+                    "-b:a", "128k",
+                    "-preset", "medium",
+                    "-movflags", "+faststart",
                     tmp_output,
                     "-y",
                 ]
                 subprocess.run(cmd, check=True, capture_output=True)
 
-                # Now create variant record and move file to final storage
                 variant, created = MediaVariant.objects.get_or_create(
                     media=media,
                     variant_type=variant_type,
@@ -264,15 +309,13 @@ class MediaProcessingService:
                     content_file = ContentFile(f.read())
                     variant.file.save(output_filename, content_file)
 
-                # Get variant dimensions and size
                 variant.width = target_width
                 variant.height = target_height
                 variant.size_bytes = variant.file.size
-                variant.duration = original_duration  # same as original
-                variant.codec = "h264"  # or read from ffprobe
+                variant.duration = original_duration
+                variant.codec = "h264"
                 variant.save()
 
-                # Store reference in media.metadata for backward compatibility
                 media.metadata["variants"][variant_type] = {
                     "file": variant.file.name,
                     "width": target_width,
@@ -282,18 +325,15 @@ class MediaProcessingService:
                     "codec": variant.codec,
                 }
 
-                # Clean up temp file
                 os.unlink(tmp_output)
 
-            # Save updated media metadata
             media.save(update_fields=["metadata"])
             logger.info(
-                f"Processed video media {media.id} with {len(variants_config)} variants"
+                f"Processed video media {media.id} with static thumbnail and moving thumbnail (duration={animated_thumb_duration}s)"
             )
 
         except Exception as e:
             logger.exception(f"Failed to process video media {media.id}: {e}")
-            # Optionally re-raise or log; we'll just log here
 
     @staticmethod
     def process_media(media: Media):

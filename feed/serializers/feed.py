@@ -1,5 +1,6 @@
 # feed/serializers/feed.py
 
+import logging
 from typing import Any, Dict
 from rest_framework import serializers
 from events.serializers.event import EventListSerializer
@@ -12,6 +13,7 @@ from stories.serializers.story import StoryFeedSerializer, StorySerializer
 from users.serializers.user.minimal import UserMinimalSerializer
 from users.serializers.user_image import UserImageDisplaySerializer
 
+logger = logging.getLogger(__name__)
 FEED_DATA_TYPES = [
     "posts",
     "reels",
@@ -97,23 +99,29 @@ class UnifiedContentItemSerializer(serializers.Serializer):
 
     def get_items(self, obj) -> list[Dict[str, Any]]:
         # Rows have 'row_type' and 'items'
-        if "row_type" in obj and "items" in obj:
-            row_type = obj["row_type"]
-            items = obj["items"]
-            serializer_class = ROW_TYPE_SERIALIZER.get(row_type)
-            if serializer_class:
-                return serializer_class(items, many=True, context=self.context).data
-        return []
+        try:
+            if "row_type" in obj and "items" in obj:
+                row_type = obj["row_type"]
+                items = obj["items"]
+                serializer_class = ROW_TYPE_SERIALIZER.get(row_type)
+                if serializer_class:
+                    return serializer_class(items, many=True, context=self.context).data
+            return []
+        except Exception as e:
+            logger.error(f"Error in get_items: {e}, on data: {obj}")
 
     def get_item(self, obj) -> Dict[str, Any]:
         # Single items have 'type' and 'data'
-        if "type" in obj and "item" in obj:
-            content_type = obj["type"]
-            data_obj = obj["item"]
-            serializer_class = SINGLE_ITEM_SERIALIZER.get(content_type)
-            if serializer_class:
-                return serializer_class(data_obj, context=self.context).data
-        return None
+        try:
+            if "type" in obj and "item" in obj:
+                content_type = obj["type"]
+                data_obj = obj["item"]
+                serializer_class = SINGLE_ITEM_SERIALIZER.get(content_type)
+                if serializer_class:
+                    return serializer_class(data_obj, context=self.context).data
+            return None
+        except Exception as e:
+            logger.error(f"Error in get_item: {e}, on data: {obj}")
 
     def to_representation(self, instance):
         # Determine type and title based on input structure

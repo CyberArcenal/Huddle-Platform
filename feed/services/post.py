@@ -19,7 +19,7 @@ from feed.services.media import MediaProcessingService
 from feed.services.reaction import ReactionService
 from feed.services.share import ShareService
 from feed.services.view import ViewService
-from feed.tasks.media import finalize_post_upload, process_media_task
+
 from groups.models.group import Group
 from groups.services.group import GroupService
 from groups.services.group_member import GroupMemberService
@@ -46,6 +46,7 @@ class PostService:
         client_id: Optional[str] = None,
         **extra_fields,
     ) -> Post:
+        from feed.tasks.media import finalize_post_upload, process_media_task
         # Idempotency check
         if client_id:
             existing = Post.objects.filter(client_id=client_id).first()
@@ -53,10 +54,12 @@ class PostService:
                 return existing
 
         # Save media files to temporary locations
+        
         temp_paths = []
         if media_files:
             for file in media_files:
-                with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                original_ext = os.path.splitext(file.name)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp:
                     for chunk in file.chunks():
                         tmp.write(chunk)
                     temp_paths.append(tmp.name)

@@ -23,6 +23,7 @@ from feed.serializers.share import (
     ShareCreateSerializer,
     ShareDisplaySerializer,
     ShareFeedSerializer,
+    ShareUpdateSerializer,
 )
 from feed.services.share import ShareService
 from global_utils.pagination import StandardResultsSetPagination
@@ -323,7 +324,7 @@ class ShareDetailView(APIView):
 
     @extend_schema(
         tags=["Share Post's"],
-        request=ShareCreateSerializer,  # reuse create serializer for updates
+        request=ShareUpdateSerializer,  # reuse create serializer for updates
         responses={200: ShareUpdateResponseSerializer},
         examples=[
             OpenApiExample(

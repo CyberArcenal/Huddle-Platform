@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 
+from core import settings
 from core.settings.dev import LOGGER
 from global_utils.pagination import UsersPagination
 from users.models.user_activity import UserActivity
@@ -207,6 +208,28 @@ class VerifyEmailSerializer(serializers.Serializer):
 # Views
 # ----------------------------------------------------------------------
 
+import redis
+from rest_framework.permissions import IsAuthenticated
+redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+class UserOnlineStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, user_id=None):
+        if user_id:
+            # Check single user
+            is_online = redis_client.exists(f"online:{user_id}")
+            return Response({"user_id": user_id, "online": bool(is_online)})
+        else:
+            # Bulk check: get all online users from a set
+            # You can maintain a set of online users, or just iterate over IDs
+            user_ids = request.query_params.getlist('ids')
+            statuses = {}
+            for uid in user_ids:
+                statuses[uid] = redis_client.exists(f"online:{uid}")
+            return Response(statuses)
+        
+        
 class UserRegisterView(APIView):
     permission_classes = [permissions.AllowAny]
 

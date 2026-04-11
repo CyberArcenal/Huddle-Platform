@@ -32,9 +32,10 @@ class ReelService:
             existing = Reel.objects.filter(client_id=client_id).first()
             if existing:
                 return existing
-
+            
+        original_ext = os.path.splitext(video.name)[1]
         # Save uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp:
             for chunk in video.chunks():
                 tmp.write(chunk)
             temp_path = tmp.name

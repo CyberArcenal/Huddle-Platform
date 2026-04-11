@@ -1,5 +1,7 @@
 # Core Django + third-party apps
 INSTALLED_APPS = [
+    "channels",
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.sites",
@@ -32,6 +34,7 @@ PROJECT_APPS = [
     "dating",
     "users",
     "audit",
+    "live",
 ]
 
 INSTALLED_APPS += PROJECT_APPS

@@ -19,6 +19,9 @@ urlpatterns = [
     path('posts/<int:post_id>/share-to-group/', post.SharePostToGroupView.as_view(), name='post-share-to-group'),
     path('posts/<int:post_id>/status/', post.PostStatusView.as_view(), name='post-status'),
     
+    path('posts/deleted/', post.PostDeletedListView.as_view(), name='post-deleted-list'),
+    path('posts/archived/', post.PostArchivedListView.as_view(), name='post-archived-list'),
+    
     path('users/<int:user_id>/content/', UserContentFeedView.as_view(), name='user-content'),
     path('me/content/', UserContentFeedView.as_view(), name='my-content'),
     

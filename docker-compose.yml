@@ -27,6 +27,21 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"  # WebSocket/API port
+      - "7881:7881"  # TCP ICE port
+      - "7882:7882/udp" # UDP port for WebRTC
+      - "50000-60000:50000-60000/udp" # UDP ports for media
+    command: --config /etc/livekit/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit/livekit.yaml
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
 
   db:
     container_name: barangay_system_db

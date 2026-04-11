@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from feed.models.post import Post
+from feed.models.post import POST_PRIVACY_TYPES, Post
 from feed.models.reaction import ReactionType
 from feed.serializers.base import (
     PostStatsSerializers,
@@ -201,6 +201,7 @@ class PostDisplaySerializer(serializers.ModelSerializer):
             "media",
             "privacy",
             "is_deleted",
+            "is_archived",
             "processing",
             "created_at",
             "updated_at",
@@ -298,3 +299,43 @@ class PostFeedSerializer(serializers.ModelSerializer):
         from feed.services.post import PostService
 
         return PostService.get_post_statistics(serializer=self, obj=obj)
+    
+
+
+
+class PostUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating an existing post.
+    Supports partial updates. Only owner can update – permission checks must be done in the view.
+    Allowed fields: content, privacy, is_archived, is_deleted (soft delete/restore), tag_users.
+    """
+    tag_users = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False
+    )
+    class Meta:
+        model = Post
+        fields = [
+            "content",
+            "privacy",
+            "is_archived",
+            "is_deleted",
+            "tag_users",
+        ]
+        extra_kwargs = {
+            "content": {"required": False, "allow_blank": True},
+            "privacy": {"required": False},
+            "is_archived": {"required": False},
+            "is_deleted": {"required": False},
+        }
+
+    def validate_privacy(self, value):
+        if value not in dict(POST_PRIVACY_TYPES):
+            raise serializers.ValidationError("Invalid privacy choice.")
+        return value
+
+    def update(self, instance, validated_data):
+        # Directly update fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance

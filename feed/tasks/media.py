@@ -2,16 +2,13 @@ from events.models import Event
 from django.contrib.contenttypes.models import ContentType
 from feed.models import Reel, Media
 from feed.models.post import Post
-from feed.services.media import MediaProcessingService
 from celery import shared_task
 from django.core.files import File
 import os
 
-from feed.services.media import MediaProcessingService
-
-
 @shared_task
 def process_media_task(media_id: int) -> None:
+    from feed.services.media import MediaProcessingService
     from feed.models import Media
 
     try:
@@ -23,6 +20,7 @@ def process_media_task(media_id: int) -> None:
 
 @shared_task
 def finalize_reel_upload(reel_id, temp_path):
+    from feed.services.media import MediaProcessingService
     try:
         reel = Reel.objects.get(id=reel_id)
         with open(temp_path, "rb") as f:
@@ -54,6 +52,7 @@ def finalize_reel_upload(reel_id, temp_path):
 
 @shared_task
 def finalize_post_upload(post_id, temp_paths):
+    from feed.services.media import MediaProcessingService
     try:
         post = Post.objects.get(id=post_id)
         post_ct = ContentType.objects.get_for_model(post)
@@ -97,6 +96,7 @@ def finalize_post_upload(post_id, temp_paths):
 
 @shared_task
 def finalize_event_upload(event_id, temp_paths):
+    from feed.services.media import MediaProcessingService
     try:
         event = Event.objects.get(id=event_id)
         event_ct = ContentType.objects.get_for_model(event)

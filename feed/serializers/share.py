@@ -142,6 +142,7 @@ class ShareDisplaySerializer(serializers.ModelSerializer):
             "caption",
             "privacy",
             "is_deleted",
+            "is_archived",
             "created_at",
             "updated_at",
             "share_count",
@@ -278,3 +279,41 @@ class ShareFeedSerializer(serializers.ModelSerializer):
         from feed.services.post import PostService
 
         return PostService.get_post_statistics(serializer=self, obj=obj)
+
+
+
+
+
+class ShareUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating an existing share.
+    Supports partial updates. Only owner can update.
+    Allowed fields: caption, privacy, is_archived, is_deleted.
+    """
+
+
+    class Meta:
+        model = Share
+        fields = [
+            "caption",
+            "privacy",
+            "is_archived",
+            "is_deleted",
+        ]
+        extra_kwargs = {
+            "caption": {"required": False, "allow_blank": True},
+            "privacy": {"required": False},
+            "is_archived": {"required": False},
+            "is_deleted": {"required": False},
+        }
+
+    def validate_privacy(self, value):
+        if value not in dict(POST_PRIVACY_TYPES):
+            raise serializers.ValidationError("Invalid privacy choice.")
+        return value
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance

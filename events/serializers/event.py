@@ -105,7 +105,10 @@ class EventCreateSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         media_files = validated_data.pop("media", [])
         client_id = validated_data.pop("client_id", None)
-
+        
+        if not request or not request.user.is_authenticated:
+            raise serializers.ValidationError("Authentication required")
+        
         return EventService.create_event(
             organizer=request.user,
             media_files=media_files,

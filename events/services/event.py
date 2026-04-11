@@ -1,9 +1,13 @@
+import os
+import tempfile
+
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.db import transaction, IntegrityError
 from django.db.models import Q
 from typing import Optional, List, Dict, Any, Tuple
 import uuid
+from feed.tasks.media import finalize_post_upload
 from groups.models.group import Group
 from users.models import User
 from events.models import Event
@@ -22,6 +26,8 @@ class EventService:
         event_type: str = 'public',
         group: Optional[Group] = None,
         max_attendees: Optional[int] = None,
+        media_files: Optional[List[Any]] = None,
+        client_id: Optional[str] = None,
         **extra_fields
     ) -> Event:
         """Create a new event"""
@@ -48,6 +54,23 @@ class EventService:
         if max_attendees is not None and max_attendees <= 0:
             raise ValidationError("Max attendees must be positive")
         
+        # Idempotency check
+        if client_id:
+            existing = Event.objects.filter(client_id=client_id).first()
+            if existing:
+                return existing
+
+        # Save media files to temporary locations
+        
+        temp_paths = []
+        if media_files:
+            for file in media_files:
+                original_ext = os.path.splitext(file.name)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=original_ext) as tmp:
+                    for chunk in file.chunks():
+                        tmp.write(chunk)
+                    temp_paths.append(tmp.name)
+        
         try:
             with transaction.atomic():
                 event = Event.objects.create(
@@ -62,8 +85,17 @@ class EventService:
                     max_attendees=max_attendees,
                     **extra_fields
                 )
+                
+                finalize_post_upload.delay(event.id, temp_paths)
+   
                 return event
         except IntegrityError as e:
+            
+            # Clean up temp files on failure
+            for path in temp_paths:
+                if os.path.exists(path):
+                    os.remove(path)
+                    
             raise ValidationError(f"Failed to create event: {str(e)}")
     
     @staticmethod

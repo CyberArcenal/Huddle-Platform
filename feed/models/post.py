@@ -43,6 +43,7 @@ class Post(models.Model):
         max_length=10, choices=POST_PRIVACY_TYPES, default="followers"
     )
     is_deleted = models.BooleanField(default=False)
+    is_archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

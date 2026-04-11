@@ -2,7 +2,9 @@ from django.core.exceptions import ValidationError
 from django.db import transaction, IntegrityError
 from django.contrib.contenttypes.models import ContentType
 from typing import Optional, List, Dict, Any
-
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from live.models.live import LiveStream
 from users.models import User
 from ..models import Comment
 
@@ -33,9 +35,27 @@ class CommentService:
                     parent_comment=parent_comment,
                     content=content,
                 )
+                if isinstance(content_object, LiveStream):
+                    CommentService._broadcast_live_comment(comment, content_object)
                 return comment
         except IntegrityError as e:
             raise ValidationError(f"Failed to create comment: {str(e)}")
+    
+    @staticmethod
+    def _broadcast_live_comment(comment:Comment, live:LiveStream) -> None:
+        channel_layer = get_channel_layer()
+        group_name = f'live_{live.id}'
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'new_comment',
+                'comment_id': comment.id,
+                'user_id': comment.user_id,
+                'username': comment.user.username,
+                'content': comment.content,
+                'created_at': comment.created_at.isoformat(),
+            }
+        )
 
     @staticmethod
     def get_comment_by_id(comment_id: int) -> Optional[Comment]:

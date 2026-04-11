@@ -185,25 +185,25 @@ class ReelCreateSerializer(serializers.ModelSerializer):
                     pass
 
 
-class ReelUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating an existing reel (partial updates allowed)."""
+# class ReelUpdateSerializer(serializers.ModelSerializer):
+#     """Serializer for updating an existing reel (partial updates allowed)."""
 
-    class Meta:
-        model = Reel
-        fields = ["caption", "thumbnail", "audio", "duration", "privacy"]
-        extra_kwargs = {
-            "caption": {"required": False},
-            "thumbnail": {"required": False},
-            "audio": {"required": False},
-            "duration": {"required": False},
-            "privacy": {"required": False},
-        }
+#     class Meta:
+#         model = Reel
+#         fields = ["caption", "thumbnail", "audio", "duration", "privacy"]
+#         extra_kwargs = {
+#             "caption": {"required": False},
+#             "thumbnail": {"required": False},
+#             "audio": {"required": False},
+#             "duration": {"required": False},
+#             "privacy": {"required": False},
+#         }
 
-    def update(self, instance, validated_data):
-        try:
-            return ReelService.update_reel(instance, validated_data)
-        except ValidationError as e:
-            raise serializers.ValidationError(str(e))
+#     def update(self, instance, validated_data):
+#         try:
+#             return ReelService.update_reel(instance, validated_data)
+#         except ValidationError as e:
+#             raise serializers.ValidationError(str(e))
 
 
 class ReelDisplaySerializer(serializers.ModelSerializer):
@@ -230,6 +230,8 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
             "audio_url",
             "duration",
             "privacy",
+            "is_deleted",
+            "is_archived",
             "created_at",
             "updated_at",
             "statistics",
@@ -261,3 +263,43 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
     def get_statistics(self, obj) -> PostStatsSerializers:
         from feed.services.post import PostService
         return PostService.get_post_statistics(serializer=self, obj=obj)
+    
+    
+
+
+class ReelUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating an existing reel.
+    Supports partial updates. Only owner can update.
+    Allowed fields: caption, privacy, is_archived, is_deleted, thumbnail, audio.
+    """
+    class Meta:
+        model = Reel
+        fields = [
+            "caption",
+            "privacy",
+            "is_archived",
+            "is_deleted",
+            "thumbnail",
+            "audio",
+        ]
+        extra_kwargs = {
+            "caption": {"required": False, "allow_blank": True},
+            "privacy": {"required": False},
+            "is_archived": {"required": False},
+            "is_deleted": {"required": False},
+            "thumbnail": {"required": False},
+            "audio": {"required": False},
+        }
+
+    def validate_privacy(self, value):
+        if value not in dict(POST_PRIVACY_TYPES):
+            raise serializers.ValidationError("Invalid privacy choice.")
+        return value
+
+    def update(self, instance, validated_data):
+        # Direct update (file fields will be handled by Django's storage)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance

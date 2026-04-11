@@ -1,0 +1,23 @@
+
+
+RUN DJANGO
+
+python manage.py runserver
+
+
+RUN LIVEKIT
+
+docker run --rm -it -p 7880:7880 -p 7881:7881 
+-p 7882:7882/udp livekit/livekit-server --dev --bind 0.0.0.0
+
+
+RUN CELERY
+
+celery -A core worker -P threads -l info
+
+
+DOWNLOAD SCHEMA
+
+curl -o app/src/main/openapi/schema.yaml http://127.0.0.1:8000/api/schema/?format=yaml
+
+

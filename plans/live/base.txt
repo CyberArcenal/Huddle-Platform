@@ -1,0 +1,27 @@
+Batay sa mga file na ibinigay, narito ang mga kulang na screen para gumana nang buo ang live streaming feature:
+
+### 1. `StartLiveScreen` (o `CreateLiveScreen`)
+- **Bakit kailangan:** Sa `LiveListScreen`, may `IconButton` na may `onClick = { navController.navigate("start_live") }`. Pero sa `HomeScreen` navigation, **walang** `composable("start_live")` na nakarehistro. Kapag na-click ito, magca-crash ang app.
+- **Dapat gawin:** Gumawa ng screen kung saan puwedeng mag-input ng `title` at `description` (at iba pang opsyon tulad ng thumbnail). Tatawag ito sa `viewModel.startLive(title, description)` pagkatapos ay mag-redirect sa `LiveStreamScreen` gamit ang bagong `liveId`.
+- **Sample na kailangan:** Isang simpleng `Scaffold` na may `TextField` para sa title at description, at button na "Start Live".
+
+### 2. (Optional) `LiveViewerRequestScreen` o request status screen
+- Sa kasalukuyan, ang viewer ay pwedeng mag-“Join Request” sa pamamagitan ng button sa `LiveStreamScreen`. Walang dedicated screen para makita ang status ng request (pending/approved/rejected). Pero puwede namang ipakita sa pamamagitan ng Snackbar o Toast. Hindi ito mahigpit na kailangan, pero magandang magkaroon ng feedback.
+
+### 3. Navigation entry para sa `"start_live"` sa `HomeScreen`
+- Kahit may `StartLiveScreen` ka, kailangan mo rin i-register ito sa `NavHost` sa loob ng `HomeScreen`. Halimbawa:
+  ```kotlin
+  composable("start_live") {
+      StartLiveScreen(
+          viewModel = viewModel(),
+          navController = bottomNavController
+      )
+  }
+  ```
+
+### 4. (Kung gusto mo ng hiwalay na host at viewer UI) – Puwede namang iisa lang gaya ng ginawa mo.
+- Hindi kulang, pero kung gusto mo ng mas malinis na separation, puwedeng gumawa ng `HostLiveScreen` at `ViewerLiveScreen`. Pero hindi required.
+
+### Konklusyon:
+**Pinaka-kulang ay ang `StartLiveScreen` at ang navigation route nito.** Iyon ang unang dapat gawin para magamit ang “Start Live” button. Pagkatapos noon, puwede nang gumana ang buong flow:  
+`LiveListScreen` → `StartLiveScreen` → `LiveStreamScreen` (bilang host) → WebSocket + LiveKit.

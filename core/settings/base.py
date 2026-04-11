@@ -29,6 +29,7 @@ from .components.spectacular        import *
 # from .components.cloudinary         import *
 
 from .components.media              import *
+from .components.livekit            import *
 
 
 
