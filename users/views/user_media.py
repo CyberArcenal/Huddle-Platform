@@ -90,7 +90,7 @@ class UserMediaGridView(APIView):
                 request=request,
                 page=page_num,
                 page_size=page_size,
-                content_type=content_type, 
+                media_type=content_type, 
             )
 
             # Build paginated data (matches UserMediaGridData)
@@ -115,6 +115,8 @@ class UserMediaGridView(APIView):
                 "previous": get_page_link(prev_page) if prev_page else None,
                 "results": UserMediaItemSerializer(items, many=True, context={"request": request}).data,
             }
+            
+            print("Data to be returned:", data)  # Debugging statement
 
             return Response(
                 {

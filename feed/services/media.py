@@ -434,7 +434,22 @@ class MediaProcessingService:
             logger.warning(
                 f"Unsupported media type for media {media.id}: {media.file.name}"
             )
-
+    @staticmethod
+    def get_video_thumbnail_url(media: Media):
+        """Return the URL of the thumbnail variant if it exists, otherwise None."""
+        try:
+            thumbnail_variant = media.variants.get(variant_type="thumbnail")
+            return thumbnail_variant.file.url if thumbnail_variant.file else None
+        except MediaVariant.DoesNotExist:
+            return None
+    @staticmethod
+    def get_image_thumbnail_url(media: Media):
+        """Return the URL of the thumbnail variant if it exists, otherwise None."""
+        try:
+            thumbnail_variant = media.variants.get(variant_type="thumbnail")
+            return thumbnail_variant.file.url if thumbnail_variant.file else None
+        except MediaVariant.DoesNotExist:
+            return None
 
 def trigger_media_processing(media):
     """

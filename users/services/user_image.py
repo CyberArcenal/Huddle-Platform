@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Tuple
 from django.db import models
 from django.db.models import Q
 from feed.models.post import Post
+from feed.services.media import MediaProcessingService
 from users.models import User
 from feed.models import Media, Reel
 from stories.models import Story
@@ -122,10 +123,12 @@ class UserImageService:
             file_type = _get_file_type(media.file)
             if not file_type:
                 continue
+            
+            thumbnail_url = MediaProcessingService.get_video_thumbnail_url(media)
             combined.append({
                 "type": "post_media",
                 "url": request.build_absolute_uri(media.file.url) if media.file else None,
-                "thumbnail": None,
+                "thumbnail": request.build_absolute_uri(thumbnail_url) if thumbnail_url else None,
                 "created_at": media.content_object.created_at if isinstance(media.content_object, Post) else None,
                 "content_id": media.content_object.id if isinstance(media.content_object, Post) else None,
                 "content_type": "post",
@@ -138,10 +141,12 @@ class UserImageService:
         for reel in reels:
             media_obj = reel.media.first()
             if media_obj and media_obj.file:
+                thumbnail_url = MediaProcessingService.get_video_thumbnail_url(media_obj)
+                
                 combined.append({
                     "type": "reel",
                     "url": request.build_absolute_uri(media_obj.file.url),
-                    "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
+                    "thumbnail": request.build_absolute_uri(thumbnail_url) if thumbnail_url else None,
                     "created_at": reel.created_at,
                     "content_id": reel.id,
                     "content_type": "reel",
