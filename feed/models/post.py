@@ -10,12 +10,28 @@ POST_TYPES = [
     ("image", "Image"),
     ("video", "Video"),
     ("poll", "Poll"),
-    ("share", "Share"),
 ]
 POST_PRIVACY_TYPES = [
     ("public", "Public"),
     ("followers", "Followers"),
     ("secret", "Secret"),
+]
+
+FEELING_CHOICES = [
+    ("happy", "Happy"),
+    ("sad", "Sad"),
+    ("love", "Love"),
+    ("crazy", "Crazy"),
+    ("cool", "Cool"),
+    ("excited", "Excited"),
+    ("angry", "Angry"),
+    ("bored", "Bored"),
+    ("tired", "Tired"),
+    ("confused", "Confused"),
+    ("anxious", "Anxious"),
+    ("proud", "Proud"),
+    ("lonely", "Lonely"),
+    ("blessed", "Blessed"),
 ]
 
 
@@ -24,7 +40,7 @@ class Post(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="posts"
     )
-    media = GenericRelation(Media, related_query_name='post')
+    media = GenericRelation(Media, related_query_name="post")
     group = models.ForeignKey(
         Group, null=True, blank=True, on_delete=models.CASCADE, related_name="posts"
     )
@@ -35,10 +51,12 @@ class Post(models.Model):
         settings.AUTH_USER_MODEL, related_name="tagged_posts", blank=True
     )
 
+    feeling = models.CharField(max_length=50, blank=True, choices=FEELING_CHOICES)
+    location = models.CharField(max_length=255, blank=True)
 
     content = models.TextField()
     post_type = models.CharField(max_length=10, choices=POST_TYPES, default="text")
-   
+
     privacy = models.CharField(
         max_length=10, choices=POST_PRIVACY_TYPES, default="followers"
     )
@@ -46,8 +64,7 @@ class Post(models.Model):
     is_archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    
+
     client_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     processing = models.BooleanField(default=True)
     temp_file_paths = models.JSONField(default=list, blank=True)

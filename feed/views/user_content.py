@@ -60,6 +60,12 @@ class UserContentFeedView(APIView):
                 description="Number of items per page",
                 required=False,
             ),
+            OpenApiParameter(
+                name="content_type",
+                type=str,
+                description="Type of content to retrieve",
+                required=False,
+            ),
         ],
         responses={200: UserContentResponseSerializer},
         description="Get a user's activity feed (posts, shares, reels, stories) in chronological order.",
@@ -83,6 +89,8 @@ class UserContentFeedView(APIView):
         # Pagination parameters
         page = request.query_params.get('page', 1)
         page_size = request.query_params.get('page_size', 20)
+        content_type = request.query_params.get('content_type', None)
+
         try:
             page = int(page)
             page_size = int(page_size)
@@ -96,6 +104,8 @@ class UserContentFeedView(APIView):
             user=target_user,
             requester=request.user if request.user.is_authenticated else None,
             max_items=500,
+            content_type=content_type
+
         )
 
         # Paginate the list

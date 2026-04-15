@@ -4,6 +4,8 @@ from django.db import transaction, IntegrityError
 from typing import Optional, List, Dict, Any
 
 from feed.models.view import ObjectView
+from stories.media_processing.story_media import trigger_story_media_processing
+from stories.models.story import STORY_TYPES
 from ..models import Story
 import uuid
 
@@ -22,7 +24,7 @@ class StoryService:
     ) -> Story:
         """Create a new story"""
         # Validate story type
-        valid_types = [choice[0] for choice in Story.STORY_TYPES]
+        valid_types = [choice[0] for choice in STORY_TYPES]
         if story_type not in valid_types:
             raise ValidationError(f"Invalid story type. Must be one of {valid_types}")
         
@@ -45,6 +47,8 @@ class StoryService:
                     expires_at=expires_at,
                     **extra_fields
                 )
+                if story.story_type in ['image', 'video'] and story.media_url:
+                    transaction.on_commit(lambda: trigger_story_media_processing(story))
                 return story
         except IntegrityError as e:
             raise ValidationError(f"Failed to create story: {str(e)}")

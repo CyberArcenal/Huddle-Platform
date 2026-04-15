@@ -56,7 +56,7 @@ class ReelService:
                 )
                 # Start background processing (Celery or threading)
                 from feed.tasks.media import finalize_reel_upload
-                finalize_reel_upload.delay(reel.id, temp_path)
+                transaction.on_commit(lambda: finalize_reel_upload.delay(reel.id, temp_path))
                 return reel
         except Exception:
             if os.path.exists(temp_path):

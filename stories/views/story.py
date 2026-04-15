@@ -527,7 +527,7 @@ class StoryFeedView(APIView):
     def get(self, request):
         try:
             include_own = request.query_params.get("include_own", "true").lower() == "true"
-            limit_per_user = int(request.query_params.get("limit_per_user", 3))
+            limit_per_user = int(request.query_params.get("limit_per_user", 50))
             offset = int(request.query_params.get("offset", 0))
             limit = int(request.query_params.get("limit", 10))
 

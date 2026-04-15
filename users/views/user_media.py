@@ -45,9 +45,15 @@ class UserMediaGridView(APIView):
         parameters=[
             OpenApiParameter(name="page", type=int, description="Page number", required=False),
             OpenApiParameter(name="page_size", type=int, description="Items per page", required=False),
+            OpenApiParameter(
+                name="content_type",
+                type=str,
+                description="Filter by content type: 'post', 'reel', 'story', 'user_image'",
+                required=False,
+            ),
         ],
         responses={200: UserMediaGridResponseSerializer},
-        description="Get all media (post images/videos, reels, story media) from a user, paginated.",
+        description="Get all media (post images/videos, reels, story media) from a user, paginated, optionally filtered by content type.",
     )
     def get(self, request, user_id=None):
         try:
@@ -70,10 +76,12 @@ class UserMediaGridView(APIView):
             try:
                 page_num = int(request.query_params.get("page", 1))
                 page_size = int(request.query_params.get("page_size", paginator.page_size))
+                content_type = request.query_params.get("content_type", None)
                 page_size = min(page_size, paginator.max_page_size)
             except ValueError:
                 page_num = 1
                 page_size = paginator.page_size
+                content_type = None
 
             # Fetch media (service does offset/limit internally)
             items, total = UserImageService.get_user_media(
@@ -82,6 +90,7 @@ class UserMediaGridView(APIView):
                 request=request,
                 page=page_num,
                 page_size=page_size,
+                content_type=content_type, 
             )
 
             # Build paginated data (matches UserMediaGridData)

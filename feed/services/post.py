@@ -43,6 +43,8 @@ class PostService:
         privacy: str = "followers",
         group: Group = None,
         tag_users: Optional[List[User]] = None,
+        feeling: Optional[str] = None,
+        location: Optional[str] = None,
         client_id: Optional[str] = None,
         **extra_fields,
     ) -> Post:
@@ -75,10 +77,13 @@ class PostService:
                     client_id=client_id,
                     processing=True,
                     temp_file_paths=temp_paths,
+                    feeling=feeling,
+                    location=location,
                     **extra_fields,
                 )
                 # Trigger background task to move files and create Media records
-                finalize_post_upload.delay(post.id, temp_paths)
+                # finalize_post_upload.delay(post.id, temp_paths)
+                transaction.on_commit(lambda: finalize_post_upload.delay(post.id, temp_paths))
                 # Handle tagged users
                 if tag_users:
                     post.tag_users.set(tag_users)

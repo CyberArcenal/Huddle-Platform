@@ -363,6 +363,7 @@ class StoryHighlightAddStoriesView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # check if added in other user highlight and if so, return error since a story can only be in one highlight per user
         try:
             updated = StoryHighlightService.add_stories_to_highlight(
                 highlight, serializer.validated_data["story_ids"]

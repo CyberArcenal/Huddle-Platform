@@ -18,6 +18,13 @@ class Reel(models.Model):
     caption = models.TextField(blank=True)
     media = GenericRelation(Media, related_query_name='reel')        # main video
     thumbnail = models.ImageField(upload_to='reels/thumbnails/', blank=True, null=True)
+    thumbnail_variant = models.OneToOneField(
+        'MediaVariant',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reel_thumbnail'
+    )
     audio = models.FileField(upload_to='reels/audio/', blank=True, null=True)  # optional custom audio
     duration = models.FloatField(help_text='Duration in seconds', blank=True, null=True)
     privacy = models.CharField(max_length=10, choices=POST_PRIVACY_TYPES, default='public')

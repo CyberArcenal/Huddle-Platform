@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from feed.models.post import POST_PRIVACY_TYPES, Post
+from feed.models.post import FEELING_CHOICES, POST_PRIVACY_TYPES, Post
 from feed.models.reaction import ReactionType
 from feed.serializers.base import (
     PostStatsSerializers,
@@ -30,6 +30,7 @@ class PostMinimalSerializer(serializers.ModelSerializer):
     group = GroupMinimalSerializer(read_only=True)
     preview = serializers.SerializerMethodField()
     media_preview = serializers.SerializerMethodField()
+    feeling = serializers.ChoiceField(choices=FEELING_CHOICES, read_only=True)
 
     class Meta:
         model = Post
@@ -38,6 +39,8 @@ class PostMinimalSerializer(serializers.ModelSerializer):
             "user",
             "preview",
             "post_type",
+            "feeling",
+            "location",
             "privacy",
             "group",
             "created_at",
@@ -76,6 +79,8 @@ class PostCreateSerializer(serializers.ModelSerializer):
     tag_users = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), required=False, allow_null=True
     )
+    feeling = serializers.ChoiceField(choices=FEELING_CHOICES, required=False, allow_blank=True)
+    location = serializers.CharField(required=False, allow_blank=True)
     mimeTypes = serializers.ListField(
         child=serializers.CharField(),
         required=False,
@@ -92,6 +97,9 @@ class PostCreateSerializer(serializers.ModelSerializer):
             "privacy",
             "media",
             "tag_users",
+            "feeling",
+            "location",
+
             "mimeTypes",
             "client_id", 
         ]
@@ -154,6 +162,8 @@ class PostCreateSerializer(serializers.ModelSerializer):
                 media_files=validated_data.get("media", []),
                 privacy=validated_data.get("privacy", "followers"),
                 tag_users=validated_data.get("tag_users", []),
+                feeling=validated_data.get("feeling", ""),
+                location=validated_data.get("location", ""),
                 group=validated_data.get("group", None),
                 client_id=validated_data.get("client_id"),
             )
@@ -188,6 +198,8 @@ class PostDisplaySerializer(serializers.ModelSerializer):
     reaction_counts = serializers.SerializerMethodField()
     user_reaction = serializers.SerializerMethodField()
     statistics = serializers.SerializerMethodField()
+    feeling = serializers.ChoiceField(choices=FEELING_CHOICES, read_only=True)
+    tag_users = UserMinimalSerializer(many=True, read_only=True)
 
     class Meta:
         model = Post
@@ -197,6 +209,9 @@ class PostDisplaySerializer(serializers.ModelSerializer):
             "shared_post",
             "group",
             "content",
+            "feeling",
+            "location",
+            "tag_users",
             "post_type",
             "media",
             "privacy",
@@ -268,7 +283,8 @@ class PostFeedSerializer(serializers.ModelSerializer):
     preview = serializers.SerializerMethodField()
     statistics = serializers.SerializerMethodField()
     media = MediaDisplaySerializer(many=True, read_only=True)
-
+    feeling = serializers.ChoiceField(choices=FEELING_CHOICES, read_only=True)
+    tag_users = UserMinimalSerializer(many=True, read_only=True)
     class Meta:
         model = Post
         fields = [
@@ -276,7 +292,10 @@ class PostFeedSerializer(serializers.ModelSerializer):
             "user",
             "shared_post",
             "group",
+            "feeling",
+            "location",
             "content",
+            "tag_users",
             "privacy",
             "post_type",
             "media",

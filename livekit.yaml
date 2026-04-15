@@ -2,8 +2,15 @@ port: 7880
 rtc:
   tcp_port: 7881
   udp_port: 7882
-  port_range_start: 50000
-  port_range_end: 60000
-  use_external_ip: false # For local development, no need for external IP
+  port_range_start: 30000
+  port_range_end: 30050
+  use_external_ip: false
 keys:
-  devkey: secret # Use your own key/secret pair
+  devkey: MySuperSecretKeyForDev2026AtLeast32CharsLong!!!
+
+webhook:
+  # Must match one of the keys defined below
+  api_key: devkey
+  # List of URLs (no "events" key here)
+  urls:
+    - http://web:8000/api/v1/live/webhook/

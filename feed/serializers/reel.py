@@ -248,11 +248,11 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
         except:
             return None
 
-    def get_thumbnail_url(self, obj) -> str:
+    def get_thumbnail_url(self, obj:Reel) -> Optional[str]:
         request = self.context.get("request")
-        if obj.thumbnail and request:
-            return request.build_absolute_uri(obj.thumbnail.url)
-        return ""
+        if obj.thumbnail_variant and obj.thumbnail_variant.file and request:
+            return request.build_absolute_uri(obj.thumbnail_variant.file.url)
+        return None
 
     def get_audio_url(self, obj) -> str:
         request = self.context.get("request")

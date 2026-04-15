@@ -7,15 +7,19 @@ from users.models import User
 class StoryHighlightService:
     @staticmethod
     def create_highlight(user: User, title: str, story_ids: List[int]) -> StoryHighlight:
-        """Create a new highlight with given stories."""
         if not title:
             raise ValidationError("Title is required.")
         if StoryHighlight.objects.filter(user=user, title=title).exists():
             raise ValidationError("You already have a highlight with that title.")
 
+        # Validate stories belong to user and are not already in another highlight
         stories = Story.objects.filter(id__in=story_ids, user=user)
-        if len(stories) != len(story_ids):
+        if len(stories) != len(set(story_ids)):
             raise ValidationError("One or more stories are invalid or do not belong to you.")
+
+        already_used = StoryHighlightService._get_stories_already_in_other_highlight(user, story_ids)
+        if already_used:
+            raise ValidationError(f"Stories {already_used} are already part of another highlight.")
 
         with transaction.atomic():
             highlight = StoryHighlight.objects.create(user=user, title=title)
@@ -24,7 +28,6 @@ class StoryHighlightService:
 
     @staticmethod
     def update_highlight(highlight: StoryHighlight, title: Optional[str] = None, story_ids: Optional[List[int]] = None) -> StoryHighlight:
-        """Update highlight title or stories."""
         if title is not None:
             if StoryHighlight.objects.filter(user=highlight.user, title=title).exclude(id=highlight.id).exists():
                 raise ValidationError("Another highlight with that title already exists.")
@@ -33,10 +36,19 @@ class StoryHighlightService:
 
         if story_ids is not None:
             stories = Story.objects.filter(id__in=story_ids, user=highlight.user)
-            if len(stories) != len(story_ids):
+            if len(stories) != len(set(story_ids)):
                 raise ValidationError("One or more stories are invalid or do not belong to you.")
+
+            # Check for conflicts with other highlights (exclude current one)
+            already_used = StoryHighlightService._get_stories_already_in_other_highlight(
+                highlight.user, story_ids, exclude_highlight=highlight
+            )
+            if already_used:
+                raise ValidationError(f"Stories {already_used} are already part of another highlight.")
+
             highlight.stories.set(stories)
 
+        highlight.save(update_fields=['title'])  # save only if title changed, but set() saves automatically
         return highlight
 
     @staticmethod
@@ -55,10 +67,17 @@ class StoryHighlightService:
 
     @staticmethod
     def add_stories_to_highlight(highlight: StoryHighlight, story_ids: List[int]) -> StoryHighlight:
-        """Add stories to an existing highlight (without removing existing)."""
         stories = Story.objects.filter(id__in=story_ids, user=highlight.user)
-        if len(stories) != len(story_ids):
+        if len(stories) != len(set(story_ids)):
             raise ValidationError("One or more stories are invalid or do not belong to you.")
+
+        # Check if any of the new story_ids already belong to another highlight (excluding current)
+        already_used = StoryHighlightService._get_stories_already_in_other_highlight(
+            highlight.user, story_ids, exclude_highlight=highlight
+        )
+        if already_used:
+            raise ValidationError(f"Stories {already_used} are already part of another highlight.")
+
         highlight.stories.add(*stories)
         return highlight
 
@@ -95,3 +114,18 @@ class StoryHighlightService:
             highlight.save(update_fields=["cover"])
             highlight.refresh_from_db()
         return highlight
+
+    @staticmethod
+    def _get_stories_already_in_other_highlight(user: User, story_ids: List[int], exclude_highlight: Optional[StoryHighlight] = None) -> List[int]:
+        """Return story IDs that are already part of some highlight (other than exclude_highlight) for this user."""
+        # Get all highlights for the user, optionally excluding the current one
+        qs = StoryHighlight.objects.filter(user=user)
+        if exclude_highlight:
+            qs = qs.exclude(id=exclude_highlight.id)
+        
+        # Get all stories that are already used in any of these highlights
+        used_story_ids = set(
+            Story.objects.filter(highlights__in=qs).values_list('id', flat=True)
+        )
+        # Intersect with the requested story_ids
+        return [sid for sid in story_ids if sid in used_story_ids]

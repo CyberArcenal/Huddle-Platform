@@ -173,3 +173,10 @@ class StoryFeedService:
     def add_story_to_feeds(story: Story):
         """Add story back to followers' feeds (after reactivation)."""
         print(f"Adding story {story.id} to feeds.")
+        
+    @staticmethod
+    def get_story_feed_items(user, limit_per_user=3, limit=10):
+        feed, _, _ = StoryFeedService.generate_story_feed(
+            user, limit_per_user=limit_per_user, limit=limit
+        )
+        return feed

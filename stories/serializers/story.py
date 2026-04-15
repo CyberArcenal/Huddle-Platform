@@ -6,6 +6,7 @@ from django.conf import settings
 from feed.serializers.base import PostStatsSerializers
 from feed.services.view import ViewService
 from stories.models import Story
+from stories.models.story import STORY_TYPES
 from stories.services.story import StoryService
 from users.models import User
 from users.serializers.user.minimal import UserMinimalSerializer
@@ -25,6 +26,7 @@ class StorySerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()
     media_url = serializers.SerializerMethodField()
+    thumbnail = serializers.SerializerMethodField()
     statistics = serializers.SerializerMethodField()
 
     class Meta:
@@ -37,6 +39,7 @@ class StorySerializer(serializers.ModelSerializer):
             "media_url",
             "expires_at",
             "is_active",
+            "thumbnail",
             "created_at",
             "has_viewed",
             "remaining_time",
@@ -52,6 +55,18 @@ class StorySerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.media_url.url)
             else:
                 return obj.media_url.url
+        except Exception as e:
+            return None
+        
+    def get_thumbnail(self, obj) -> Optional[str]:
+        request = self.context.get("request", None)
+        try:
+            if obj.thumbnail:
+                if request:
+                    return request.build_absolute_uri(obj.thumbnail.url)
+                else:
+                    return obj.thumbnail.url
+            return None
         except Exception as e:
             return None
 
@@ -83,7 +98,7 @@ class StorySerializer(serializers.ModelSerializer):
 class StoryCreateSerializer(serializers.Serializer):
     """Serializer for creating new stories using StoryService"""
 
-    story_type = serializers.ChoiceField(choices=Story.STORY_TYPES)
+    story_type = serializers.ChoiceField(choices=STORY_TYPES)
     content = serializers.CharField(required=False, allow_blank=True)
     media_file = serializers.FileField(
         required=False, allow_null=True

@@ -4,6 +4,7 @@ import logging
 from io import BytesIO
 import subprocess
 import threading
+import tempfile
 from PIL import Image
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class MediaProcessingService:
-    """Handle processing of media files: generate variants, extract metadata."""
+    """Handle processing of media files: generate variants, extract metadata, then compress original."""
 
     @staticmethod
     def create(
@@ -28,7 +29,6 @@ class MediaProcessingService:
         created_by=None,
     ):
         """Create a new media instance."""
-
         if not content_type:
             raise ValidationError("content_type is required to create media.")
         if not object_id:
@@ -44,24 +44,25 @@ class MediaProcessingService:
             order=order,
         )
         transaction.on_commit(
-            lambda: trigger_media_processing(media_obj)  # gamitin ang function
+            lambda: trigger_media_processing(media_obj)
         )
 
     @staticmethod
     def process_image(media: Media):
-        """Generate thumbnails and resized versions for an image."""
+        """Generate thumbnails and resized versions for an image, then compress original."""
         try:
             with media.file.open("rb") as f:
                 with Image.open(f) as img:
                     # Original metadata (store in media.metadata)
                     width, height = img.size
                     img_format = img.format
+                    original_size = media.file.size
                     media.metadata = {
                         "original": {
                             "width": width,
                             "height": height,
                             "format": img_format,
-                            "size_bytes": media.file.size,
+                            "size_bytes": original_size,
                         },
                         "variants": {},  # will be filled with variant references
                     }
@@ -70,13 +71,11 @@ class MediaProcessingService:
                     sizes = {
                         "thumbnail": (150, 150),
                         "small": (480, 480),
-                        "medium": (1024, 1024),
+                        "medium": (720, 720),
                     }
 
                     # Base filename without extension, used for variant naming
-                    base_filename = os.path.splitext(os.path.basename(media.file.name))[
-                        0
-                    ]
+                    base_filename = os.path.splitext(os.path.basename(media.file.name))[0]
                     ext = os.path.splitext(media.file.name)[1].lower()
 
                     for variant_type, (max_width, max_height) in sizes.items():
@@ -119,7 +118,7 @@ class MediaProcessingService:
                         variant.size_bytes = len(content_file)
                         variant.save()
 
-                        # Store reference in media.metadata for backward compatibility
+                        # Store reference in media.metadata
                         media.metadata["variants"][variant_type] = {
                             "file": variant.file.name,
                             "width": variant.width,
@@ -127,24 +126,50 @@ class MediaProcessingService:
                             "size_bytes": variant.size_bytes,
                         }
 
-                    media.save(update_fields=["metadata"])
-                    logger.info(f"Processed image media {media.id}")
+                    # ===== COMPRESS ORIGINAL IMAGE =====
+                    max_dim = getattr(settings, "MAX_IMAGE_DIMENSION", 1080)
+                    quality = getattr(settings, "IMAGE_COMPRESSION_QUALITY", 80)
+
+                    compressed_img = img.copy()
+                    if max(compressed_img.size) > max_dim:
+                        compressed_img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+                    buffer = BytesIO()
+                    save_format = img_format if img_format in ['JPEG', 'PNG', 'WEBP'] else 'JPEG'
+                    if save_format == 'JPEG':
+                        compressed_img.save(buffer, format=save_format, quality=quality, optimize=True)
+                    else:
+                        compressed_img.save(buffer, format=save_format, optimize=True)
+                    buffer.seek(0)
+
+                    # Replace original file
+                    original_name = media.file.name
+                    media.file.delete(save=False)  # delete old file
+                    new_file = ContentFile(buffer.read())
+                    media.file.save(original_name, new_file, save=False)
+
+                    # Update metadata for original (now compressed)
+                    media.metadata["original"] = {
+                        "width": compressed_img.width,
+                        "height": compressed_img.height,
+                        "format": save_format,
+                        "size_bytes": media.file.size,
+                        "compressed": True,
+                        "original_size_bytes": original_size,
+                    }
+                    media.save(update_fields=["file", "metadata"])
+                    logger.info(f"Processed and compressed image media {media.id}")
 
         except Exception as e:
             logger.exception(f"Failed to process image media {media.id}: {e}")
-            
+
     @staticmethod
     def process_video(media: Media):
-        """Extract thumbnail, generate video variants, and store metadata."""
+        """Extract thumbnail, generate video variants, and compress original."""
         try:
             from feed.utils.media import extract_thumbnail
-            import subprocess
-            import os
-            import json
-            from django.conf import settings
-            import tempfile
 
-            # 1. Extract static thumbnail (existing code)
+            # 1. Extract static thumbnail
             thumbnail_file, tmp_thumb_path, video_tmp_path = extract_thumbnail(
                 media.file, time="00:00:01"
             )
@@ -173,7 +198,7 @@ class MediaProcessingService:
             if video_tmp_path and os.path.exists(video_tmp_path):
                 os.unlink(video_tmp_path)
 
-            # 2. Original video metadata (existing)
+            # 2. Original video metadata
             cmd_probe = [
                 "ffprobe", "-v", "error",
                 "-show_entries", "stream=width,height,duration,codec_name",
@@ -192,6 +217,7 @@ class MediaProcessingService:
                 video_stream.get("duration") or data.get("format", {}).get("duration", 0)
             )
             original_codec = video_stream.get("codec_name")
+            original_size = media.file.size
 
             media.metadata = {
                 "original": {
@@ -199,34 +225,31 @@ class MediaProcessingService:
                     "height": original_height,
                     "duration": original_duration,
                     "codec": original_codec,
-                    "size_bytes": media.file.size,
+                    "size_bytes": original_size,
                 },
                 "variants": {},
             }
 
-            # ========== BAGONG KODIGO: GUMAWA NG 3-SECOND VIDEO THUMBNAIL ==========
-            animated_thumb_duration = getattr(settings, "ANIMATED_THUMBNAIL_DURATION", 3)  # default 3 sec
-            animated_thumb_width = getattr(settings, "ANIMATED_THUMBNAIL_WIDTH", 320)     # maliit na lapad
+            # ===== 3. Create 3-second video thumbnail (animated) =====
+            animated_thumb_duration = getattr(settings, "ANIMATED_THUMBNAIL_DURATION", 3)
+            animated_thumb_width = getattr(settings, "ANIMATED_THUMBNAIL_WIDTH", 320)
 
-            # Kalkulahin ang taas upang mapanatili ang aspect ratio
             if original_width and original_height:
                 target_height = int(animated_thumb_width * original_height / original_width)
             else:
-                target_height = animated_thumb_width  # fallback
+                target_height = animated_thumb_width
 
-            # Gumamit ng temporary file para sa trimmed clip
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_anim:
                 tmp_anim_path = tmp_anim.name
 
-            # ffmpeg command: i-trim ang unang `animated_thumb_duration` segundo, i-scale, i-encode
             cmd_anim_thumb = [
                 "ffmpeg",
                 "-i", media.file.path,
-                "-t", str(animated_thumb_duration),           # haba ng clip
+                "-t", str(animated_thumb_duration),
                 "-vf", f"scale={animated_thumb_width}:{target_height}",
                 "-c:v", "libx264",
                 "-preset", "fast",
-                "-crf", "28",                                 # mababang bitrate para maliit ang file
+                "-crf", "28",
                 "-c:a", "aac",
                 "-b:a", "64k",
                 "-movflags", "+faststart",
@@ -235,10 +258,9 @@ class MediaProcessingService:
             ]
             subprocess.run(cmd_anim_thumb, check=True, capture_output=True)
 
-            # I-save bilang MediaVariant
             anim_variant, created = MediaVariant.objects.get_or_create(
                 media=media,
-                variant_type="video_thumbnail",               # pangalan ng variant
+                variant_type="video_thumbnail",
                 defaults={"size_bytes": 0}
             )
             if not created and anim_variant.file:
@@ -256,7 +278,6 @@ class MediaProcessingService:
             anim_variant.codec = "h264"
             anim_variant.save()
 
-            # I-record sa metadata
             media.metadata["variants"]["video_thumbnail"] = {
                 "file": anim_variant.file.name,
                 "width": animated_thumb_width,
@@ -266,11 +287,9 @@ class MediaProcessingService:
                 "codec": "h264",
             }
 
-            # Linisin ang temp file
             os.unlink(tmp_anim_path)
-            # ========== TAPOS NG BAGONG KODIGO ==========
 
-            # 3. Generate other video variants (existing code)
+            # ===== 4. Generate other video variants (480p, 720p, etc.) =====
             variants_config = getattr(settings, "VIDEO_VARIANTS", [])
             for config in variants_config:
                 variant_type = config["type"]
@@ -327,10 +346,78 @@ class MediaProcessingService:
 
                 os.unlink(tmp_output)
 
-            media.save(update_fields=["metadata"])
-            logger.info(
-                f"Processed video media {media.id} with static thumbnail and moving thumbnail (duration={animated_thumb_duration}s)"
-            )
+            # ===== 5. COMPRESS ORIGINAL VIDEO =====
+            crf = getattr(settings, "VIDEO_COMPRESSION_CRF", 28)
+            max_width = getattr(settings, "VIDEO_COMPRESSION_MAX_WIDTH", 1280)
+            bitrate = getattr(settings, "VIDEO_COMPRESSION_BITRATE", None)
+
+            scale_filter = ""
+            if original_width and original_width > max_width:
+                scale_filter = f"scale={max_width}:-2"
+            else:
+                scale_filter = "scale=iw:ih"
+
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_compressed:
+                compressed_path = tmp_compressed.name
+
+            cmd_compress = [
+                "ffmpeg",
+                "-i", media.file.path,
+                "-vf", scale_filter,
+                "-c:v", "libx264",
+            ]
+            if bitrate:
+                cmd_compress.extend(["-b:v", bitrate])
+            else:
+                cmd_compress.extend(["-crf", str(crf)])
+            cmd_compress.extend([
+                "-preset", "medium",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                compressed_path,
+                "-y"
+            ])
+            subprocess.run(cmd_compress, check=True, capture_output=True)
+
+            # Get new dimensions if scaled
+            if scale_filter != "scale=iw:ih":
+                probe_cmd = [
+                    "ffprobe", "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries", "stream=width,height",
+                    "-of", "default=noprint_wrappers=1",
+                    compressed_path
+                ]
+                result_probe = subprocess.run(probe_cmd, capture_output=True, text=True)
+                lines = result_probe.stdout.strip().split()
+                new_width = int(lines[0].split('=')[1]) if lines else original_width
+                new_height = int(lines[1].split('=')[1]) if len(lines) > 1 else original_height
+            else:
+                new_width = original_width
+                new_height = original_height
+
+            # Replace original file
+            original_name = media.file.name
+            media.file.delete(save=False)
+            with open(compressed_path, "rb") as f:
+                new_content = ContentFile(f.read())
+                media.file.save(original_name, new_content, save=False)
+
+            # Update metadata
+            media.metadata["original"] = {
+                "width": new_width,
+                "height": new_height,
+                "duration": original_duration,
+                "codec": "h264",
+                "size_bytes": media.file.size,
+                "compressed": True,
+                "original_size_bytes": original_size,
+            }
+            media.save(update_fields=["file", "metadata"])
+
+            os.unlink(compressed_path)
+            logger.info(f"Processed and compressed video media {media.id}")
 
         except Exception as e:
             logger.exception(f"Failed to process video media {media.id}: {e}")
@@ -353,13 +440,11 @@ def trigger_media_processing(media):
     """
     Process media asynchronously using Celery if available, otherwise threading.
     """
-    # Check if we should use Celery (configurable in settings)
     use_celery = getattr(settings, "MEDIA_PROCESSING_USE_CELERY", True)
 
     if use_celery:
         try:
             from feed.tasks.media import process_media_task
-
             process_media_task.delay(media.id)
             logger.debug(f"Scheduled media processing via Celery for media {media.id}")
             return
@@ -367,8 +452,6 @@ def trigger_media_processing(media):
             logger.warning(
                 f"Celery not available or task not defined: {e}, falling back to threading"
             )
-
-    # Fallback to threading
 
     threading.Thread(target=MediaProcessingService.process_media, args=(media,)).start()
     logger.debug(f"Scheduled media processing via threading for media {media.id}")

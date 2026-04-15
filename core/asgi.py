@@ -14,7 +14,7 @@ application = ProtocolTypeRouter({
         URLRouter(
             messaging_routing.websocket_urlpatterns +
             users_routing.websocket_urlpatterns + 
-            live.websocket_urlpatterns
+            live.live_websocket_urlpatterns
         )
     ),
 })

@@ -35,7 +35,12 @@ def finalize_reel_upload(reel_id, temp_path):
             )
             # Optionally trigger further processing (thumbnails, variants)
             MediaProcessingService.process_media(media)
-
+            
+            thumbnail_variant = media.variants.filter(variant_type='thumbnail').first()
+            if thumbnail_variant:
+                reel.thumbnail_variant = thumbnail_variant
+                reel.save(update_fields=['thumbnail_variant'])
+            
         reel.processing = False
         reel.temp_file_path = ""
         reel.save(update_fields=["processing", "temp_file_path"])

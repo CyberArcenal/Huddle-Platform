@@ -63,6 +63,7 @@ class UserContentService:
         user: User,
         requester: Optional[User],
         max_items: int = 500,
+        content_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Return merged list of all user content, sorted by created_at descending."""
         fetch_limit = max_items
@@ -76,42 +77,81 @@ class UserContentService:
             user=user, include_expired=False, limit=20  # enough for a story ring
         )
         user_images = cls._get_user_images(user, requester, fetch_limit)
-
         combined = []
-        for item in posts:
-            combined.append(
-                {
-                    "type": "post",
-                    "item": item,
-                    "created_at": item.created_at,
-                    "id": item.id,
-                }
-            )
-        for item in shares:
-            combined.append(
-                {
-                    "type": "share",
-                    "item": item,
-                    "created_at": item.created_at,
-                    "id": item.id,
-                }
-            )
-        for item in reels:
-            combined.append(
-                {
-                    "type": "reel",
-                    "item": item,
-                    "created_at": item.created_at,
-                    "id": item.id,
-                }
-            )
-        # --- Group stories into a single row ---
-        if stories:
-            comb = group_user_story(user, stories, requester)
-            combined.append(comb)
-        # ---------------------------------------
-        for item in user_images:
-            combined.append(item)
+        if content_type:
+            if content_type == "post":
+                for item in posts:
+                    combined.append(
+                        {
+                            "type": "post",
+                            "item": item,
+                            "created_at": item.created_at,
+                            "id": item.id,
+                        }
+                    )
+            elif content_type == "share":
+                for item in shares:
+                    combined.append(
+                        {
+                            "type": "share",
+                            "item": item,
+                            "created_at": item.created_at,
+                            "id": item.id,
+                        }
+                    )
+            elif content_type == "reel":
+                for item in reels:
+                    combined.append(
+                        {
+                            "type": "reel",
+                            "item": item,
+                            "created_at": item.created_at,
+                            "id": item.id,
+                        }
+                    )
+            elif content_type == "story":
+                # --- Group stories into a single row ---
+                if stories:
+                    comb = group_user_story(user, stories, requester)
+                    combined.append(comb)
+            elif content_type == "user_image":
+                for item in user_images:
+                    combined.append(item)
+        else:
+            for item in posts:
+                combined.append(
+                    {
+                        "type": "post",
+                        "item": item,
+                        "created_at": item.created_at,
+                        "id": item.id,
+                    }
+                )
+            for item in shares:
+                combined.append(
+                    {
+                        "type": "share",
+                        "item": item,
+                        "created_at": item.created_at,
+                        "id": item.id,
+                    }
+                )
+            for item in reels:
+                combined.append(
+                    {
+                        "type": "reel",
+                        "item": item,
+                        "created_at": item.created_at,
+                        "id": item.id,
+                    }
+                )
+            # --- Group stories into a single row ---
+            if stories:
+                comb = group_user_story(user, stories, requester)
+                combined.append(comb)
+            # ---------------------------------------
+            for item in user_images:
+                combined.append(item)
 
         combined.sort(key=lambda x: (-x['created_at'].timestamp(), -int(str(x['id']).split('_')[-1]) if x['id'] else 0))
         return combined[:max_items]

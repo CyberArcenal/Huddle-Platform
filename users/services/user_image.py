@@ -63,131 +63,123 @@ class UserImageService:
         page: int = 1,
         page_size: int = 20,
         max_items: int = 500,
+        media_type: Optional[str] = None,      # changed from content_type
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Return a list of media items (each as a dict) from the user,
         sorted by created_at descending, along with the total count.
-        Uses simple page-based pagination.
+        media_type can be 'image' or 'video' to filter by file type.
         """
         if not request:
             raise Exception("Request Not Provided For Build Uri")
         offset = (page - 1) * page_size
 
-        # Fetch all media items from all sources (up to max_items)
         # 1. Post media
         post_media_qs = Media.objects.filter(
             post__user=user, post__is_deleted=False
         ).order_by("-post__created_at", "order")
         post_media = list(post_media_qs[:max_items])
 
-        # 2. Reels
+        # 2. Reels (always video)
         reels = list(
-            Reel.objects.filter(user=user, is_deleted=False).order_by("-created_at")[
-                :max_items
-            ]
+            Reel.objects.filter(user=user, is_deleted=False).order_by("-created_at")[:max_items]
         )
 
-        # 3. Story media (image/video stories that are active and not expired)
+        # 3. Stories – already have story_type 'image' or 'video'
         stories = list(
             Story.objects.filter(
                 user=user,
                 is_active=True,
-                expires_at__gt=models.F("expires_at"),  # not expired
+                expires_at__gt=models.F("expires_at"),
                 story_type__in=["image", "video"],
             ).order_by("-created_at")[:max_items]
         )
 
-        # 4. User images (profile/cover) – active only and with privacy check
-        # For user's own media grid, we can show all active images.
-        # For another user, we need to respect privacy.
+        # 4. User images (always image)
         user_images_qs = UserImage.objects.filter(user=user, is_active=True)
         if requester and requester != user:
-            # For non-owner: only public or followers (if requester follows)
             user_images_qs = user_images_qs.filter(
                 Q(privacy="public")
                 | (Q(privacy="followers") & Q(user__followers__id=requester.id))
             )
         user_images = list(user_images_qs.order_by("-created_at")[:max_items])
 
-        # Build combined list
         combined = []
 
-        for media in post_media:
-            combined.append(
-                {
-                    "type": "post_media",
-                    "url": (
-                        request.build_absolute_uri(media.file.url)
-                        if media.file
-                        else None
-                    ),
-                    "thumbnail": None,  # posts may not have separate thumbnails
-                    "created_at": (
-                        media.content_object.created_at
-                        if isinstance(media.content_object, Post)
-                        else None
-                    ),
-                    "content_id": (
-                        media.content_object.id
-                        if isinstance(media.content_object, Post)
-                        else None
-                    ),
-                    "content_type": "post",
-                    "media_order": media.order,
-                    "media_id": media.id,
-                }
-            )
-        for reel in reels:
-            # Retrieve the first Media instance for this reel (or None if none)
-            try:
-                media_obj = reel.media.first()
-                media_url = request.build_absolute_uri(media_obj.file.url) if media_obj else None
+        # Helper to guess if a file is an image or video (by extension or mime)
+        def _get_file_type(file_field):
+            if not file_field:
+                return None
+            name = file_field.name.lower()
+            if name.endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
+                return 'image'
+            if name.endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm', '.mpeg')):
+                return 'video'
+            return None
 
+        # --- Post media ---
+        for media in post_media:
+            file_type = _get_file_type(media.file)
+            if not file_type:
+                continue
+            combined.append({
+                "type": "post_media",
+                "url": request.build_absolute_uri(media.file.url) if media.file else None,
+                "thumbnail": None,
+                "created_at": media.content_object.created_at if isinstance(media.content_object, Post) else None,
+                "content_id": media.content_object.id if isinstance(media.content_object, Post) else None,
+                "content_type": "post",
+                "media_order": media.order,
+                "media_id": media.id,
+                "media_format": file_type,          # 'image' or 'video'
+            })
+
+        # --- Reels (always video) ---
+        for reel in reels:
+            media_obj = reel.media.first()
+            if media_obj and media_obj.file:
                 combined.append({
                     "type": "reel",
-                    "url": media_url,
+                    "url": request.build_absolute_uri(media_obj.file.url),
                     "thumbnail": request.build_absolute_uri(reel.thumbnail.url) if reel.thumbnail else None,
                     "created_at": reel.created_at,
                     "content_id": reel.id,
                     "content_type": "reel",
                     "media_order": None,
+                    "media_format": "video",
                 })
-            except Exception as e:
-                pass
 
+        # --- Stories (use story_type) ---
         for story in stories:
-            combined.append(
-                {
-                    "type": "story_media",
-                    "url": (
-                        request.build_absolute_uri(story.media_url.url)
-                        if story.media_url
-                        else None
-                    ),
-                    "thumbnail": None,
-                    "created_at": story.created_at,
-                    "content_id": story.id,
-                    "content_type": "story",
-                    "media_order": None,
-                }
-            )
+            combined.append({
+                "type": "story_media",
+                "url": request.build_absolute_uri(story.media_url.url) if story.media_url else None,
+                "thumbnail": None,
+                "created_at": story.created_at,
+                "content_id": story.id,
+                "content_type": "story",
+                "media_order": None,
+                "media_format": story.story_type,   # 'image' or 'video'
+            })
 
+        # --- User images (always image) ---
         for user_image in user_images:
-            combined.append(
-                {
-                    "type": "user_image",
-                    "url": (
-                        request.build_absolute_uri(user_image.image.url)
-                        if user_image.image
-                        else None
-                    ),
-                    "thumbnail": None,
-                    "created_at": user_image.created_at,
-                    "content_id": user_image.id,
-                    "content_type": "user_image",
-                    "media_order": None,
-                }
-            )
+            combined.append({
+                "type": "user_image",
+                "url": request.build_absolute_uri(user_image.image.url) if user_image.image else None,
+                "thumbnail": None,
+                "created_at": user_image.created_at,
+                "content_id": user_image.id,
+                "content_type": "user_image",
+                "media_order": None,
+                "media_format": "image",
+            })
+
+        # Filter by media_type if provided
+        if media_type:
+            if media_type not in ('image', 'video'):
+                raise ValueError("media_type must be 'image' or 'video'")
+            combined = [item for item in combined if item.get('media_format') == media_type]
 
         # Sort by created_at descending
         combined.sort(key=lambda x: x["created_at"], reverse=True)
