@@ -68,10 +68,13 @@ class MediaProcessingService:
                     }
 
                     # Define sizes and variant types
+                    thumbnail_size = getattr(settings, "THUMBNAIL_SIZE", 320)
+                    small = getattr(settings, "SMALL_IMAGE_SIZE", 480)
+                    medium = getattr(settings, "MEDIUM_IMAGE_SIZE", 720)
                     sizes = {
-                        "thumbnail": (150, 150),
-                        "small": (480, 480),
-                        "medium": (720, 720),
+                        "thumbnail": (thumbnail_size, thumbnail_size),
+                        "small": (small, small),
+                        "medium": (medium, medium),
                     }
 
                     # Base filename without extension, used for variant naming
@@ -166,6 +169,7 @@ class MediaProcessingService:
     @staticmethod
     def process_video(media: Media):
         """Extract thumbnail, generate video variants, and compress original."""
+        logger.info(f"Processing video media {media.id} with file {media.file.name}")
         try:
             from feed.utils.media import extract_thumbnail
 
@@ -183,16 +187,19 @@ class MediaProcessingService:
             )
             if not created and thumb_variant.file:
                 thumb_variant.file.delete(save=False)
+                
             thumb_variant.file.save(variant_name_thumb, thumbnail_file)
-            thumbnail_file.close()
-
+     
             try:
-                with Image.open(thumb_variant.file) as thumb_img:
-                    thumb_variant.width, thumb_variant.height = thumb_img.size
-            except:
-                pass
+                with thumb_variant.file.open('rb') as f:
+                    with Image.open(f) as thumb_img:
+                        thumb_variant.width = thumb_img.width
+                        thumb_variant.height = thumb_img.height
+            except Exception as e:
+                logger.warning(f"Could not read thumbnail dimensions for media {media.id}: {e}")
             thumb_variant.size_bytes = thumb_variant.file.size
             thumb_variant.save()
+            logger.info(f"Thumbnail saved for media {media.id} | size={thumb_variant.file.size} bytes | path={thumb_variant.file.path if hasattr(thumb_variant.file, 'path') else 'cloud'}")
 
             os.unlink(tmp_thumb_path)
             if video_tmp_path and os.path.exists(video_tmp_path):
@@ -425,29 +432,96 @@ class MediaProcessingService:
     @staticmethod
     def process_media(media: Media):
         """Detect media type and process accordingly."""
-        ext = os.path.splitext(media.file.name)[1].lower()
-        if ext in (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"):
-            return MediaProcessingService.process_image(media)
-        elif ext in (".mp4", ".mov", ".avi", ".webm", ".mkv"):
-            return MediaProcessingService.process_video(media)
-        else:
-            logger.warning(
-                f"Unsupported media type for media {media.id}: {media.file.name}"
+        try:
+            # Safe logging - hindi na mag-crash kahit Reel o Post
+            ext = os.path.splitext(media.file.name)[1].lower()
+            content_type = getattr(media.file, 'content_type', None)
+            if not content_type:
+                import mimetypes
+                content_type = mimetypes.guess_type(media.file.name)[0] or 'unknown'
+
+            logger.info(
+                f"Starting media processing for media {media.id} | "
+                f"type: {content_type} | ext: {ext}"
             )
+
+            # Rest of your code...
+            if ext in (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"):
+                return MediaProcessingService.process_image(media)
+            elif ext in (".mp4", ".mov", ".avi", ".webm", ".mkv"):
+                return MediaProcessingService.process_video(media)
+            else:
+                logger.warning(f"Unsupported media type for media {media.id}: {media.file.name}")
+
+        except Exception as e:
+            logger.exception(f"Failed to start media processing for media {media.id}: {e}")
+            
+    @staticmethod
+    def is_variant_broken(variant):
+        """Check kung broken ang variant (0 bytes, walang file, o hindi nae-exist)."""
+        if not variant or not variant.file:
+            return True
+        try:
+            if variant.file.size == 0:
+                return True
+            # Optional: check kung nasa storage pa
+            if not default_storage.exists(variant.file.name):
+                return True
+        except Exception:
+            return True
+        return False
+
+    @staticmethod
+    def regenerate_variants(media: Media, force=False):
+        """
+        Re-generate lahat ng variants kung may broken o force=True.
+        Safe at may logging.
+        """
+        logger.info(f"🔄 Regenerating variants for media {media.id} (force={force})")
+
+        # 1. Tanggalin muna ang broken variants
+        deleted_count = 0
+        for variant in media.variants.all():
+            if force or MediaProcessingService.is_variant_broken(variant):
+                if variant.file:
+                    variant.file.delete(save=False)
+                variant.delete()
+                deleted_count += 1
+
+        if deleted_count > 0:
+            logger.info(f"🗑️ Deleted {deleted_count} broken variant(s) for media {media.id}")
+
+        # 2. Kung may natanggal o wala pa talagang variants → i-reprocess
+        if force or deleted_count > 0 or media.variants.count() == 0:
+            try:
+                MediaProcessingService.process_media(media)
+                logger.info(f"✅ Successfully regenerated variants for media {media.id}")
+            except Exception as e:
+                logger.exception(f"❌ Failed to regenerate media {media.id}: {e}")
+        else:
+            logger.info(f"⏭️ Media {media.id} is already healthy, skipping.")
+            
     @staticmethod
     def get_video_thumbnail_url(media: Media):
         """Return the URL of the thumbnail variant if it exists, otherwise None."""
         try:
             thumbnail_variant = media.variants.get(variant_type="thumbnail")
             return thumbnail_variant.file.url if thumbnail_variant.file else None
+        except AttributeError:
+            logger.warning(f"Media {media} has no variants relation, cannot get thumbnail URL.")
+            return None
         except MediaVariant.DoesNotExist:
             return None
+        
     @staticmethod
     def get_image_thumbnail_url(media: Media):
         """Return the URL of the thumbnail variant if it exists, otherwise None."""
         try:
-            thumbnail_variant = media.variants.get(variant_type="thumbnail")
+            thumbnail_variant = media.variants.get(variant_type="medium")
             return thumbnail_variant.file.url if thumbnail_variant.file else None
+        except AttributeError:
+            logger.warning(f"Media {media} has no variants relation, cannot get thumbnail URL.")
+            return None
         except MediaVariant.DoesNotExist:
             return None
 

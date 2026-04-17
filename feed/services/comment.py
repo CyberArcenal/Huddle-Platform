@@ -244,3 +244,17 @@ class CommentService:
             "content_object_id": comment.object_id,
             "content_type": comment.content_type.model,
         }
+        
+    @staticmethod
+    def soft_delete_comment(comment: Comment):
+        """Soft-delete a single comment."""
+        if not comment.is_deleted:
+            comment.is_deleted = True
+            comment.save(update_fields=["is_deleted"])
+
+    @staticmethod
+    def restore_comment(comment: Comment):
+        """Restore a soft-deleted comment."""
+        if comment.is_deleted:
+            comment.is_deleted = False
+            comment.save(update_fields=["is_deleted"])

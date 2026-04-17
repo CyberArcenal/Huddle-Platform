@@ -1,3 +1,4 @@
+import traceback
 from typing import Optional
 
 from django.conf import settings
@@ -14,6 +15,7 @@ from feed.serializers.base import PostStatsSerializers, ReactionCountSerializer
 from feed.serializers.comment import CommentDisplaySerializer
 from feed.serializers.media import MediaDisplaySerializer
 from feed.services.comment import CommentService
+from feed.services.media import MediaProcessingService
 from feed.services.reel import ReelService
 from feed.services.reaction import ReactionService
 from feed.utils.media import extract_thumbnail
@@ -61,11 +63,21 @@ class ReelMinimalSerializer(serializers.ModelSerializer):
         except:
             return None
 
-    def get_thumbnail_url(self, obj) -> str:
-        request = self.context.get("request")
-        if obj.thumbnail and request:
-            return request.build_absolute_uri(obj.thumbnail.url)
-        return ""
+    def get_thumbnail_url(self, obj:Reel) -> Optional[str]:
+        request = self.context.get("request", None)
+        try:
+            media = obj.media.all().first()
+            thumbnail = MediaProcessingService.get_video_thumbnail_url(media=media)
+            if thumbnail and request:
+                return request.build_absolute_uri(thumbnail)
+        except Exception as e:
+            traceback.print_exc()
+            pass
+        
+        if obj.thumbnail_variant and obj.thumbnail_variant.file and request:
+            return request.build_absolute_uri(obj.thumbnail_variant.file.url)
+        
+        return None
 
 
 class ReelCreateSerializer(serializers.ModelSerializer):
@@ -249,9 +261,19 @@ class ReelDisplaySerializer(serializers.ModelSerializer):
             return None
 
     def get_thumbnail_url(self, obj:Reel) -> Optional[str]:
-        request = self.context.get("request")
+        request = self.context.get("request", None)
+        try:
+            media = obj.media.all().first()
+            thumbnail = MediaProcessingService.get_video_thumbnail_url(media=media)
+            if thumbnail and request:
+                return request.build_absolute_uri(thumbnail)
+        except Exception as e:
+            traceback.print_exc()
+            pass
+        
         if obj.thumbnail_variant and obj.thumbnail_variant.file and request:
             return request.build_absolute_uri(obj.thumbnail_variant.file.url)
+        
         return None
 
     def get_audio_url(self, obj) -> str:

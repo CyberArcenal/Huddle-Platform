@@ -25,5 +25,20 @@ CELERY_BEAT_SCHEDULE = {
             'expires': SYNC_INTERVAL - 5,
         }
     },
+    'reset-stuck-processing-posts-every-10-minutes': {
+        'task': 'feed.tasks.cleanup.reset_stuck_processing_posts',
+        'schedule': crontab(minute='*/10'),  # every 10 minutes
+        'args': (10,),  # minutes threshold
+    },
+    # ← NEW TASK: Regenerate broken media variants (every 30 minutes)
+    'regenerate-broken-media-variants-every-30-min': {
+        'task': 'feed.tasks.media.regenerate_broken_media_variants',
+        'schedule': crontab(minute='*/30'),        # every 30 minutes
+        'kwargs': {
+            'limit': 25,           # process only 25 items per run
+            'only_reels': True,    # focus muna sa reels (pwede mo alisin pag stable na)
+            'force': False,        # False = only broken ones
+        },
+    },
 }
 

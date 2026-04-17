@@ -68,6 +68,18 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
+  
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok_tunnel
+    command: start --all --config /etc/ngrok.yml
+    volumes:
+      - ./ngrok.yml:/etc/ngrok.yml:ro   # I-mount ang configuration file
+    ports:
+      - "4040:4040"                      # Para sa ngrok Web Interface
+    restart: unless-stopped
+    depends_on:
+      - web
 
   db:
     container_name: huddle_db

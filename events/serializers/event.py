@@ -105,12 +105,14 @@ class EventCreateSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         media_files = validated_data.pop("media", [])
         client_id = validated_data.pop("client_id", None)
-        
+
         if not request or not request.user.is_authenticated:
             raise serializers.ValidationError("Authentication required")
         
+        if not validated_data.get("organizer", None):
+            validated_data["organizer"] = request.user
+
         return EventService.create_event(
-            organizer=request.user,
             media_files=media_files,
             client_id=client_id,
             **validated_data
@@ -267,7 +269,7 @@ class EventDetailSerializer(EventListSerializer):
             return obj.organizer == request.user
         return False
 
-    def get_can_rsvp(self, obj:Event) -> bool:
+    def get_can_rsvp(self, obj: Event) -> bool:
         request = self.context.get("request")
         if not request or not request.user.is_authenticated:
             return False

@@ -1,0 +1,7 @@
+version: "2"
+authtoken: 31O6EY7ZMgtn8901IlgN2AvqZXt_4bR78Pt685cbcePA9zKh6 # Palitan ito ng iyong actual na authtoken
+tunnels:
+  django:
+    proto: http
+    addr: web:8000          # Parehong service name at port ng iyong Django app
+    domain: oriented-frank-airedale.ngrok-free.app # Palitan ng iyong static domain (hal. your-subdomain.ngrok.app)

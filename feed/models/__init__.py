@@ -2,7 +2,7 @@
 from .post import Post
 from .comment import Comment
 from .reaction import Reaction
-from .media import Media
+from .media import Media, MediaVariant
 from .reel import Reel    
 from .share import Share
 from .view import ObjectView
@@ -18,4 +18,6 @@ __all__ = [
     'Share',
     'ObjectView',
     'ObjectBookmark',
+    'Media',
+    'MediaVariant',
 ]

@@ -1,6 +1,7 @@
 import os
 import threading
 import tempfile
+import traceback
 from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -97,10 +98,11 @@ class PostService:
 
     @staticmethod
     def get_post_by_id(
-        post_id: int, requesting_user: Optional[User] = None
+        post_id: int, requesting_user: Optional[User] = None,
+        processing: Optional[bool] = False
     ) -> Optional[Post]:
         try:
-            post = Post.objects.get(id=post_id, is_deleted=False, processing=False)
+            post = Post.objects.get(id=post_id, is_deleted=False, processing=processing)
         except Post.DoesNotExist:
             return None
 
@@ -265,7 +267,9 @@ class PostService:
                 else:
                     post.delete()
                 return True
-        except Exception:
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
             return False
 
     @staticmethod

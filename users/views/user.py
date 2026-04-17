@@ -356,7 +356,7 @@ class UserProfileView(APIView):
     def get(self, request):
         try:
             serializer = UserProfileSerializer(request.user, context={"request": request})
-            logger.debug(f"Retrieved profile for user {request.user.id}: {serializer.data}")
+            # logger.debug(f"Retrieved profile for user {request.user.id}: {serializer.data}")
             return Response(
                 {
                     "status": True,

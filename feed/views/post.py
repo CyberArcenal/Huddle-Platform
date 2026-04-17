@@ -564,7 +564,7 @@ class PostDetailView(APIView):
     )
     @transaction.atomic
     def delete(self, request, post_id):
-        post = self.get_object(post_id)
+        post = Post.objects.get(id=post_id, is_deleted=False)
         if not post:
             return Response(
                 {
@@ -599,6 +599,7 @@ class PostDetailView(APIView):
                     "data": None,
                 }
             )
+            
 
         return Response(
             {

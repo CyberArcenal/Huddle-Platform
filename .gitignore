@@ -2,5 +2,3 @@
 *.pyc
 *.sqlite3
 /core/settings/media
-*.py
-/core/settings/media

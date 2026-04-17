@@ -1,7 +1,9 @@
+import traceback
 from typing import Optional
 from django.conf import settings
 from rest_framework import serializers
 from feed.models.media import MEDIA_VARIANT_TYPES, Media, MediaVariant
+
 
 
 class MediaVariantSerializer(serializers.ModelSerializer):
@@ -80,10 +82,11 @@ class MediaUpdateSerializer(serializers.ModelSerializer):
 class MediaDisplaySerializer(serializers.ModelSerializer):
     file_url = serializers.SerializerMethodField()
     variants = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Media
-        fields = ["id", "file_url", "order", "created_at", "metadata", "variants"]
+        fields = ["id", "file_url", "order", "created_at", "metadata", "variants", "thumbnail_url"]
         read_only_fields = ["id", "created_at"]
 
     def get_file_url(self, obj) -> Optional[str]:
@@ -107,3 +110,16 @@ class MediaDisplaySerializer(serializers.ModelSerializer):
             variants, many=True, context={"request": request}
         )
         return serializer.data
+    
+    def get_thumbnail_url(self, obj:Media) -> Optional[str]:
+        from feed.services.media import MediaProcessingService
+        request = self.context.get("request", None)
+        try:
+            thumbnail = MediaProcessingService.get_video_thumbnail_url(media=obj)
+            if thumbnail and request:
+                return request.build_absolute_uri(thumbnail)
+        except Exception as e:
+            traceback.print_exc()
+            pass
+        
+        return None
