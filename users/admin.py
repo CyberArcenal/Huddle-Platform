@@ -2,6 +2,8 @@
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+
+from users.models.personality_quiz import PersonalityTypeDetail
 from .models import (
     User,
     UserFollow,
@@ -13,6 +15,18 @@ from .models import (
     OtpRequest,
     UserActivity,
 )
+
+
+@admin.register(PersonalityTypeDetail)
+class PersonalityTypeDetailAdmin(admin.ModelAdmin):
+    list_display = ['mbti_type', 'name', 'updated_at']
+    search_fields = ['mbti_type', 'name']
+    fieldsets = (
+        ('Basic Info', {'fields': ('mbti_type', 'name', 'description')}),
+        ('Traits', {'fields': ('strengths', 'weaknesses')}),
+        ('Career & Relationships', {'fields': ('career_matches', 'relationship_advice')}),
+        ('Extras', {'fields': ('fun_facts', 'famous_people')}),
+    )
 
 
 class CustomUserAdmin(BaseUserAdmin):

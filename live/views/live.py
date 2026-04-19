@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 
 from core import settings
-from global_utils.response import CustomPagination
+from global_utils.pagination import StandardResultsSetPagination
 from live.services.live import LiveService
 from live.serializers.live import (
     LiveStreamSerializer,
@@ -122,7 +122,7 @@ class ActiveLivesResponseSerializer(serializers.Serializer):
 
 class ActiveLivesView(APIView):
     permission_classes = [AllowAny]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["Live"],
@@ -353,7 +353,7 @@ class GetPendingRequestsResponseSerializer(serializers.Serializer):
 
 class PendingRequestsView(APIView):
     permission_classes = [IsAuthenticated]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(tags=["Live"], responses={200: GetPendingRequestsResponseSerializer})
     def get(self, request, live_id):

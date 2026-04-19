@@ -159,6 +159,7 @@ class UserBaseSerializer(rest_framework.serializers.ModelSerializer):
             "username",
             "email",
             "first_name",
+            "middle_name",
             "last_name",
             "date_of_birth",
             "phone_number",

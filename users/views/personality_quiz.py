@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions, serializers
 from django.db import transaction
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from users.services.personality_quiz import PersonalityQuizService, get_personality_details
+from users.services.personality_quiz import PersonalityQuizService
 from users.models import PersonalityQuestion, PersonalityAssessmentSession
 from rest_framework.permissions import IsAuthenticated
 
@@ -27,6 +27,7 @@ class PersonalityDetailsSerializer(serializers.Serializer):
     weaknesses = serializers.ListField(child=serializers.CharField())
     career_matches = serializers.ListField(child=serializers.CharField())
     relationship_advice = serializers.CharField()
+    compatible_types = serializers.ListField(child=serializers.CharField())
     
 class PersonalityTypeResponseDataSerializer(serializers.Serializer):
     personality_type = serializers.CharField(allow_null=True)
@@ -115,7 +116,7 @@ class PersonalityTypeDetailsView(APIView):
 
     def get(self, request, mbti_type):
         try:
-            details = get_personality_details(mbti_type.upper())
+            details = PersonalityQuizService.get_personality_details(mbti_type.upper())
             return Response({"status": True,"message": "Details retrieved", "data": details})
         except Exception as e:
             return Response({"status": False, "message": "Failed to retrieve details", "data": None}, status=status.HTTP_400_BAD_REQUEST)

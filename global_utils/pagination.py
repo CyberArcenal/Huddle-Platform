@@ -24,6 +24,7 @@ class BasePagination(PageNumberPagination):
         }
         logger.debug(response)
         return Response(response)
+
     def get_paginated_error(self, data=None, message=None, status=False):
         if data is None:
             data = []
@@ -31,15 +32,13 @@ class BasePagination(PageNumberPagination):
         response_data = {
             "status": status,
             "message": message or "Error",
-            "pagination": {
-                "next": False,
-                "previous": False,
-                "count": 0,
-                "current_page": 1,
-                "total_pages": 0,
-                "page_size": 0,
-            },
-            "data": data,
+            "next": False,
+            "previous": False,
+            "count": 0,
+            "current_page": 1,
+            "total_pages": 0,
+            "page_size": 0,
+            "results": data,
         }
         return Response(response_data)
 
@@ -83,8 +82,3 @@ class NotificationPagination(BasePagination):
 
 class MessagingPagination(BasePagination):
     pass
-
-
-
-
-

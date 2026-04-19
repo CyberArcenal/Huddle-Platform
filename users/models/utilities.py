@@ -44,6 +44,10 @@ ACTION_TYPES = [
     ("2fa_enabled", "Two-Factor Authentication Enabled"),
     ("2fa_disabled", "Two-Factor Authentication Disabled"),
     ("security_settings_update", "Security Settings Update"),
+    ('update_email', 'Update Email'),
+    ('update_phone', 'Update Phone Number'),
+    ('update_username', 'Update Username'),
+    ('update_full_name', 'Update Full Name')
 ]
 
 

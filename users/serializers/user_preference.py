@@ -19,9 +19,15 @@ def make_preference_response_serializer(child_serializer_class):
     Creates a serializer class for response:
         { "available": [ ... ], "selected": [ ... ] }
     """
-    class UserPreferenceResponseSerializer(serializers.Serializer):
+    class UserPreferenceResponseDataSerializer(serializers.Serializer):
         available = serializers.ListField(child=child_serializer_class())
         selected = serializers.ListField(child=child_serializer_class())
+        
+    class UserPreferenceResponseSerializer(serializers.Serializer):
+        status = serializers.BooleanField()
+        message = serializers.CharField()
+        data = UserPreferenceResponseDataSerializer()
+    
     return UserPreferenceResponseSerializer
 
 

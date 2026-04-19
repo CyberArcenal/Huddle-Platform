@@ -40,5 +40,14 @@ CELERY_BEAT_SCHEDULE = {
             'force': False,        # False = only broken ones
         },
     },
+    'delete-corrupted-reels-every-hour': {
+        'task': 'feed.tasks.reel.delete_corrupted_reels',
+        'schedule': crontab(minute=0, hour='*/1'),  # every 1 hour
+        'kwargs': {
+            'minutes_stuck': 15,
+            'soft_delete': True,
+            'dry_run': False,
+        },
+    },
 }
 

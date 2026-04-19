@@ -42,6 +42,8 @@ urlpatterns = [
     django.urls.path('update-bio/', users.views.user.UpdateBioView.as_view(), name='update-bio'),
     django.urls.path('update-location/', users.views.user.UpdateLocationView.as_view(), name='update-location'),
     django.urls.path('update-date-of-birth/', users.views.user.UpdateDateOfBirthView.as_view(), name='update-date-of-birth'),
+    django.urls.path('name-edit-status/', users.views.user.NameEditStatusView.as_view(), name='name-edit-status'),
+    django.urls.path('update-full-name/', users.views.user.UpdateFullNameView.as_view(), name='update-full-name'),
     
     # Follow endpoints
     django.urls.path('follow/', users.views.follow.FollowUserView.as_view(), name='follow-user'),

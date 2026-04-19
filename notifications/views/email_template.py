@@ -4,7 +4,7 @@ from rest_framework import status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from global_utils.logger import log_audit_event
-from global_utils.response import CustomPagination
+from global_utils.pagination import StandardResultsSetPagination
 from global_utils.security import get_client_ip
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.db import transaction
@@ -103,7 +103,7 @@ class EmailTemplateDeleteResponseSerializer(serializers.Serializer):
 # ----------------------------------------------------------------------
 
 class EmailTemplateCRUD(APIView):
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # Only staff can access email templates

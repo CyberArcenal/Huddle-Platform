@@ -10,7 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExampl
 from events.serializers.event import EventListSerializer
 from feed.models.post import Post
 from feed.serializers.safe_import import PostFeedSerializer
-from global_utils.response import CustomPagination
+from global_utils.pagination import StandardResultsSetPagination
 from groups.models.group import Group
 from events.models import Event
 from groups.serializers.group import GroupMinimalSerializer
@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 # Helper to build paginated data dict
 # ----------------------------------------------------------------------
-def build_paginated_data(request, results_serializer, total, page, page_size, extra_fields=None):
+def build_paginated_data(
+    request, results_serializer, total, page, page_size, extra_fields=None
+):
     """
     Build the data dict that will go inside the `data` field of the response.
     extra_fields is a dict to merge into the data dict (e.g., query, match_type, filters).
@@ -113,7 +115,7 @@ class SearchAutocompleteResponseSerializer(serializers.Serializer):
 
 
 class SearchByUsernameResponseData(serializers.Serializer):
-    match_type = serializers.ChoiceField(choices=['exact', 'partial'])
+    match_type = serializers.ChoiceField(choices=["exact", "partial"])
     count = serializers.IntegerField()
     page = serializers.IntegerField()
     hasNext = serializers.BooleanField()
@@ -175,9 +177,10 @@ class GlobalSearchResponseSerializer(serializers.Serializer):
 # Views
 # ----------------------------------------------------------------------
 
+
 class UserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["User Search's"],
@@ -258,7 +261,7 @@ class UserSearchView(APIView):
 
 class AdvancedUserSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["User Search's"],
@@ -346,7 +349,7 @@ class AdvancedUserSearchView(APIView):
 
 class SearchAutocompleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["User Search's"],
@@ -441,7 +444,7 @@ class SearchAutocompleteView(APIView):
 
 class SearchByUsernameView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["User Search's"],
@@ -486,7 +489,9 @@ class SearchByUsernameView(APIView):
                     qs["page"] = page_num
                     return f"{base_url}?{qs.urlencode()}"
 
-                next_page = page_number + 1 if (page_number * page_size) < total else None
+                next_page = (
+                    page_number + 1 if (page_number * page_size) < total else None
+                )
                 prev_page = page_number - 1 if page_number > 1 else None
 
                 paginated_data = {
@@ -562,7 +567,7 @@ class SearchByUsernameView(APIView):
 
 class SearchByEmailView(APIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["User Search's"],
@@ -640,7 +645,7 @@ class SearchByEmailView(APIView):
 
 class GlobalSearchView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CustomPagination
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(
         tags=["Global Search"],
@@ -692,25 +697,35 @@ class GlobalSearchView(APIView):
                 status=UserStatus.ACTIVE,
             ).order_by("username")
             page = paginator.paginate_queryset(users, request)
-            user_serializer = UserMinimalSerializer(page, many=True, context={"request": request})
+            user_serializer = UserMinimalSerializer(
+                page, many=True, context={"request": request}
+            )
 
             # Posts
             posts = Post.objects.filter(
                 Q(content__icontains=query), is_deleted=False
             ).order_by("-created_at")[:10]
-            post_data = PostFeedSerializer(posts, many=True, context={'request': request})
+            post_data = PostFeedSerializer(
+                posts, many=True, context={"request": request}
+            )
 
             # Groups
             groups = Group.objects.filter(
                 Q(name__icontains=query) | Q(description__icontains=query)
             ).order_by("name")[:10]
-            group_data = GroupMinimalSerializer(groups, many=True, context={'request': request})
+            group_data = GroupMinimalSerializer(
+                groups, many=True, context={"request": request}
+            )
 
             # Events
             events = Event.objects.filter(
-                Q(title__icontains=query) | Q(description__icontains=query) | Q(location__icontains=query)
+                Q(title__icontains=query)
+                | Q(description__icontains=query)
+                | Q(location__icontains=query)
             ).order_by("-start_time")[:10]
-            event_data = EventListSerializer(events, many=True, context={'request': request})
+            event_data = EventListSerializer(
+                events, many=True, context={"request": request}
+            )
 
             total_users = users.count()
             page_number = paginator.page.number
@@ -724,7 +739,9 @@ class GlobalSearchView(APIView):
                 qs["page"] = page_num
                 return f"{base_url}?{qs.urlencode()}"
 
-            next_page = page_number + 1 if (page_number * page_size) < total_users else None
+            next_page = (
+                page_number + 1 if (page_number * page_size) < total_users else None
+            )
             prev_page = page_number - 1 if page_number > 1 else None
 
             paginated_data = {

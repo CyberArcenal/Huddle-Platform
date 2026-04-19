@@ -4,6 +4,51 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from users.models import User
 
+class PersonalityTypeDetail(models.Model):
+    """Detailed description of each MBTI personality type"""
+    
+    MBTI_CHOICES = [
+        ('INTJ', 'INTJ - The Architect'),
+        ('INTP', 'INTP - The Logician'),
+        ('ENTJ', 'ENTJ - The Commander'),
+        ('ENTP', 'ENTP - The Debater'),
+        ('INFJ', 'INFJ - The Advocate'),
+        ('INFP', 'INFP - The Mediator'),
+        ('ENFJ', 'ENFJ - The Protagonist'),
+        ('ENFP', 'ENFP - The Campaigner'),
+        ('ISTJ', 'ISTJ - The Logistician'),
+        ('ISFJ', 'ISFJ - The Defender'),
+        ('ESTJ', 'ESTJ - The Executive'),
+        ('ESFJ', 'ESFJ - The Consul'),
+        ('ISTP', 'ISTP - The Virtuoso'),
+        ('ISFP', 'ISFP - The Adventurer'),
+        ('ESTP', 'ESTP - The Entrepreneur'),
+        ('ESFP', 'ESFP - The Entertainer'),
+    ]
+    
+    mbti_type = models.CharField(max_length=4, choices=MBTI_CHOICES, unique=True)
+    name = models.CharField(max_length=100)  # e.g., "The Architect"
+    description = models.TextField()
+    strengths = models.JSONField(default=list)  # List of strings
+    weaknesses = models.JSONField(default=list)
+    career_matches = models.JSONField(default=list)
+    relationship_advice = models.TextField(blank=True)
+    compatible_types = models.JSONField(default=list, blank=True, help_text="List of MBTI types that are compatible with this type")
+    fun_facts = models.JSONField(default=list, blank=True)  # Optional
+    famous_people = models.JSONField(default=list, blank=True)  # Optional
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Personality Type Detail"
+        verbose_name_plural = "Personality Type Details"
+        ordering = ['mbti_type']
+    
+    def __str__(self):
+        return f"{self.mbti_type} - {self.name}"
+
 class PersonalityQuestion(models.Model):
     """Question for personality assessment (e.g., MBTI)"""
     

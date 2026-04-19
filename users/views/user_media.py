@@ -115,8 +115,6 @@ class UserMediaGridView(APIView):
                 "previous": get_page_link(prev_page) if prev_page else None,
                 "results": UserMediaItemSerializer(items, many=True, context={"request": request}).data,
             }
-            
-            print("Data to be returned:", data)  # Debugging statement
 
             return Response(
                 {

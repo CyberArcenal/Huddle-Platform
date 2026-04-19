@@ -15,6 +15,7 @@ from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
 
 from global_utils.security import get_client_ip
+from notifications.services.notification_queue import NotificationQueueService
 from notifications.utils.email import get_dynamic_email_backend
 from users.models import LoginCheckpoint, OtpRequest, User
 from users.serializers.auth import (
@@ -154,13 +155,15 @@ class PasswordResetRequestView(APIView):
         # Generate new OTP
         otp_code = str(secrets.randbelow(900000) + 100000)
         expires_at = now + timedelta(minutes=15)
-
-        try:
-            get_dynamic_email_backend()  # Initialize email backend (optional)
-            # TODO: Send email with OTP code
-        except Exception as e:
-            logger.error(f"Failed to send OTP email to {email}: {e}")
-
+        
+        NotificationQueueService.queue_notification(
+                channel="email",
+                recipient=email,
+                subject="Email Verification",
+                message=f"Your verification code is: {otp_code}",
+                metadata={"otp_code": otp_code, "user_id": user.id}
+            )
+        
         OtpRequest.objects.create(
             email=email,
             user=user,

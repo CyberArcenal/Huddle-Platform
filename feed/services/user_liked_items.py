@@ -1,8 +1,10 @@
 # feed/services/user_liked_items.py (updated)
 
 from typing import List, Dict, Any, Tuple
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
+
 
 from feed.services.reaction import ReactionService
 from feed.utils.reaction import can_view_content
@@ -73,7 +75,12 @@ class UserLikedItemsService:
 
             # Select related 'user' if the model has that field (common for most content models)
             try:
-                qs = qs.select_related('user')
+                user_fields = [
+                    f.name for f in model_class._meta.get_fields()
+                    if f.is_relation and f.related_model == settings.AUTH_USER_MODEL
+                ]
+                if user_fields:
+                    qs = qs.select_related(user_fields[0]) 
             except Exception:
                 # Field doesn't exist, ignore
                 pass

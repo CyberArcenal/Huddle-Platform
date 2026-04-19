@@ -72,6 +72,8 @@ class BaseUserPreferenceView(APIView):
 
             available_serializer = self.serializer_class(available, many=True)
             selected_serializer = self.serializer_class(user_selected, many=True)
+            
+            logger.info(f"Retrieved {len(available)} available options and {len(user_selected)} selected options for user {request.user.id} - {self.relation_name}")
 
             return Response(
                 {

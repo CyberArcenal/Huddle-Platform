@@ -1,10 +1,9 @@
 import traceback
 from rest_framework.views import exception_handler
-from django.http import JsonResponse
 from rest_framework import status
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
-
+from rest_framework.response import Response
 from users.utils.authentications import is_blacklisted
 
 
@@ -53,7 +52,7 @@ def _handle_permission_denied(exc, context, response):
 
     # Check if token is blacklisted
     token_blacklisted = is_blacklisted(request) if request else False
-    
+
     if token_blacklisted:
         status_code = status.HTTP_401_UNAUTHORIZED
         message = "Token is blacklisted"
@@ -64,7 +63,7 @@ def _handle_permission_denied(exc, context, response):
         status_code = status.HTTP_401_UNAUTHORIZED
         message = "Authentication credentials were not provided"
 
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -75,13 +74,22 @@ def _handle_permission_denied(exc, context, response):
 
 
 def _handle_validation_error(exc, context, response):
-    status_code = 400
-    return JsonResponse(
+    status_code = status.HTTP_400_BAD_REQUEST
+
+    # Django ValidationError may have .messages (list) or .error_dict
+    if hasattr(exc, "messages"):
+        errors = exc.messages
+    elif hasattr(exc, "error_dict"):
+        errors = exc.error_dict
+    else:
+        errors = str(exc)
+
+    return Response(
         {
             "status": False,
             "status_code": status_code,
             "message": "Validation error",
-            "errors": exc.detail,  # Include the actual validation errors
+            "errors": errors,
         },
         status=status_code,
     )
@@ -90,7 +98,7 @@ def _handle_validation_error(exc, context, response):
 # Exception Handlers
 def _handle_server_error(exc, context, response):
     status_code = 500
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -102,7 +110,7 @@ def _handle_server_error(exc, context, response):
 
 def _handle_invalid_token(exc, context, response):
     status_code = response.status_code if response else 401
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -114,7 +122,7 @@ def _handle_invalid_token(exc, context, response):
 
 def _handle_unicode_error(exc, context, response):
     status_code = response.status_code if response else 400
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -126,7 +134,7 @@ def _handle_unicode_error(exc, context, response):
 
 def _handle_invalidated_error(exc, context, response):
     status_code = response.status_code if response else 403
-    return JsonResponse(
+    return Response(
         {"status": False, "status_code": status_code, "message": "Invalid credentials"},
         status=status_code,
     )
@@ -134,7 +142,7 @@ def _handle_invalidated_error(exc, context, response):
 
 def _handle_authentication_error(exc, context, response):
     status_code = response.status_code if response else 401
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -146,7 +154,7 @@ def _handle_authentication_error(exc, context, response):
 
 def _handle_generic_error(exc, context, response):
     status_code = response.status_code if response else 400
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -158,7 +166,7 @@ def _handle_generic_error(exc, context, response):
 
 def _handle_http404_error(exc, context, response):
     status_code = 404
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -170,7 +178,7 @@ def _handle_http404_error(exc, context, response):
 
 def _handle_type_error(exc, context, response):
     status_code = 400
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,
@@ -182,7 +190,7 @@ def _handle_type_error(exc, context, response):
 
 def _handle_method_error(exc, context, response):
     status_code = response.status_code if response else 405
-    return JsonResponse(
+    return Response(
         {
             "status": False,
             "status_code": status_code,

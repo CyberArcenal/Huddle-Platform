@@ -134,6 +134,7 @@ class UserProfileSerializer(rest_framework.serializers.ModelSerializer):
             "username",
             "email",
             "first_name",
+            "middle_name",
             "last_name",
             "full_name",
             "date_of_birth",
@@ -189,7 +190,10 @@ class UserProfileSerializer(rest_framework.serializers.ModelSerializer):
         
     def get_full_name(self, obj: users.models.User) -> str:
         """Get full name of the user"""
-        return f"{obj.first_name} {obj.last_name}".strip()
+        if obj.middle_name:
+            return f"{obj.first_name} {obj.middle_name} {obj.last_name}".strip()
+        else:
+            return f"{obj.first_name} {obj.last_name}".strip()
 
     def get_profile_picture_url(self, obj: users.models.User) -> typing.Optional[str]:
         from users.services.user_image import UserImageService

@@ -124,6 +124,7 @@ class User(AbstractUser):
         default=UserStatus.ACTIVE.value,
         help_text="Account status",
     )
+    middle_name = models.CharField(max_length=150, blank=True, null=True, help_text="Middle name (optional)")
     bio = models.TextField(max_length=500, blank=True)
     date_of_birth = models.DateField(blank=True, null=True)
     phone_number = models.CharField(
@@ -148,6 +149,8 @@ class User(AbstractUser):
     lifestyle_tags = models.ManyToManyField(
         "LifestyleTag", blank=True, related_name="users"
     )
+    
+    last_name_change_date = models.DateTimeField(null=True, blank=True, help_text="Last time first_name or last_name was changed")
 
     # Personality & relationship fields
     personality_type = models.CharField(

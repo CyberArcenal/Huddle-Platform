@@ -1,5 +1,7 @@
 # feed/views/user_liked_items.py
 
+import logging
+import traceback
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
@@ -11,6 +13,7 @@ from feed.serializers.feed import UnifiedContentItemSerializer
 from global_utils.pagination import StandardResultsSetPagination
 from rest_framework import serializers
 
+logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------------
 # Response serializers for consistent documentation
@@ -88,32 +91,44 @@ class UserLikedItemsView(APIView):
             page_size = paginator.page_size
 
         page_size = min(page_size, getattr(paginator, "max_page_size", page_size))
+        try:
+            items, total = UserLikedItemsService.get_liked_items(
+                target_user=target_user,
+                requester=(request.user if request.user.is_authenticated else None),
+                page=page,
+                page_size=page_size
+            )
 
-        items, total = UserLikedItemsService.get_liked_items(
-            target_user=target_user,
-            requester=(request.user if request.user.is_authenticated else None),
-            page=page,
-            page_size=page_size
-        )
+            # items already in the form [{"type": "<feed_type>", "item": <model instance>}, ...]
+            serializer = UnifiedContentItemSerializer(items, many=True, context={'request': request})
+            serialized_items = serializer.data
 
-        # items already in the form [{"type": "<feed_type>", "item": <model instance>}, ...]
-        serializer = UnifiedContentItemSerializer(items, many=True, context={'request': request})
-        serialized_items = serializer.data
-
-        response_data = {
-            "count": total,
-            "page": page,
-            "hasNext": (page * page_size) < total,
-            "hasPrev": page > 1,
-            "next": None,
-            "previous": None,
-            "results": serialized_items,
-        }
-
-        return Response(
-            {
-                "status": True,
-                "message": "Liked items retrieved.",
-                "data": response_data,
+            response_data = {
+                "count": total,
+                "page": page,
+                "hasNext": (page * page_size) < total,
+                "hasPrev": page > 1,
+                "next": None,
+                "previous": None,
+                "results": serialized_items,
             }
-        )
+
+            return Response(
+                {
+                    "status": True,
+                    "message": "Liked items retrieved.",
+                    "data": response_data,
+                }
+            )
+        except Exception as e:
+            traceback.print_exc()
+            
+            logger.exception(f"Error retrieving liked items for user {target_user.id}")
+            
+            return Response(
+                {
+                    "status": False,
+                    "message": "Failed to retrieve liked items.",
+                    "data": None,
+                }
+            )

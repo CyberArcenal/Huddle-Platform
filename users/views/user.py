@@ -1,3 +1,4 @@
+from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, serializers
@@ -456,6 +457,7 @@ class UserDetailView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
             serializer = UserProfileSerializer(user, context={"request": request})
+            logger.debug(serializer.data)
             return Response(
                 {
                     "status": True,
@@ -1428,5 +1430,146 @@ class UpdateDateOfBirthView(APIView):
                 "status": True,
                 "message": "Date of birth updated",
                 "data": {"user": UserProfileSerializer(request.user, context={"request": request}).data},
+            }
+        )
+        
+# =========================== NEW ============================================================================
+
+# ------------------- Response Serializers for NameEditStatus -------------------
+class NameEditStatusDataSerializer(serializers.Serializer):
+    can_edit = serializers.BooleanField()
+    next_edit_available_at = serializers.CharField(allow_null=True, required=False)
+    days_remaining = serializers.IntegerField(allow_null=True, required=False)
+    cooldown_period_days = serializers.IntegerField()
+
+class NameEditStatusResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = NameEditStatusDataSerializer()
+
+# ------------------- Response Serializers for UpdateFullName -------------------
+class UpdateFullNameResponseDataSerializer(serializers.Serializer):
+    user = serializers.DictField()  # You can use UserProfileSerializer here if imported
+
+class UpdateFullNameResponseSerializer(serializers.Serializer):
+    status = serializers.BooleanField()
+    message = serializers.CharField()
+    data = UpdateFullNameResponseDataSerializer()
+
+# ------------------- Views -------------------
+class NameEditStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["User's"],
+        responses={
+            200: NameEditStatusResponseSerializer,
+        },
+        description="Get the current user's name edit status including cooldown information.",
+    )
+    def get(self, request):
+        user = request.user
+        cooldown_days = getattr(settings, 'NAME_CHANGE_COOLDOWN_DAYS', 30)
+        now = timezone.now()
+
+        if user.last_name_change_date:
+            next_available = user.last_name_change_date + timedelta(days=cooldown_days)
+            if now >= next_available:
+                can_edit = True
+                days_remaining = 0
+                next_edit_available_at = None
+            else:
+                can_edit = False
+                delta = next_available - now
+                days_remaining = delta.days
+                next_edit_available_at = next_available.isoformat()
+        else:
+            can_edit = True
+            days_remaining = 0
+            next_edit_available_at = None
+
+        data = {
+            "can_edit": can_edit,
+            "next_edit_available_at": next_edit_available_at,
+            "days_remaining": days_remaining,
+            "cooldown_period_days": cooldown_days,
+        }
+
+        return Response({
+            "status": True,
+            "message": "Name edit status retrieved",
+            "data": data
+        })
+
+
+class UpdateFullNameView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    class UpdateFullNameInputSerializer(serializers.Serializer):
+        first_name = serializers.CharField(max_length=30, required=True)
+        middle_name = serializers.CharField(max_length=150, required=False, allow_blank=True, allow_null=True)
+        last_name = serializers.CharField(max_length=30, required=True)
+
+    @extend_schema(
+        tags=["User's"],
+        request=UpdateFullNameInputSerializer,
+        responses={
+            200: UpdateFullNameResponseSerializer,
+            400: UpdateFullNameResponseSerializer,
+        },
+        description="Update the user's full name (first, middle, last). Respects cooldown period.",
+    )
+    @transaction.atomic
+    def put(self, request):
+        serializer = self.UpdateFullNameInputSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"status": False, "message": "Validation error", "data": serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        data = serializer.validated_data
+        user = request.user
+        cooldown_days = getattr(settings, 'NAME_CHANGE_COOLDOWN_DAYS', 30)
+
+        # Check cooldown
+        if user.last_name_change_date:
+            next_available = user.last_name_change_date + timedelta(days=cooldown_days)
+            if timezone.now() < next_available:
+                days_left = (next_available - timezone.now()).days
+                return Response(
+                    {
+                        "status": False,
+                        "message": f"You can change your name again after {days_left} days.",
+                        "data": None,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Update name fields
+        user.first_name = data['first_name'].strip()
+        user.middle_name = data.get('middle_name', '').strip() or None
+        user.last_name = data['last_name'].strip()
+        user.last_name_change_date = timezone.now()
+        user.save(update_fields=['first_name', 'middle_name', 'last_name', 'last_name_change_date'])
+
+        # Log activity (optional)
+        from users.models.user_activity import UserActivity
+        UserActivity.objects.create(
+            user=user,
+            action="update_full_name",
+            description=f"Name changed to {user.first_name} {user.middle_name or ''} {user.last_name}".strip(),
+            ip_address=request.META.get("REMOTE_ADDR"),
+            user_agent=request.META.get("HTTP_USER_AGENT"),
+        )
+
+        from users.serializers.user.profile import UserProfileSerializer
+        user_data = UserProfileSerializer(user, context={"request": request}).data
+
+        return Response(
+            {
+                "status": True,
+                "message": "Full name updated successfully",
+                "data": {"user": user_data},
             }
         )

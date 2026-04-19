@@ -75,7 +75,10 @@ class UserMinimalSerializer(rest_framework.serializers.ModelSerializer):
 
     def get_full_name(self, obj: users.models.User) -> str:
         """Get full name of the user"""
-        return f"{obj.first_name} {obj.last_name}".strip()
+        if obj.middle_name:
+            return f"{obj.first_name} {obj.middle_name} {obj.last_name}".strip()
+        else:
+            return f"{obj.first_name} {obj.last_name}".strip()
 
     def to_representation(self, instance):
         """Remove capability_score if not set"""
